@@ -1,68 +1,510 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+html {
+    background: #17181c;
+    width: 100vw;
+    white-space: normal;
+    white-space-collapse: normal;
+    /* font-family: EmojiMart, sans-serif; */
+}
+
+@font-face {
+    font-family: "KA";
+    src: url(./assets/fonts/ka1.ttf), format("truetype");
+}
+
+@font-face {
+    font-family: "vipnagorgialla";
+    src: url(./assets/fonts/vipnagorgialla-regular.otf), format("opentype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "vipnagorgialla";
+    src: url(./assets/fonts/vipnagorgialla-regular-italic.otf), format("opentype");
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "vipnagorgialla";
+    src: url(./assets/fonts/vipnagorgialla-bold.otf), format("opentype");
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "vipnagorgialla";
+    src: url(./assets/fonts/vipnagorgialla-bold-italic.otf), format("opentype");
+    font-weight: bold;
+    font-style: italic;
+}
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    --background: oklch(0.9750 0.0120 281.0864);
+    --foreground: oklch(0 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0 0 0);
+    --popover: oklch(0.9900 0 0);
+    --popover-foreground: oklch(0 0 0);
+    --primary: oklch(0.5937 0.1972 277.2662);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.9400 0 0);
+    --secondary-foreground: oklch(0 0 0);
+    --muted: oklch(0.9700 0 0);
+    --muted-foreground: oklch(0.4400 0 0);
+    --accent: oklch(0.9400 0 0);
+    --accent-foreground: oklch(0 0 0);
+    --destructive: oklch(0.6300 0.1900 23.0300);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.9200 0 0);
+    --input: oklch(0.9400 0 0);
+    --ring: oklch(0 0 0);
+    --chart-1: oklch(0.6389 0.1936 24.4531);
+    --chart-2: oklch(0.5500 0.2200 264.5300);
+    --chart-3: oklch(0.7632 0.1661 142.4130);
+    --chart-4: oklch(0.9072 0.1327 94.2139);
+    --chart-5: oklch(0.8047 0 0);
+    --sidebar: oklch(0.9900 0 0);
+    --sidebar-foreground: oklch(0 0 0);
+    --sidebar-primary: oklch(0 0 0);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.9400 0 0);
+    --sidebar-accent-foreground: oklch(0 0 0);
+    --sidebar-border: oklch(0.9400 0 0);
+    --sidebar-ring: oklch(0 0 0);
+    --font-sans: Geist, sans-serif;
+    --font-serif: Georgia, serif;
+    --font-mono: Geist Mono, monospace;
+    --radius: 0.5rem;
+    /* --shadow-2xs: 0px 1px 5px 0px hsl(0 0% 0% / 0.06);
+    --shadow-xs: 0px 1px 5px 0px hsl(0 0% 0% / 0.06);
+    --shadow-sm: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 1px 2px -1px hsl(0 0% 0% / 0.12);
+    --shadow: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 1px 2px -1px hsl(0 0% 0% / 0.12);
+    --shadow-md: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 2px 4px -1px hsl(0 0% 0% / 0.12);
+    --shadow-lg: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 4px 6px -1px hsl(0 0% 0% / 0.12);
+    --shadow-xl: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 8px 10px -1px hsl(0 0% 0% / 0.12);
+    --shadow-2xl: 0px 1px 5px 0px hsl(0 0% 0% / 0.30);
+    --shadow-color: hsl(0 0% 0%);
+    --shadow-opacity: 0.12;
+    --shadow-blur: 5px;
+    --shadow-spread: 0px;
+    --shadow-offset-x: 0px;
+    --shadow-offset-y: 1px; */
+    --letter-spacing: 0em;
+    --spacing: 0.25rem;
+    --tracking-normal: 0em;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+.dark {
+    --background: oklch(0.2097 0.0080 274.5332);
+    --foreground: oklch(0.85 0 0);
+    --card: oklch(0.1553 0.0042 285.8987);
+    --card-foreground: oklch(1 0 0);
+    --popover: oklch(0.1800 0 0);
+    --popover-foreground: oklch(1 0 0);
+    --primary: oklch(0.5937 0.1972 277.2662);
+    --primary-foreground: oklch(1.0000 0 0);
+    --secondary: oklch(0.2500 0 0);
+    --secondary-foreground: oklch(1 0 0);
+    --muted: oklch(0.2300 0 0);
+    --muted-foreground: oklch(0.7200 0 0);
+    --accent: oklch(0.3200 0 0);
+    --accent-foreground: oklch(1 0 0);
+    --destructive: oklch(0.6900 0.2000 23.9100);
+    --destructive-foreground: oklch(0 0 0);
+    --border: oklch(0.2600 0 0);
+    --input: oklch(0.3200 0 0);
+    --ring: oklch(0.7200 0 0);
+    --chart-1: oklch(0.6248 0.1939 24.7189);
+    --chart-2: oklch(0.5800 0.2100 260.8400);
+    --chart-3: oklch(0.6767 0.1384 144.3452);
+    --chart-4: oklch(0.8116 0.1423 100.0243);
+    --chart-5: oklch(0.9200 0 0);
+    --sidebar: oklch(0.1800 0 0);
+    --sidebar-foreground: oklch(1 0 0);
+    --sidebar-primary: oklch(1 0 0);
+    --sidebar-primary-foreground: oklch(0 0 0);
+    --sidebar-accent: oklch(0.3200 0 0);
+    --sidebar-accent-foreground: oklch(1 0 0);
+    --sidebar-border: oklch(0.3200 0 0);
+    --sidebar-ring: oklch(0.7200 0 0);
+    --font-sans: Geist, sans-serif;
+    --font-serif: Georgia, serif;
+    --font-mono: Geist Mono, monospace;
+    --radius: 0.5rem;
+    /* --shadow-2xs: 0px 1px 5px 0px hsl(0 0% 0% / 0.06);
+    --shadow-xs: 0px 1px 5px 0px hsl(0 0% 0% / 0.06);
+    --shadow-sm: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 1px 2px -1px hsl(0 0% 0% / 0.12);
+    --shadow: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 1px 2px -1px hsl(0 0% 0% / 0.12);
+    --shadow-md: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 2px 4px -1px hsl(0 0% 0% / 0.12);
+    --shadow-lg: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 4px 6px -1px hsl(0 0% 0% / 0.12);
+    --shadow-xl: 0px 1px 5px 0px hsl(0 0% 0% / 0.12), 0px 8px 10px -1px hsl(0 0% 0% / 0.12);
+    --shadow-2xl: 0px 1px 5px 0px hsl(0 0% 0% / 0.30);
+    --shadow-color: hsl(0 0% 0%);
+    --shadow-opacity: 0.12;
+    --shadow-blur: 5px;
+    --shadow-spread: 0px;
+    --shadow-offset-x: 0px;
+    --shadow-offset-y: 1px; */
+    --letter-spacing: 0em;
+    --spacing: 0.25rem;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    --font-sans: Geist, sans-serif;
+    --font-mono: Geist Mono, monospace;
+    --font-serif: Georgia, serif;
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    /* --shadow-2xs: var(--shadow-2xs);
+    --shadow-xs: var(--shadow-xs);
+    --shadow-sm: var(--shadow-sm);
+    --shadow: var(--shadow);
+    --shadow-md: var(--shadow-md);
+    --shadow-lg: var(--shadow-lg);
+    --shadow-xl: var(--shadow-xl);
+    --shadow-2xl: var(--shadow-2xl); */
+    --radius: 0.5rem;
+    --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+    --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+    --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+    --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+    --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+    --tracking-normal: var(--tracking-normal);
+    --spacing: var(--spacing);
+    --letter-spacing: var(--letter-spacing);
+    /* --shadow-offset-y: var(--shadow-offset-y);
+    --shadow-offset-x: var(--shadow-offset-x);
+    --shadow-spread: var(--shadow-spread);
+    --shadow-blur: var(--shadow-blur);
+    --shadow-opacity: var(--shadow-opacity);
+    --color-shadow-color: var(--shadow-color); */
+
+    --font-vipnagorgialla: vipnagorgialla, sans-serif;
+    --font-ka: KA, sans-serif;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* width */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 0px;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+/* Track */
+::-webkit-scrollbar-track {
+    background: transparent;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: gray;
+    opacity: 0.2 !important;
+    border-radius: 4px;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: lightgray;
+    opacity: 0.6;
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+        letter-spacing: var(--tracking-normal);
+    }
+
+    /* Mobile-specific improvements */
+    @media (max-width: 768px) {
+
+        html,
+        body {
+            /* Remove deprecated -webkit-overflow-scrolling */
+            /* Use overscroll-behavior instead for iOS 13+ */
+            overscroll-behavior: contain;
+            /* Prevent pull-to-refresh while allowing touch scrolling */
+            touch-action: pan-y pinch-zoom;
+        }
+
+        /* Fix viewport height issues on mobile browsers */
+        .h-screen {
+            height: 100vh;
+            height: 100dvh;
+            /* Use dynamic viewport height when supported */
+        }
+
+        /* Improve touch scrolling performance */
+        .overflow-y-auto,
+        .overflow-auto {
+            /* Remove deprecated -webkit-overflow-scrolling: touch */
+            /* Use modern overscroll behavior instead */
+            overscroll-behavior-y: contain;
+            /* Prevent pull-to-refresh on scrollable containers */
+            overscroll-behavior-x: none;
+            /* Ensure smooth scrolling on mobile */
+            scroll-behavior: smooth;
+            /* Optimize touch handling */
+            touch-action: pan-y;
+        }
+
+        /* Prevent horizontal scrolling on mobile */
+        .overflow-x-hidden {
+            overscroll-behavior-x: none;
+        }
+
+        /* Improve input handling on mobile */
+        input:not(.mentions-input input):not(.mentions-input textarea),
+        textarea:not(.mentions-input textarea) {
+            /* Prevent zoom on focus */
+            /* font-size: 16px; */
+            transform: translateZ(0);
+            /* Force hardware acceleration */
+        }
+
+        /* Special handling for mentions input on mobile */
+        .mentions-input textarea,
+        .mentions-input input {
+            /* Prevent zoom while maintaining design font size */
+            /* font-size: max(16px, 14px); */
+            transform: translateZ(0);
+            /* Force hardware acceleration */
+            -webkit-text-size-adjust: 100%;
+            /* Prevent text size adjustment */
+        }
+
+        /* Optimize scrollable containers */
+        .scrollbar-thin {
+            scrollbar-width: none;
+            /* Hide scrollbars on mobile */
+        }
+
+        .scrollbar-thin::-webkit-scrollbar {
+            display: none;
+            /* Hide scrollbars on mobile webkit */
+        }
+
+        /* Additional iOS scrolling improvements */
+        * {
+            /* Ensure smooth momentum scrolling on iOS */
+            scroll-behavior: smooth;
+        }
+
+        /* Fix for iOS Safari elastic scrolling - disable pull-to-refresh */
+        body {
+            /* Prevent pull-to-refresh that interferes with message scrolling */
+            overscroll-behavior-y: contain;
+        }
+
+        /* Ensure scrollable elements work properly on iOS */
+        [style*="overflow: auto"],
+        [style*="overflow-y: auto"],
+        .overflow-auto,
+        .overflow-y-auto {
+            /* Modern approach for iOS momentum scrolling */
+            overscroll-behavior: contain;
+            /* Disable pull-to-refresh on scrollable containers */
+            overscroll-behavior-y: contain;
+            /* Improve scrolling performance */
+            will-change: scroll-position;
+            /* Optimize touch handling for message scrolling */
+            touch-action: pan-y;
+            /* Force hardware acceleration */
+            transform: translateZ(0);
+        }
+
+        /* Fix for iOS scrolling with positioned elements */
+        .fixed,
+        .absolute,
+        .relative,
+        [style*="position: fixed"],
+        [style*="position: absolute"],
+        [style*="position: relative"] {
+            /* Ensure transform doesn't interfere with scrolling */
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+        }
+
+        /* Specific optimizations for message scrolling containers */
+        .flex-1.overflow-y-auto {
+            /* Disable pull-to-refresh completely for message containers */
+            overscroll-behavior: none;
+            overscroll-behavior-y: none;
+            /* Optimize touch scrolling */
+            -webkit-overflow-scrolling: auto;
+            /* Prevent any elastic bounce behavior */
+            touch-action: pan-y;
+            /* Ensure hardware acceleration */
+            will-change: scroll-position;
+            transform: translateZ(0);
+        }
+
+        /* Additional fix for any scrollable containers within messages */
+        .scrollbar-thin.overflow-y-auto {
+            overscroll-behavior: none;
+            overscroll-behavior-y: none;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: auto;
+        }
+    }
+}
+
+#wanderConnectButtonHost {
+    display: none;
+}
+
+/* Custom styles for mentions input */
+.mentions-input {
+    position: relative;
+}
+
+.mentions-input textarea {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+.mentions-input textarea::-webkit-scrollbar {
+    width: 6px;
+}
+
+.mentions-input textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.mentions-input textarea::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+}
+
+.mentions-input textarea::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Mobile-specific improvements for mentions input */
+@media (max-width: 768px) {
+    .mentions-input {
+        /* Ensure proper touch handling */
+        -webkit-user-select: text;
+        user-select: text;
+    }
+
+    .mentions-input textarea,
+    .mentions-input input {
+        /* Better mobile touch handling */
+        -webkit-user-select: text;
+        user-select: text;
+        /* Prevent unwanted zooming while maintaining 14px design */
+        /* font-size: max(16px, 14px) !important; */
+        /* Ensure consistent line height */
+        line-height: 1.5 !important;
+        /* Improve tap targets */
+        min-height: 44px;
+        /* Better mobile scrolling - use modern approach */
+        overscroll-behavior: auto;
+    }
+
+    /* Hide scrollbars on mobile for mentions input */
+    .mentions-input textarea::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mentions-input textarea {
+        scrollbar-width: none;
+    }
+
+    /* Ensure suggestions are properly sized on mobile */
+    .mentions-input .mentions__suggestions__list {
+        min-width: 280px !important;
+        max-width: calc(100vw - 32px) !important;
+        /* font-size: 14px !important; */
+    }
+}
+
+/* Mention highlight styling */
+.mention-highlight {
+    display: inline;
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure proper text wrapping in mentions */
+.mentions-input .mentions__control {
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.mentions-input .mentions__highlighter {
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.mentions-input .mentions__input {
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* Smooth scrolling for mentions suggestions */
+.mentions__suggestions__list {
+    scroll-behavior: smooth;
+}
+
+/* Focus states for better accessibility */
+.mentions-input:focus-within {
+    outline: none;
+}
+
+.mentions-input textarea:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.markdown>* {
+    all: revert !important;
+    margin: 0px !important;
+    padding: 0px !important;
 }
