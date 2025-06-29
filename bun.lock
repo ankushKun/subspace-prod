@@ -38,6 +38,7 @@
         "@subspace-protocol/sdk": "link:@subspace-protocol/sdk",
         "@tailwindcss/vite": "^4.1.10",
         "@wanderapp/connect": "^0.1.9",
+        "@wauth/sdk": "link:@wauth/sdk",
         "@yudiel/react-qr-scanner": "^2.3.1",
         "arweave": "^1.15.7",
         "class-variance-authority": "^0.7.1",
@@ -59,7 +60,6 @@
         "tailwind-merge": "^3.3.1",
         "tailwindcss": "^4.1.10",
         "vaul": "^1.1.2",
-        "wauth": "link:wauth",
         "zod": "^3.25.67",
         "zustand": "^5.0.5",
       },
@@ -636,6 +636,8 @@
     "@vitejs/plugin-react-swc": ["@vitejs/plugin-react-swc@3.10.2", "", { "dependencies": { "@rolldown/pluginutils": "1.0.0-beta.11", "@swc/core": "^1.11.31" }, "peerDependencies": { "vite": "^4 || ^5 || ^6 || ^7.0.0-beta.0" } }, "sha512-xD3Rdvrt5LgANug7WekBn1KhcvLn1H3jNBfJRL3reeOIua/WnZOEV5qi5qIBq5T8R0jUDmRtxuvk4bPhzGHDWw=="],
 
     "@wanderapp/connect": ["@wanderapp/connect@0.1.9", "", { "dependencies": { "ts-deepmerge": "^7.0.3" } }, "sha512-5cpaGAzZ4eZeSrkDvAI1XrU+Mc8iqt3aroIELBJnfIhsfSUcm0hKCsrHbHpQDAfhCrXTXwx4J2TYD+WfHSXngA=="],
+
+    "@wauth/sdk": ["@wauth/sdk@link:@wauth/sdk", {}],
 
     "@yudiel/react-qr-scanner": ["@yudiel/react-qr-scanner@2.3.1", "", { "dependencies": { "barcode-detector": "3.0.3", "webrtc-adapter": "9.0.3" }, "peerDependencies": { "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" } }, "sha512-fE7217QvMKT/AxAEeKIheFhkKO13PSGHiqJfg4dLK/SGPpelpXNpZZ0Qeph1Cm08/AqMlGhvzQbCmoPeD/VVIg=="],
 
@@ -1396,8 +1398,6 @@
     "warp-arbundles": ["warp-arbundles@1.0.4", "", { "dependencies": { "arweave": "^1.13.7", "base64url": "^3.0.1", "buffer": "^6.0.3", "warp-isomorphic": "^1.0.7" } }, "sha512-KeRac/EJ7VOK+v5+PSMh2SrzpCKOAFnJICLlqZWt6qPkDCzVwcrNE5wFxOlEk5U170ewMDAB3e86UHUblevXpw=="],
 
     "warp-isomorphic": ["warp-isomorphic@1.0.7", "", { "dependencies": { "buffer": "^6.0.3", "undici": "^5.19.1" } }, "sha512-fXHbUXwdYqPm9fRPz8mjv5ndPco09aMQuTe4kXfymzOq8V6F3DLsg9cIafxvjms9/mc6eijzkLBJ63yjEENEjA=="],
-
-    "wauth": ["wauth@link:wauth", {}],
 
     "webidl-conversions": ["webidl-conversions@3.0.1", "", {}, "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="],
 

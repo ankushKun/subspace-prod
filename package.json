@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev:frontend": "vite",
+    "dev:sdk": "cd ../sdk && npm run dev",
+    "dev": "npm run dev:frontend & npm run dev:sdk",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -67,7 +69,7 @@
     "vaul": "^1.1.2",
     "zod": "^3.25.67",
     "zustand": "^5.0.5",
-    "wauth": "link:wauth"
+    "@wauth/sdk": "link:@wauth/sdk"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

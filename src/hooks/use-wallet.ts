@@ -4,7 +4,7 @@ import { WanderConnect } from "@wanderapp/connect";
 import Arweave from "arweave";
 import type { JWKInterface } from "arweave/web/lib/wallet";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { WAuth, WAuthProviders } from "wauth";
+import { WAuth, WAuthProviders } from "@wauth/sdk";
 
 export enum ConnectionStrategies {
     ArWallet = "ar_wallet",
@@ -108,7 +108,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     state.wauthInstance.logout();
 
 
-                    const data = await state.wauthInstance.login({ provider })
+                    const data = await state.wauthInstance.connect({ provider })
                     console.log("[app] data", data)
                     if (!data) return
 
