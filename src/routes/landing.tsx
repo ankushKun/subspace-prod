@@ -32,7 +32,7 @@ export default function SubspaceLanding() {
                     <Button className="absolute top-0 right-1 font-ocr h-8 !z-20 rounded-none !bg-transparent p-0 !px-1.5">app <ExternalLink /></Button>
                 </Link>
             }
-            <div className="!bg-primary text-background !w-screen mx-auto !h-2 transform-gpu absolute overflow-x-clip top-0">
+            <div className="!bg-primary text-background !w-screen mx-auto !h-2 transform-gpu absolute overflow-x-clip top-0 z-10">
                 <Trapezoid className="left-1/2 -translate-x-1/2 top-2 w-60 absolute" />
                 <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-2 text-xl font-ocr text-black flex items-center justify-center gap-2">
                     <img src={alienTransparent} alt="logo" className="object-cover w-5 mb-1.5" />
