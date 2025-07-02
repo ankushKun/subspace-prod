@@ -31,8 +31,15 @@ export default function SubspaceLanding() {
             </div>
             {/* footer */}
             <div className="w-full bg-[#131313] mt-auto flex items-center justify-center overflow-clip">
-                <div className="w-full h-full !text-white p-2 px-3">
-                    <div>ok</div>
+                <div className="w-full h-full !text-white p-2 px-3 flex flex-col gap-1">
+                    <div className="font-freecam text-primary">powered by {" "}
+                        <a href="https://ao.ar.io" target="_blank"
+                            className="hover:underline underline-offset-4 hover:tracking-widest transition-all duration-200 hover:text-white">
+                            AOTHECOMPUTER
+                        </a>
+                    </div>
+                    {/* @ts-ignore */}
+                    <div className="font-freecam text-primary text-[10px] opacity-60">v{__VERSION__} | {__COMMIT_HASH__}</div>
                 </div>
                 <img src={alienShip} alt="logo" draggable={false} className="ml-auto bg-primary object-cover relative top-0.5" />
             </div>
