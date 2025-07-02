@@ -88,6 +88,13 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
         }
     }, [scanProgress, scannedJWK, walletActions.connect])
 
+    function clickClose() {
+        const closeButton = document.getElementById("close-button")
+        if (closeButton) {
+            closeButton.click()
+        }
+    }
+
     return (
         <Dialog onOpenChange={(open) => {
             if (!open) {
@@ -171,6 +178,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                 onClick={() => {
                                     if (wanderInstance) wanderInstance.open()
                                     else walletActions.connect({ strategy: ConnectionStrategies.WanderConnect })
+                                    clickClose()
                                 }}
                             >
                                 <div>Wander Connect</div>

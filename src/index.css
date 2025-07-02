@@ -229,7 +229,7 @@ html {
 
 /* width */
 ::-webkit-scrollbar {
-    width: 4px;
+    width: 0px;
     height: 0px;
 }
 
@@ -242,7 +242,7 @@ html {
 ::-webkit-scrollbar-thumb {
     background: gray;
     opacity: 0.2 !important;
-    border-radius: 4px;
+    border-radius: 0px;
 }
 
 /* Handle on hover */
