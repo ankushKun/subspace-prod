@@ -81,11 +81,17 @@ export default function SubspaceLanding() {
 
                     {/* CTA area */}
                     <div className="flex flex-col items-center space-y-4 sm:space-y-6 mt-12 md:mt-16 px-4">
-                        <LoginDialog>
+                        {!connected ? <LoginDialog>
                             <Button variant="ghost" className="text-base sm:text-lg md:text-xl font-ocr tracking-[0.15em] sm:tracking-[0.2em] md:tracking-[0.3em] bg-primary text-black h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 rounded-lg">
                                 ◆ MAKE CONTACT ◆
                             </Button>
-                        </LoginDialog>
+                        </LoginDialog> : <>
+                            <Button variant="ghost" className="text-base uppercase sm:text-lg md:text-xl font-ocr tracking-[0.15em] sm:tracking-[0.2em] md:tracking-[0.3em] bg-primary text-black h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 rounded-lg">
+                                <Link to="/app">
+                                    start chatting
+                                </Link>
+                            </Button>
+                        </>}
                         <div className="flex space-x-2 text-primary/60">
                             <div className="w-1 h-1 bg-current rounded-full animate-ping"></div>
                             <div className="w-1 h-1 bg-current rounded-full animate-ping delay-200"></div>
