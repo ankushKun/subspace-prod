@@ -34,8 +34,8 @@ export default function SubspaceLanding() {
             }
             <div className="!bg-primary text-background !w-screen mx-auto !h-2 transform-gpu absolute overflow-x-clip top-0">
                 <Trapezoid className="left-1/2 -translate-x-1/2 top-2 w-60 absolute" />
-                <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-1.5 text-xl font-ocr text-black text-lg flex items-center justify-center gap-2">
-                    <img src={alienTransparent} alt="logo" className="object-cover w-5" />
+                <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-2 text-xl font-ocr text-black flex items-center justify-center gap-2">
+                    <img src={alienTransparent} alt="logo" className="object-cover w-5 mb-1.5" />
                     SUBSPACE
                 </div>
                 <Trapezoid className="left-0 -translate-x-2/3 w-72 top-0 z-0" />
