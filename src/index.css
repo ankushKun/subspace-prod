@@ -12,37 +12,34 @@ html {
 }
 
 @font-face {
+    font-family: freecam;
+    src: url(./assets/fonts/freecam.ttf), format("truetype");
+}
+
+@font-face {
+    /* variable font weight */
+    font-family: Geist;
+    src: url(./assets/fonts/geist.ttf), format("truetype");
+}
+
+@font-face {
     font-family: "KA";
     src: url(./assets/fonts/ka1.ttf), format("truetype");
 }
 
 @font-face {
-    font-family: "vipnagorgialla";
-    src: url(./assets/fonts/vipnagorgialla-regular.otf), format("opentype");
-    font-weight: normal;
-    font-style: normal;
+    font-family: OCR;
+    src: url(./assets/fonts/ocrastd.otf), format("opentype");
 }
 
+/* emoji only font */
 @font-face {
-    font-family: "vipnagorgialla";
-    src: url(./assets/fonts/vipnagorgialla-regular-italic.otf), format("opentype");
-    font-weight: normal;
-    font-style: italic;
+    font-family: twemoji;
+    src: url(./assets/fonts/twemoji.ttf), format("truetype");
+    unicode-range: U+1F000-1FFFF;
 }
 
-@font-face {
-    font-family: "vipnagorgialla";
-    src: url(./assets/fonts/vipnagorgialla-bold.otf), format("opentype");
-    font-weight: bold;
-    font-style: normal;
-}
 
-@font-face {
-    font-family: "vipnagorgialla";
-    src: url(./assets/fonts/vipnagorgialla-bold-italic.otf), format("opentype");
-    font-weight: bold;
-    font-style: italic;
-}
 
 :root {
     --background: oklch(0.9750 0.0120 281.0864);
@@ -101,7 +98,7 @@ html {
 }
 
 .dark {
-    --background: oklch(0.09 0 0);
+    --background: oklch(0.21 0 0);
     --foreground: oklch(0.95 0 0);
     --card: oklch(0.12 0 0);
     --card-foreground: oklch(0.95 0 0);
@@ -193,6 +190,12 @@ html {
     --font-mono: Geist Mono, monospace;
     --font-serif: Georgia, serif;
 
+    --font-freecam: freecam, sans-serif;
+    --font-ocr: OCR, sans-serif;
+    --font-twemoji: twemoji, sans-serif;
+    --font-ka: KA, sans-serif;
+    --font-geist: Geist, sans-serif;
+
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
@@ -222,8 +225,6 @@ html {
     --shadow-opacity: var(--shadow-opacity);
     --color-shadow-color: var(--shadow-color); */
 
-    --font-vipnagorgialla: vipnagorgialla, sans-serif;
-    --font-ka: KA, sans-serif;
 }
 
 /* width */
@@ -257,6 +258,7 @@ html {
 
     body {
         @apply bg-background text-foreground;
+        @apply font-geist;
         letter-spacing: var(--tracking-normal);
     }
 

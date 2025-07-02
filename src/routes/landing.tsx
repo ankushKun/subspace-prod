@@ -1,66 +1,42 @@
-import { Button } from "@/components/ui/button"
+import bg from "@/assets/bg.png"
 import { ThemeToggleButton } from "@/components/theme-toggle"
-import LoginDialog from "@/components/login-dialog"
-import { useIsMobile } from "@/hooks/use-mobile"
-import { useWallet } from "@/hooks/use-wallet"
-import { useEffect, useRef } from "react"
+import { cn } from "@/lib/utils"
+import alienShip from "@/assets/subspace/alien-ship.svg"
+import alienTransparent from "@/assets/subspace/alien-transparent.svg"
+import { useTheme } from "@/components/theme-provider"
 
-import s1 from "@/assets/s1.png"
-import s2 from "@/assets/s2.png"
-import chk from "@/assets/chkthisout.png"
-import { ExternalLink } from "lucide-react"
-import { Link, NavLink, useNavigate } from "react-router"
 
+function Trapezoid({ className }: { className?: string }) {
+    return (
+        <div className={cn("w-52 bg-primary absolute z-0 h-12", className)} style={{ transform: 'perspective(100px) rotateX(-35deg)', transformOrigin: 'top center' }} />
+    )
+}
 
 export default function SubspaceLanding() {
-    const isMobile = useIsMobile()
-    const connected = useWallet((state) => state.connected)
-    const navigate = useNavigate()
-    const wasConnectedOnMount = useRef(connected)
+    const { theme } = useTheme()
 
-    // Redirect to /app only when user authenticates on this page (goes from not connected to connected)
-    useEffect(() => {
-        if (!wasConnectedOnMount.current && connected) {
-            navigate("/app")
-        }
-    }, [connected, navigate])
-
-    // force this page to always be in light mode
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-            <title>Subspace</title>
-            {connected ? <NavLink to="/app"><Button className="absolute top-8 right-6 z-20 font-bold">Go Subspace <ExternalLink /></Button></NavLink>
-                : <LoginDialog>
-                    <Button className="absolute top-6 right-6 z-20 font-bold">Login</Button>
-                </LoginDialog>}
-
-            <ThemeToggleButton className="absolute top-4 left-4 z-20" />
-
-            <div className="h-screen relative flex flex-col items-center justify-center">
-                <div className="font-ka text-5xl sm:text-7xl md:text-8xl tracking-wider drop-shadow-2xl drop-shadow-primary/40">SUBSPACE</div>
-                <div className="font-vipnagorgialla tracking-wider text-xs sm:text-sm md:text-xl scale-y-130 mt-2.5 drop-shadow-xl">Intergalactic Communicator</div>
-            </div>
-            <div className="flex -mt-22 flex-col h- mx-auto overflow-x-clip max-w-screen min-w-screen z-20 items-center justify-start gap-2">
-                <img draggable={false} className="absolute w-80 right-[6vw] md:right-[8vw] -translate-y-36 z-20 invert dark:invert-0 drop-shadow-xl" src={chk} />
-                <img draggable={false} src={isMobile ? s2 : s1} className="w-[90vw] overflow-clip -rotate-12 md:rotate-0 md:w-[80vw] rounded-xl object-cover drop-shadow-2xl drop-shadow-black" />
-            </div>
-            <div className="flex flex-col items-center justify-center gap-2 my-52 pb-14">
-                {(() => {
-                    const Btn = <Button className="z-20 p-10 drop-shadow-2xl tracking-wider px-12 bg-primary text-primary-foreground hover:bg-primary-foreground font-ka 
-                    text-2xl md:text-3xl hover:text-primary transform hover:scale-110 transition duration-500">Start Talking</Button>
-                    return connected ? <NavLink to="/app">{Btn}</NavLink> : <LoginDialog>{Btn}</LoginDialog>
-                })()}
-            </div>
-            <div className="flex flex-col text-black bg-primary w-full p-6 gap-4">
-                {/* <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="font-ka text-3xl tracking-widest">Subspace</div>
-                </div> */}
-                <div className="flex flex-col items-center text-center justify-center gap-2">
-                    <div className="font-ka tracking-widest">powered by <Link draggable={false} target="_blank" to="https://x.com/aoTheComputer" className="hover:underline underline-offset-8 hover:text-white">aoTheComputer</Link></div>
+        <div className="flex flex-col items-center justify-start h-screen">
+            <div className="bg-primary text-background w-full h-2.5 transform-gpu">
+                <Trapezoid className="left-1/2 -translate-x-1/2 top-2 w-60" />
+                <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-1.5 pointer-events-none font-ocr text-black text-2xl flex items-center justify-center gap-3">
+                    <img src={alienTransparent} alt="logo" className="object-cover w-7 h-7 mb-2" />
+                    SUBSPACE
                 </div>
-                {/* @ts-ignore */}
-                <div className="text-xs font-vipnagorgialla text-center opacity-50">v{__VERSION__}</div>
+                <Trapezoid className="left-0 -translate-x-2/3 top-2.5" />
+                <ThemeToggleButton className="rounded-xs left-2 z-10 relative top-0.5 !text-black !bg-transparent " />
             </div>
+            <div className="w-full mt-8 text-foreground">
+                ok
+            </div>
+            {/* footer */}
+            <div className="w-full bg-[#131313] mt-auto flex items-center justify-center overflow-clip">
+                <div className="w-full h-full !text-white p-2 px-3">
+                    <div>ok</div>
+                </div>
+                <img src={alienShip} alt="logo" draggable={false} className="ml-auto bg-primary object-cover relative top-0.5" />
+            </div>
+
         </div>
     )
 }
