@@ -6,12 +6,12 @@ import { createSigner } from "@permaweb/aoconnect";
 import { useWallet } from "./use-wallet";
 import { useGlobalState } from "./use-global-state";
 import { getPrimaryName } from "@/lib/utils";
-import { Constants } from "@/lib/constants";
+import { Constants as WebConstants } from "@/lib/constants";
 
 // Helper function to get CU URL from localStorage
 function getCuUrl(): string {
     const storedUrl = localStorage.getItem('subspace-cu-url');
-    return storedUrl || Constants.CuEndpoints.Randao; // Default to Randao
+    return storedUrl || WebConstants.CuEndpoints.Randao; // Default to Randao
 }
 
 // Helper function to set CU URL in localStorage
@@ -27,6 +27,7 @@ interface SubspaceState {
     profile: ExtendedProfile | null
     profiles: Record<string, ExtendedProfile>
     servers: Record<string, Server>
+    serverData: Record<string, any> // For persistence only
     actions: {
         init: () => void
         profile: {
@@ -53,23 +54,31 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     profile: null,
     profiles: {},
     servers: {},
+    serverData: {},
     actions: {
         init: () => {
             const signer = useWallet.getState().actions.getSigner()
             const owner = useWallet.getState().address
-            set({ subspace: getSubspace(signer, owner) })
+            const subspace = getSubspace(signer, owner)
+            set({ subspace })
 
-            // Preload servers if we have persisted data
-            const servers = get().servers
-            if (Object.keys(servers).length > 0) {
-                console.log("Preloading servers from persisted data")
-                // Start loading servers in the background
-                setTimeout(() => {
-                    for (const serverId of Object.keys(servers)) {
-                        get().actions.servers.get(serverId).catch(console.error)
-                    }
-                }, 100)
-            }
+            // Delay rehydration slightly to ensure subspace is ready
+            setTimeout(() => {
+                // Rehydrate servers from persisted data
+                get().actions.internal.rehydrateServers()
+
+                // Preload servers if we have persisted data
+                const serverData = get().serverData
+                if (Object.keys(serverData).length > 0) {
+                    console.log("Preloading servers from persisted data")
+                    // Start loading servers in the background
+                    setTimeout(() => {
+                        for (const serverId of Object.keys(serverData)) {
+                            get().actions.servers.get(serverId).catch(console.error)
+                        }
+                    }, 100)
+                }
+            }, 50)
         },
         profile: {
             get: async (userId?: string) => {
@@ -156,38 +165,38 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         servers: {
             get: async (serverId: string) => {
                 const subspace = get().subspace
+                if (!subspace) throw new Error("Subspace not initialized")
 
-                // Check if we already have the server instance
+                // Check if we already have a proper server instance
                 const existingServer = get().servers[serverId]
-                if (existingServer) {
+                if (existingServer && typeof existingServer.getMessages === 'function') {
                     return existingServer
-                }
-
-                // Check if we have persisted data to show immediately
-                const persistedData = get().servers[serverId]
-                if (persistedData) {
-                    console.log(`Using persisted data for server ${serverId}`)
-                    // Create a temporary server instance for immediate UI
-                    // We'll still fetch fresh data in the background
                 }
 
                 try {
                     const server = await subspace.getServer(serverId)
                     if (server) {
+                        // Store both the server instance and raw data for persistence
                         set({
                             servers: { ...get().servers, [serverId]: server },
+                            serverData: {
+                                ...get().serverData,
+                                [serverId]: {
+                                    serverId: server.serverId,
+                                    name: server.name,
+                                    ownerId: server.ownerId,
+                                    logo: server.logo,
+                                    memberCount: server.memberCount,
+                                    channels: server.channels,
+                                    categories: server.categories,
+                                    roles: server.roles
+                                }
+                            }
                         })
                     }
                     return server
                 } catch (e) {
-                    console.error("Failed to get servers:", e)
-                    // If we have persisted data, try to return a basic server object
-                    if (persistedData) {
-                        console.log(`Falling back to persisted data for server ${serverId}`)
-                        // We can't create a proper Server instance without the AO instance
-                        // So we'll fetch it fresh when the subspace is available
-                        return null
-                    }
+                    console.error("Failed to get server:", e)
                     return null
                 }
             },
@@ -197,13 +206,21 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 const server = await subspace.createServer(data)
 
-                // Initialize member properties on the server instance
-                // (server as any).members =[];
-                // (server as any).membersLoaded = false;
-                // (server as any).membersLoading = false;
-
                 set({
                     servers: { ...get().servers, [server.serverId]: server },
+                    serverData: {
+                        ...get().serverData,
+                        [server.serverId]: {
+                            serverId: server.serverId,
+                            name: server.name,
+                            ownerId: server.ownerId,
+                            logo: server.logo,
+                            memberCount: server.memberCount,
+                            channels: server.channels,
+                            categories: server.categories,
+                            roles: server.roles
+                        }
+                    }
                 })
 
                 // join the server and wait for completion
@@ -236,6 +253,19 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     if (server) {
                         set({
                             servers: { ...get().servers, [server.serverId]: server },
+                            serverData: {
+                                ...get().serverData,
+                                [server.serverId]: {
+                                    serverId: server.serverId,
+                                    name: server.name,
+                                    ownerId: server.ownerId,
+                                    logo: server.logo,
+                                    memberCount: server.memberCount,
+                                    channels: server.channels,
+                                    categories: server.categories,
+                                    roles: server.roles
+                                }
+                            }
                         })
 
                         // Refresh profile to update the joined servers list
@@ -261,7 +291,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 if (success) {
                     // Remove the server from local state
                     const { [serverId]: removedServer, ...remainingServers } = get().servers
-                    set({ servers: remainingServers })
+                    const { [serverId]: removedServerData, ...remainingServerData } = get().serverData
+                    set({
+                        servers: remainingServers,
+                        serverData: remainingServerData
+                    })
 
                     // Clear active server/channel if user was viewing the left server
                     const globalState = useGlobalState.getState()
@@ -283,66 +317,48 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) throw new Error("Subspace not initialized")
 
-                // Check if we already have cached members and don't need to refresh
-                const existingServer = get().servers[serverId]
-                if (!forceRefresh && existingServer?.members) {
-                    console.log(`Using cached members for server ${serverId}`)
-                    return existingServer.members || [] as Member[]
+                // Get the proper server instance
+                const server = await get().actions.servers.get(serverId)
+                if (!server) {
+                    console.error("Server not found for getMembers")
+                    return []
                 }
 
-                // Mark as loading
-                if (existingServer) {
-                    set({
-                        servers: { ...get().servers, [serverId]: existingServer }
-                    })
+                // Check if we already have cached members and don't need to refresh
+                if (!forceRefresh && server.members) {
+                    console.log(`Using cached members for server ${serverId}`)
+                    return server.members || [] as Member[]
                 }
 
                 try {
-                    const server = await subspace.getServer(serverId)
-                    if (server) {
-                        const membersData = await server.getAllMembers()
-                        console.log("Raw members data:", membersData)
+                    const membersData = await server.getAllMembers()
+                    console.log("Raw members data:", membersData)
 
-                        // Check if the result is an object (members by userId) or an array
-                        let members: Member[] = []
-                        if (Array.isArray(membersData)) {
-                            members = membersData
-                        } else if (typeof membersData === 'object' && membersData !== null) {
-                            // Convert object to array of member objects
-                            members = Object.entries(membersData).map(([userId, memberData]) => ({
-                                userId,
-                                ...(memberData as any)
-                            }))
-                        }
-
-                        // Cache the members in both server instance and persistent data
-                        const currentServer = get().servers[serverId]
-                        if (currentServer) {
-                            // Update the server instance directly to preserve methods
-                            (currentServer as any).members = members;
-                            (currentServer as any).membersLoaded = true;
-                            (currentServer as any).membersLoading = false;
-
-                            set({
-                                servers: { ...get().servers, [serverId]: currentServer },
-                            })
-                        }
-
-                        return members
+                    // Check if the result is an object (members by userId) or an array
+                    let members: Member[] = []
+                    if (Array.isArray(membersData)) {
+                        members = membersData
+                    } else if (typeof membersData === 'object' && membersData !== null) {
+                        // Convert object to array of member objects
+                        members = Object.entries(membersData).map(([userId, memberData]) => ({
+                            userId,
+                            ...(memberData as any)
+                        }))
                     }
-                    return []
+
+                    // Cache the members in the server instance
+                    server.members = members;
+                    (server as any).membersLoaded = true;
+                    (server as any).membersLoading = false;
+
+                    // Update the server in state
+                    set({
+                        servers: { ...get().servers, [serverId]: server }
+                    })
+
+                    return members
                 } catch (e) {
                     console.error("Failed to get members:", e)
-
-                    // Mark loading as false on error
-                    const currentServer = get().servers[serverId]
-                    if (currentServer) {
-                        (currentServer as any).membersLoading = false
-                        set({
-                            servers: { ...get().servers, [serverId]: currentServer }
-                        })
-                    }
-
                     return []
                 }
             },
@@ -354,27 +370,27 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         internal: {
             rehydrateServers: () => {
                 const subspace = get().subspace
-                if (!subspace) return
+                if (!subspace || !subspace.ao) {
+                    return
+                }
 
-                const servers = get().servers
+                const serverData = get().serverData
+                const servers: Record<string, Server> = {}
 
                 // Recreate Server instances from persisted data
-                for (const [serverId, data] of Object.entries(servers)) {
+                for (const [serverId, data] of Object.entries(serverData)) {
                     try {
-                        // Since we can't directly access the AO instance, we need to get a fresh server
-                        // This is a compromise - we'll check if we already have the server instance
-                        const existingServer = get().servers[serverId]
-                        if (existingServer) {
-                            servers[serverId] = existingServer
-                        } else {
-                            // We'll lazy-load the server when needed
-                            console.log(`Server ${serverId} will be rehydrated on next access`)
-                        }
+                        // Create a new Server instance with the persisted data and current AO instance
+                        const server = new Server(data, subspace.ao)
+                        servers[serverId] = server
                     } catch (e) {
                         console.error(`Failed to rehydrate server ${serverId}:`, e)
                     }
                 }
 
+                if (Object.keys(servers).length > 0) {
+                    console.log(`Rehydrated ${Object.keys(servers).length} servers`)
+                }
                 set({ servers })
             }
         }
@@ -383,8 +399,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     name: "subspace",
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({
-        // Persist server data but not the server instances (they need to be recreated)
-        servers: state.servers,
+        // Only persist the raw server data, not the server instances (they need to be recreated)
+        serverData: state.serverData,
         profile: state.profile,
         profiles: state.profiles,
     })

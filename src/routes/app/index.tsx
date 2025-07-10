@@ -8,11 +8,20 @@ import Messages from "./components/messages"
 import Welcome from "./components/welcome"
 import Profile from "./components/profile"
 import { useGlobalState } from "@/hooks/use-global-state"
+import { useSubspace } from "@/hooks/use-subspace"
 import { useEffect } from "react"
 
 export default function App() {
     const { actions: stateActions } = useGlobalState()
+    const { actions: subspaceActions } = useSubspace()
     const { serverId, channelId } = useParams()
+
+    // Initialize subspace when app loads
+    useEffect(() => {
+        subspaceActions.init()
+        // Load profile which will also load user's servers
+        subspaceActions.profile.get().catch(console.error)
+    }, [subspaceActions])
 
     useEffect(() => {
         stateActions.setActiveServerId(serverId)

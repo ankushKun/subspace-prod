@@ -82,6 +82,34 @@ export default function ChannelList({ className }: { className?: string }) {
         navigate(`/app/${activeServerId}/${channelId}`)
     }
 
+    // Helper function to check if a channel is the active one
+    const isChannelActive = (channel: Channel): boolean => {
+        if (!activeChannelId) return false;
+
+        return channel.channelId === activeChannelId ||
+            channel.channelId === parseInt(activeChannelId).toString() ||
+            channel.orderId === parseInt(activeChannelId);
+    };
+
+    // Auto-redirect to first channel if current channel is not found
+    useEffect(() => {
+        if (server && server.channels && server.channels.length > 0 && activeChannelId) {
+            // Check if current activeChannelId exists in server channels
+            const channelExists = server.channels.some(c =>
+                c.channelId === activeChannelId ||
+                c.channelId === parseInt(activeChannelId).toString() ||
+                c.orderId === parseInt(activeChannelId)
+            );
+
+            if (!channelExists) {
+                const firstChannel = server.channels[0];
+                if (firstChannel) {
+                    selectChannel(firstChannel.channelId);
+                }
+            }
+        }
+    }, [server, activeChannelId, activeServerId]);
+
     if (!server) {
         return (
             <div className={cn(
@@ -131,7 +159,7 @@ export default function ChannelList({ className }: { className?: string }) {
                                 className={cn(
                                     "w-full h-8 px-2 flex items-center gap-2 text-sm transition-all duration-200 relative overflow-hidden cursor-pointer",
                                     "hover:bg-muted/50 rounded-md",
-                                    channel.channelId === activeChannelId
+                                    isChannelActive(channel)
                                         ? "bg-accent/20 text-foreground font-medium"
                                         : "text-muted-foreground hover:text-foreground",
                                     "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
@@ -140,7 +168,7 @@ export default function ChannelList({ className }: { className?: string }) {
                             >
                                 <Hash className={cn(
                                     "w-4 h-4 transition-all duration-200 flex-shrink-0",
-                                    channel.channelId === activeChannelId
+                                    isChannelActive(channel)
                                         ? "text-foreground"
                                         : "text-muted-foreground/60"
                                 )} />
@@ -186,7 +214,7 @@ export default function ChannelList({ className }: { className?: string }) {
                                             className={cn(
                                                 "w-full h-8 px-2 flex items-center gap-2 text-sm transition-all duration-200 relative overflow-hidden cursor-pointer",
                                                 "hover:bg-muted/50 rounded-md",
-                                                channel.channelId === activeChannelId
+                                                isChannelActive(channel)
                                                     ? "bg-accent/20 text-foreground font-medium"
                                                     : "text-muted-foreground hover:text-foreground",
                                                 "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
@@ -195,7 +223,7 @@ export default function ChannelList({ className }: { className?: string }) {
                                         >
                                             <Hash className={cn(
                                                 "w-4 h-4 transition-all duration-200 flex-shrink-0",
-                                                channel.channelId === activeChannelId
+                                                isChannelActive(channel)
                                                     ? "text-foreground"
                                                     : "text-muted-foreground/60"
                                             )} />
