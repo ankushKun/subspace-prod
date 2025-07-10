@@ -1,34 +1,34 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import { HashRouter, Route, Routes } from "react-router";
+import { HashRouter, Route, Routes, useParams } from "react-router";
 import { ThemeProvider } from '@/components/theme-provider';
 import SubspaceLanding from './routes/landing';
-import Server from '@/routes/server';
+import App from '@/routes/app';
 import Settings from '@/routes/settings';
-import ServerSettings from '@/routes/server/settings';
-import { ConnectionStrategies, useWallet } from './hooks/use-wallet';
+import ServerSettings from '@/routes/app/settings';
+import { ConnectionStrategies, useWallet } from '@/hooks/use-wallet';
 import { useEffect } from 'react';
 import { useCallback } from 'react';
+import { useGlobalState } from '@/hooks/use-global-state';
+import { useSubspace } from '@/hooks/use-subspace';
 
-function App() {
-    const connect = useWallet((state) => state.actions.connect)
-    const strategy = useWallet((state) => state.connectionStrategy)
-    const provider = useWallet((state) => state.provider)
-    const jwk = useWallet((state) => state.jwk)
+function Main() {
+    const { actions: subspaceActions } = useSubspace()
+    const { jwk, address, connected, connectionStrategy, provider, actions: walletActions } = useWallet()
 
     const handleConnection = async function () {
-        if (!strategy) return
+        if (!connectionStrategy) return
 
         try {
-            if (strategy === ConnectionStrategies.ScannedJWK) {
-                await connect({ strategy, jwk })
+            if (connectionStrategy === ConnectionStrategies.ScannedJWK) {
+                await walletActions.connect({ strategy: connectionStrategy, jwk })
                 console.log("connected with jwk")
-            } else if (strategy === ConnectionStrategies.WAuth) {
-                await connect({ strategy, provider })
-                console.log("connected with strategy", strategy, provider)
+            } else if (connectionStrategy === ConnectionStrategies.WAuth) {
+                await walletActions.connect({ strategy: connectionStrategy, provider })
+                console.log("connected with strategy", connectionStrategy, provider)
             } else {
-                await connect({ strategy })
-                console.log("connected with strategy", strategy)
+                await walletActions.connect({ strategy: connectionStrategy })
+                console.log("connected with strategy", connectionStrategy)
             }
         } catch (error) {
             console.error("Connection failed:", error)
@@ -37,7 +37,12 @@ function App() {
 
     useEffect(() => {
         handleConnection()
-    }, [handleConnection])
+    }, [])
+
+    useEffect(() => {
+        if (connected && address)
+            subspaceActions.init()
+    }, [connected, address])
 
 
 
@@ -46,18 +51,15 @@ function App() {
             <HashRouter>
                 <Routes>
                     <Route path="/" element={<SubspaceLanding />} />
-                    <Route path="/app">
-                        <Route index element={<Server />} />
-                        <Route path="settings" element={<Settings />} />
-                        {/* --- */}
-                        <Route path=":serverId" element={<Server />} />
-                        <Route path=":serverId/:channelId" element={<Server />} />
-                        <Route path=":serverId/settings" element={<ServerSettings />} />
-                    </Route>
+                    <Route path="/app" element={<App />} />
+                    <Route path="/app/settings" element={<Settings />} />
+                    <Route path="/app/:serverId" element={<App />} />
+                    <Route path="/app/:serverId/:channelId" element={<App />} />
+                    <Route path="/app/:serverId/settings" element={<ServerSettings />} />
                 </Routes>
             </HashRouter>
         </ThemeProvider>
     </>
 }
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(<Main />)

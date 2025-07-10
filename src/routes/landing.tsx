@@ -2,7 +2,7 @@ import bg from "@/assets/bg.png"
 import { ThemeToggleButton } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import alienShip from "@/assets/subspace/alien-ship.svg"
-import alienTransparent from "@/assets/subspace/alien-transparent.svg"
+import alien from "@/assets/subspace/alien-black.svg"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import LoginDialog from "@/components/login-dialog"
@@ -35,7 +35,7 @@ export default function SubspaceLanding() {
             <div className="!bg-primary text-background !w-screen mx-auto !h-2 transform-gpu absolute overflow-x-clip top-0 z-10">
                 <Trapezoid className="left-1/2 -translate-x-1/2 top-2 w-60 absolute" />
                 <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-2 text-xl font-ocr text-black flex items-center justify-center gap-2">
-                    <img src={alienTransparent} alt="logo" className="object-cover w-5 mb-1.5" />
+                    <img src={alien} alt="logo" className="object-cover w-5 mb-1.5" />
                     SUBSPACE
                 </div>
                 <Trapezoid className="left-0 -translate-x-2/3 w-72 top-0 z-0" />

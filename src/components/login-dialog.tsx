@@ -16,7 +16,7 @@ import type { JWKInterface } from "arweave/web/lib/wallet";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { useIsMobileDevice } from "@/hooks/use-mobile"
-import { WAuthProviders } from "wauth"
+import { WAuthProviders } from "@wauth/sdk"
 
 const totalScanSteps = 7;
 
