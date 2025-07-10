@@ -34,7 +34,7 @@ interface WalletActions {
     updateAddress: (address: string) => void
     connect: ({ strategy, jwk, provider }: { strategy: ConnectionStrategies, jwk?: JWKInterface, provider?: WAuthProviders }) => Promise<void>
     disconnect: () => void
-    getSigner: () => AoSigner
+    getSigner: () => AoSigner | null
 }
 
 
@@ -61,6 +61,26 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                 case ConnectionStrategies.ArWallet:
                 case ConnectionStrategies.WanderConnect:
                     return createSigner(window.arweaveWallet) as AoSigner
+                case ConnectionStrategies.ScannedJWK:
+                    {
+                        const jwk = get().jwk;
+                        if (!jwk) {
+                            throw new Error("ScannedJWK connection strategy requires a JWK, but none was found");
+                        }
+                        return createSigner(jwk) as AoSigner;
+                    }
+                case ConnectionStrategies.WAuth:
+                    {
+                        // WAuth doesn't support signing operations yet
+                        // Return null to allow read-only operations
+                        console.warn("WAuth connection strategy doesn't support signing operations yet. Some features may be limited.");
+                        return null;
+                    }
+                case ConnectionStrategies.GuestUser:
+                    {
+                        console.warn("Guest user mode doesn't support signing operations. Some features may be limited.");
+                        return null;
+                    }
                 default:
                     throw new Error(`Connection Strategy ${get().connectionStrategy} does not have a signer implemented yet`)
             }

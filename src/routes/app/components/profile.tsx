@@ -173,10 +173,10 @@ export default function Profile({ className }: { className?: string }) {
                         {/* Login Info */}
                         <div className="flex-1 min-w-0 text-left">
                             <div className="text-sm font-medium text-primary truncate">
-                                Connect Wallet
+                                Sign In
                             </div>
                             <div className="text-xs text-primary/60 flex items-center gap-1">
-                                <span className="truncate">Not connected</span>
+                                <span className="truncate">Join the conversation</span>
                             </div>
                         </div>
                     </Button>

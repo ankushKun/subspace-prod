@@ -8,6 +8,17 @@ import { useGlobalState } from "./use-global-state";
 import { getPrimaryName } from "@/lib/utils";
 import { Constants } from "@/lib/constants";
 
+// Helper function to get CU URL from localStorage
+function getCuUrl(): string {
+    const storedUrl = localStorage.getItem('subspace-cu-url');
+    return storedUrl || Constants.CuEndpoints.Randao; // Default to Randao
+}
+
+// Helper function to set CU URL in localStorage
+export function setCuUrl(url: string): void {
+    localStorage.setItem('subspace-cu-url', url);
+}
+
 
 type ExtendedProfile = Profile & { primaryName: string, primaryLogo: string }
 
@@ -385,18 +396,30 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
 // ------------------------------------------------------------
 
-export function getSubspace(signer: AoSigner, owner?: string): SubspaceClient {
+export function getSubspace(signer: AoSigner | null, owner?: string): SubspaceClient {
     let subspace: SubspaceClient | null = null
 
+    const cuUrl = getCuUrl();
+
     if (signer) {
-        subspace = Subspace.init({ signer, Owner: owner || "", CU_URL: Constants.CuEndpoints.Randao })
+        subspace = Subspace.init({ signer, Owner: owner || "", CU_URL: cuUrl })
     } else {
-        subspace = Subspace.init({ Owner: owner || "", CU_URL: Constants.CuEndpoints.Randao })
-    }
-    if (!subspace) {
-        throw new Error('Signer is required')
+        // Try to initialize without signer for read-only operations
+        subspace = Subspace.init({ Owner: owner || "", CU_URL: cuUrl })
     }
 
+    if (!subspace) {
+        const walletState = useWallet.getState();
+        const strategy = walletState.connectionStrategy;
+
+        if (strategy === 'wauth') {
+            throw new Error('WAuth integration is not fully implemented yet. Please use ArWallet or WanderConnect for full functionality.');
+        } else if (strategy === 'guest_user') {
+            throw new Error('Guest user mode has limited functionality. Please connect a wallet for full features.');
+        } else {
+            throw new Error('Failed to initialize Subspace client. Please check your connection and try again.');
+        }
+    }
 
     return subspace
 }
