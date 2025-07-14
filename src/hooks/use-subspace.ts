@@ -1,6 +1,12 @@
 import { create } from "zustand";
-import { Profile, Server, Subspace, SubspaceClient } from "@subspace-protocol/sdk"
-import type { AoSigner, createServerParams, Member } from "@subspace-protocol/sdk"
+import { Subspace } from "@subspace-protocol/sdk"
+import type {
+    ConnectionConfig,
+    Profile,
+    Server,
+    Member,
+    AoSigner
+} from "@subspace-protocol/sdk"
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
 import { useWallet } from "./use-wallet";
@@ -19,11 +25,16 @@ export function setCuUrl(url: string): void {
     localStorage.setItem('subspace-cu-url', url);
 }
 
-
 type ExtendedProfile = Profile & { primaryName: string, primaryLogo: string }
 
+interface CreateServerParams {
+    name: string;
+    logo?: string;
+    description?: string;
+}
+
 interface SubspaceState {
-    subspace: SubspaceClient | null
+    subspace: Subspace | null
     profile: ExtendedProfile | null
     profiles: Record<string, ExtendedProfile>
     servers: Record<string, Server>
@@ -34,14 +45,17 @@ interface SubspaceState {
             get: (userId?: string) => Promise<ExtendedProfile | null>
             getBulk: (userIds: string[]) => Promise<ExtendedProfile[]>
             refresh: () => Promise<ExtendedProfile | null>
+            updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
         }
         servers: {
             get: (serverId: string) => Promise<Server | null>
-            create: (data: createServerParams) => Promise<Server>
+            create: (data: CreateServerParams) => Promise<Server>
             join: (serverId: string) => Promise<boolean>
             leave: (serverId: string) => Promise<boolean>
             getMembers: (serverId: string, forceRefresh?: boolean) => Promise<any[]>
             refreshMembers: (serverId: string) => Promise<Member[]>
+            getMember: (serverId: string, userId: string) => Promise<Member | null>
+            updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
         }
         internal: {
             rehydrateServers: () => void
@@ -50,15 +64,19 @@ interface SubspaceState {
 }
 
 export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
-    subspace: getSubspace(useWallet.getState().actions.getSigner()),
+    subspace: getSubspace(null, null),
     profile: null,
     profiles: {},
     servers: {},
     serverData: {},
     actions: {
         init: () => {
+            console.log("init")
             const signer = useWallet.getState().actions.getSigner()
             const owner = useWallet.getState().address
+
+            if (!owner) return
+
             const subspace = getSubspace(signer, owner)
             set({ subspace })
 
@@ -85,9 +103,22 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 const walletAddress = useWallet.getState().address
 
+                if (!subspace) {
+                    console.error("Subspace not initialized")
+                    return null
+                }
+
+                // Don't run get profile if wallet address doesn't exist and no userId is provided
+                if (!userId && !walletAddress) {
+                    console.warn("No wallet address available for profile get")
+                    return null
+                }
+
                 try {
-                    const profile = await subspace.getProfile(userId || walletAddress)
+                    const profile = await subspace.user.getProfile(userId || walletAddress)
+                    console.log("profile", profile)
                     if (profile) {
+                        console.log("profile", profile)
                         const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
                         if (userId) { // means we are getting the profile for someone elses id
                             set({ profiles: { ...get().profiles, [userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile } })
@@ -98,11 +129,14 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             profiles: { ...get().profiles, [profile.userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile }
                         })
                         // fetch users servers and save them to the profile
-                        const servers = profile.serversJoined
+                        const servers = profile.serversJoined || []
                         for (const server of servers) {
                             // This will use persisted data if available for fast loading
-                            const serverObj = await get().actions.servers.get(server.serverId)
-                            // The server will be added to state within the get() method
+                            const serverId = typeof server === 'string' ? server : (server as any).serverId
+                            if (serverId) {
+                                const serverObj = await get().actions.servers.get(serverId)
+                                // The server will be added to state within the get() method
+                            }
                         }
                         return profile as ExtendedProfile
                     } else {
@@ -113,10 +147,16 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     console.error(e)
                     // create their profile
                     if (!userId) {
-                        const profile = await subspace.createProfile()
-                        const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
-                        set({ profile: { ...profile, primaryName, primaryLogo } as ExtendedProfile })
-                        return profile as ExtendedProfile
+                        const profileId = await subspace.user.createProfile()
+                        if (profileId) {
+                            const profile = await subspace.user.getProfile(profileId)
+                            if (profile) {
+                                const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
+                                set({ profile: { ...profile, primaryName, primaryLogo } as ExtendedProfile })
+                                return profile as ExtendedProfile
+                            }
+                        }
+                        return null
                     } else {
                         console.error(e)
                         return null
@@ -125,13 +165,19 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             },
             getBulk: async (userIds: string[]) => {
                 const subspace = get().subspace
-                const profiles = await subspace.getBulkProfiles(userIds) as ExtendedProfile[]
+                if (!subspace) {
+                    console.error("Subspace not initialized")
+                    return []
+                }
+
+                const profiles = await subspace.user.getBulkProfiles(userIds) as ExtendedProfile[]
                 set({
                     profiles: profiles.reduce((acc, profile) => {
                         acc[profile.userId] = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
                         return acc
                     }, {} as Record<string, ExtendedProfile>)
                 })
+
                 // get everyones primary name one by one with a small delay between each request
                 for (const profile of profiles) {
                     const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
@@ -141,7 +187,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     await new Promise(resolve => setTimeout(resolve, 100))
                 }
 
-                // TODO: check if the profiles have primary name and logo when returned
                 return profiles
             },
             refresh: async () => {
@@ -160,6 +205,21 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     console.error("Failed to refresh profile:", error)
                     return null
                 }
+            },
+            updateProfile: async (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => {
+                const subspace = get().subspace
+                if (!subspace) {
+                    console.error("Subspace not initialized")
+                    return false
+                }
+
+                try {
+                    const success = await subspace.user.updateProfile(params)
+                    return success
+                } catch (error) {
+                    console.error("Failed to update profile:", error)
+                    return false
+                }
             }
         },
         servers: {
@@ -169,12 +229,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Check if we already have a proper server instance
                 const existingServer = get().servers[serverId]
-                if (existingServer && typeof existingServer.getMessages === 'function') {
+                if (existingServer) {
                     return existingServer
                 }
 
                 try {
-                    const server = await subspace.getServer(serverId)
+                    const server = await subspace.server.getServer(serverId)
                     if (server) {
                         // Store both the server instance and raw data for persistence
                         set({
@@ -200,17 +260,22 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return null
                 }
             },
-            create: async (data: createServerParams) => {
+            create: async (data: CreateServerParams) => {
                 const subspace = get().subspace
                 if (!subspace) throw new Error("Subspace not initialized")
 
-                const server = await subspace.createServer(data)
+                const serverId = await subspace.server.createServer(data)
+                if (!serverId) throw new Error("Failed to create server")
+
+                // Get the created server
+                const server = await subspace.server.getServer(serverId)
+                if (!server) throw new Error("Failed to retrieve created server")
 
                 set({
-                    servers: { ...get().servers, [server.serverId]: server },
+                    servers: { ...get().servers, [serverId]: server },
                     serverData: {
                         ...get().serverData,
-                        [server.serverId]: {
+                        [serverId]: {
                             serverId: server.serverId,
                             name: server.name,
                             ownerId: server.ownerId,
@@ -224,7 +289,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 })
 
                 // join the server and wait for completion
-                await get().actions.servers.join(server.serverId)
+                await get().actions.servers.join(serverId)
 
                 // Refresh profile to update the joined servers list
                 try {
@@ -239,23 +304,18 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) throw new Error("Subspace not initialized")
 
-                const profile = await subspace.getProfile() as Profile
-                if (!profile) {
-                    throw new Error("Profile not initialized or missing joinServer method")
-                }
-
-                const success = await profile.joinServer({ serverId })
+                const success = await subspace.user.joinServer(serverId)
                 if (success) {
                     // After successfully joining, we need to fetch the server details
                     // and add it to our local state
-                    const server = await subspace.getServer(serverId)
+                    const server = await subspace.server.getServer(serverId)
 
                     if (server) {
                         set({
-                            servers: { ...get().servers, [server.serverId]: server },
+                            servers: { ...get().servers, [serverId]: server },
                             serverData: {
                                 ...get().serverData,
-                                [server.serverId]: {
+                                [serverId]: {
                                     serverId: server.serverId,
                                     name: server.name,
                                     ownerId: server.ownerId,
@@ -282,12 +342,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) throw new Error("Subspace not initialized")
 
-                const profile = await subspace.getProfile() as Profile
-                if (!profile) {
-                    throw new Error("Profile not initialized or missing leaveServer method")
-                }
-
-                const success = await profile.leaveServer({ serverId })
+                const success = await subspace.user.leaveServer(serverId)
                 if (success) {
                     // Remove the server from local state
                     const { [serverId]: removedServer, ...remainingServers } = get().servers
@@ -325,13 +380,13 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 // Check if we already have cached members and don't need to refresh
-                if (!forceRefresh && server.members) {
+                if (!forceRefresh && (server as any).members) {
                     console.log(`Using cached members for server ${serverId}`)
-                    return server.members || [] as Member[]
+                    return (server as any).members || [] as Member[]
                 }
 
                 try {
-                    const membersData = await server.getAllMembers()
+                    const membersData = await subspace.server.getAllMembers(serverId)
                     console.log("Raw members data:", membersData)
 
                     // Check if the result is an object (members by userId) or an array
@@ -347,7 +402,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     }
 
                     // Cache the members in the server instance
-                    server.members = members;
+                    (server as any).members = members;
                     (server as any).membersLoaded = true;
                     (server as any).membersLoading = false;
 
@@ -365,24 +420,53 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             refreshMembers: async (serverId: string) => {
                 console.log(`Force refreshing members for server ${serverId}`)
                 return get().actions.servers.getMembers(serverId, true)
+            },
+            getMember: async (serverId: string, userId: string) => {
+                const subspace = get().subspace
+                if (!subspace) {
+                    console.error("Subspace not initialized")
+                    return null
+                }
+
+                try {
+                    const member = await subspace.server.getMember(serverId, userId)
+                    return member
+                } catch (error) {
+                    console.error("Failed to get member:", error)
+                    return null
+                }
+            },
+            updateMember: async (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => {
+                const subspace = get().subspace
+                if (!subspace) {
+                    console.error("Subspace not initialized")
+                    return false
+                }
+
+                try {
+                    const success = await subspace.server.updateMember(serverId, params)
+                    return success
+                } catch (error) {
+                    console.error("Failed to update member:", error)
+                    return false
+                }
             }
         },
         internal: {
             rehydrateServers: () => {
                 const subspace = get().subspace
-                if (!subspace || !subspace.ao) {
+                if (!subspace) {
                     return
                 }
 
                 const serverData = get().serverData
                 const servers: Record<string, Server> = {}
 
-                // Recreate Server instances from persisted data
+                // Recreate server instances from persisted data
                 for (const [serverId, data] of Object.entries(serverData)) {
                     try {
-                        // Create a new Server instance with the persisted data and current AO instance
-                        const server = new Server(data, subspace.ao)
-                        servers[serverId] = server
+                        // Just use the persisted data as server data
+                        servers[serverId] = data as Server
                     } catch (e) {
                         console.error(`Failed to rehydrate server ${serverId}:`, e)
                     }
@@ -406,25 +490,28 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     })
 }))
 
-
-
-
-
 // ------------------------------------------------------------
 
-export function getSubspace(signer: AoSigner | null, owner?: string): SubspaceClient {
-    let subspace: SubspaceClient | null = null
-
+export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
     const cuUrl = getCuUrl();
 
+    console.log("owner", owner)
+    console.log("signer", signer)
+    const config: ConnectionConfig = {
+        CU_URL: cuUrl,
+        GATEWAY_URL: 'https://arweave.net',
+        owner: owner || "0x69420", // Ensure we always have a valid owner for dryrun requests
+    };
+
     if (signer) {
-        subspace = Subspace.init({ signer, Owner: owner || "", CU_URL: cuUrl })
-    } else {
-        // Try to initialize without signer for read-only operations
-        subspace = Subspace.init({ Owner: owner || "", CU_URL: cuUrl })
+        config.signer = signer;
     }
 
-    if (!subspace) {
+    try {
+        return new Subspace(config);
+    } catch (error) {
+        console.error("Failed to initialize Subspace:", error);
+
         const walletState = useWallet.getState();
         const strategy = walletState.connectionStrategy;
 
@@ -436,6 +523,4 @@ export function getSubspace(signer: AoSigner | null, owner?: string): SubspaceCl
             throw new Error('Failed to initialize Subspace client. Please check your connection and try again.');
         }
     }
-
-    return subspace
 }

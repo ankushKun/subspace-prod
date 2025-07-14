@@ -547,7 +547,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     showMemberList?: boolean;
 }) {
     const { activeServerId, activeChannelId } = useGlobalState();
-    const { servers, profile, profiles, actions } = useSubspace();
+    const { servers, profile, profiles, actions, subspace } = useSubspace();
 
     // State
     const [messages, setMessages] = useState<Message[]>([]);
@@ -576,8 +576,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             const numericId = parseInt(activeChannelId);
             channel = server.channels.find(c =>
                 c.channelId === numericId.toString() ||
-                c.orderId === numericId ||
-                c.channelId === numericId
+                c.orderId === numericId
             );
         }
 
@@ -631,12 +630,16 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
         setLoading(true);
         try {
-            const response = await server.getMessages({
+            if (!subspace) {
+                throw new Error("Subspace not initialized");
+            }
+
+            const response = await subspace.server.getMessages(activeServerId, {
                 channelId: activeChannelId,
                 limit: 50
             });
 
-            if (response.messages) {
+            if (response?.messages) {
                 // Process messages to ensure proper data types
                 const processedMessages = response.messages.map((rawMessage: any) => ({
                     ...rawMessage,
@@ -651,7 +654,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 setMessages(processedMessages);
 
                 // Load profiles for message authors
-                const authorIds = [...new Set(processedMessages.map((m: Message) => m.authorId))];
+                const authorIds = [...new Set(processedMessages.map((m: Message) => m.authorId))] as string[];
                 if (authorIds.length > 0) {
                     actions.profile.getBulk(authorIds).catch(console.error);
                 }
@@ -673,11 +676,15 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
         setSending(true);
         try {
-            const success = await server.sendMessage({
+            if (!subspace) {
+                throw new Error("Subspace not initialized");
+            }
+
+            const success = await subspace.server.sendMessage(activeServerId, {
                 channelId: activeChannelId,
                 content: messageInput.trim(),
                 replyTo: replyingTo || undefined,
-                attachments: []
+                attachments: "[]"
             });
 
             if (success) {
@@ -702,7 +709,11 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
         setSending(true);
         try {
-            const success = await server.editMessage({
+            if (!subspace) {
+                throw new Error("Subspace not initialized");
+            }
+
+            const success = await subspace.server.editMessage(activeServerId, {
                 messageId: editingMessage.id,
                 content: messageInput.trim()
             });
@@ -725,10 +736,10 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     };
 
     const deleteMessage = async (messageId: string) => {
-        if (!server) return;
+        if (!server || !subspace) return;
 
         try {
-            const success = await server.deleteMessage(messageId);
+            const success = await subspace.server.deleteMessage(activeServerId, messageId);
             if (success) {
                 // Remove message from local state
                 setMessages(prev => prev.filter(m => m.messageId !== messageId));

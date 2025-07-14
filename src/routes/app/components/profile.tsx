@@ -57,7 +57,7 @@ export default function Profile({ className }: { className?: string }) {
             try {
                 const server = servers[selectedServerId]
                 if (server) {
-                    const member = await server.getMember(profile.userId)
+                    const member = await actions.servers.getMember(selectedServerId, profile.userId)
                     setEditedNickname(member?.nickname || "")
                 }
             } catch (error) {
@@ -80,7 +80,10 @@ export default function Profile({ className }: { className?: string }) {
     // Get real servers data
     const joinedServers = profile?.serversJoined || []
     const availableServers = Object.entries(servers).filter(([serverId]) =>
-        joinedServers.some(server => server.serverId === serverId)
+        joinedServers.some(server => {
+            const serverIdToCheck = typeof server === 'string' ? server : (server as any).serverId
+            return serverIdToCheck === serverId
+        })
     )
 
     const getDisplayName = () => {
@@ -117,7 +120,7 @@ export default function Profile({ className }: { className?: string }) {
         setIsUploading(true)
         try {
             const pfpId = await uploadFileAR(file)
-            await profile.updateProfile({ Pfp: pfpId })
+            await actions.profile.updateProfile({ pfp: pfpId })
             await actions.profile.refresh()
         } catch (error) {
             console.error("Failed to upload profile picture:", error)
@@ -137,8 +140,8 @@ export default function Profile({ className }: { className?: string }) {
         try {
             const server = servers[selectedServerId]
             if (server) {
-                await server.updateMember({
-                    targetUserId: profile.userId,
+                await actions.servers.updateMember(selectedServerId, {
+                    userId: profile.userId,
                     nickname: editedNickname || undefined
                 })
                 setIsEditing(false)

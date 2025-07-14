@@ -772,21 +772,25 @@ export default function ServerList({ className }: { className?: string }) {
     const { activeServerId } = useGlobalState()
     const navigate = useNavigate()
 
-    const displayServers = profile?.serversJoined
+    const displayServers = (profile?.serversJoined || [])
         .map(server => {
+            // Handle both string and object server identifiers
+            const serverId = typeof server === 'string' ? server : (server as any).serverId
+            if (!serverId) return null
+
             // Try to get the full server instance first, then fall back to persisted data
-            const serverInstance = servers[server.serverId]
+            const serverInstance = servers[serverId]
             if (serverInstance) {
                 return serverInstance
             }
             // If no instance, check if we have persisted data
-            const persistedData = servers[server.serverId]
+            const persistedData = servers[serverId]
             if (persistedData) {
                 return persistedData
             }
             return null
         })
-        .filter(server => server !== null) || []
+        .filter(server => server !== null)
 
     function onServerJoined(data: any) {
         // Server was created and is already in the state
