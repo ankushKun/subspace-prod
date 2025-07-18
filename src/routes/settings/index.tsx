@@ -4,15 +4,17 @@ import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Settings2, Globe } from "lucide-react"
+import { ArrowLeft, Settings2, Globe, Palette, Moon, Sun } from "lucide-react"
 import { useNavigate } from "react-router"
 import alien from "@/assets/subspace/alien-black.svg"
 import { Constants } from "@/lib/constants"
 import { setCuUrl } from "@/hooks/use-subspace"
+import { useTheme } from "@/components/theme-provider"
 
 export default function Settings() {
     const navigate = useNavigate()
     const [currentCuUrl, setCurrentCuUrl] = useState<string>("")
+    const { theme, setTheme } = useTheme()
 
     // Load current CU URL from localStorage on mount
     useEffect(() => {
@@ -35,6 +37,11 @@ export default function Settings() {
     const getCuDisplayName = (url: string) => {
         const entry = Object.entries(Constants.CuEndpoints).find(([_, value]) => value === url)
         return entry ? entry[0] : url
+    }
+
+    // Toggle theme between dark and light
+    const toggleTheme = () => {
+        setTheme(theme === "dark" ? "light" : "dark")
     }
 
     return (
@@ -81,6 +88,51 @@ export default function Settings() {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
 
                 <div className="relative z-10 max-w-2xl mx-auto space-y-6">
+                    {/* Theme Section */}
+                    <Card className="p-6 bg-card border-primary/30 shadow-lg backdrop-blur-sm relative">
+                        {/* Card glow effect */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
+
+                        <div className="relative z-10 space-y-4">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="flex items-center justify-center w-8 h-8 bg-primary/20 rounded-sm border border-primary/30">
+                                    <Palette className="w-4 h-4 text-primary" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-freecam text-primary">
+                                        THEME PREFERENCES
+                                    </h2>
+                                    <p className="text-sm font-ocr text-primary/60">
+                                        Toggle between dark and light themes
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Theme Toggle */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between p-4 bg-primary/10 rounded-sm border border-primary/30">
+                                    <div className="flex flex-col">
+                                        <span className="font-medium text-primary font-ocr">
+                                            {theme === "dark" ? "Dark Theme" : "Light Theme"}
+                                        </span>
+                                        <span className="text-xs text-primary/60">
+                                            {theme === "dark" ? "Dark interface for low-light environments" : "Bright interface for well-lit environments"}
+                                        </span>
+                                    </div>
+                                    <Button
+                                        onClick={toggleTheme}
+                                        variant="outline"
+                                        size="icon"
+                                        className="w-12 h-12 rounded-sm border-primary/30 text-primary hover:bg-primary/20 hover:border-primary/50 transition-all relative"
+                                    >
+                                        <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                                        <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
                     {/* CU URL Section */}
                     <Card className="p-6 bg-card border-primary/30 shadow-lg backdrop-blur-sm relative">
                         {/* Card glow effect */}

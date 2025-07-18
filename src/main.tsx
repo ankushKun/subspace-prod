@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import SubspaceLanding from './routes/landing';
 import App from '@/routes/app';
 import Settings from '@/routes/settings';
-import ServerSettings from '@/routes/app/settings';
+import ServerSettings from '@/routes/app/server-settings';
 import { ConnectionStrategies, useWallet } from '@/hooks/use-wallet';
 import { useEffect, useState } from 'react';
 import { useCallback } from 'react';
