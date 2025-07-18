@@ -51,7 +51,7 @@ export default function SubspaceLanding() {
                 <div className="max-w-4xl mx-auto text-center flex flex-col items-center justify-center">
 
                     {/* Main Logo Section */}
-                    <div className="relative flex flex-col items-center justify-center h-[75vh] w-full">
+                    <div className="relative flex flex-col items-center justify-center h-[75vh] w-[90vw] md:w-[75vw]">
                         <div className="drop-shadow-2xl drop-shadow-primary/40 w-full ">
                             <svg
                                 className="w-full h-auto"
@@ -115,12 +115,12 @@ export default function SubspaceLanding() {
                     </div>
 
                     {/* App Preview Section */}
-                    <div className="relative flex flex-col items-center justify-center w-full max-w-4xl mx-auto px-4 -mt-4 sm:-mt-6 md:-mt-8">
-                        <div className="relative w-full pt-16 sm:pt-20 md:pt-24">
+                    <div className="relative flex flex-col items-center justify-center w-[80vw]">
+                        <div className="relative w-">
                             <img
                                 draggable={false}
                                 src={isMobile ? s2 : s1}
-                                className={cn("w-full mx-auto -rotate-2 sm:-rotate-1 md:rotate-0 rounded-xl object-cover drop-shadow-2xl border-primary/20", isMobile ? " max-w-sm border" : " max-w-4xl")}
+                                className={cn("w-full mx-auto -rotate-2 sm:-rotate-1 md:rotate-0 object-cover drop-shadow-2xl drop-shadow-primary/5 rounded-2xl border-primary/20", isMobile ? " max-w-sm border" : "")}
                                 alt="Subspace app preview"
                             />
                         </div>
