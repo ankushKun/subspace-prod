@@ -109,18 +109,24 @@ export default function SubspaceLanding() {
                         </div>
 
 
-                        <div className="font-ocr tracking-wider text-foreground text-sm sm:text-base md:text-lg lg:text-xl scale-y-130 drop-shadow-xl mt-10">
+                        <div className="font-ocr tracking-wider text-foreground text-sm sm:text-base md:text-lg lg:text-xl drop-shadow-xl mt-10">
                             Group chat with your friends!
                         </div>
                     </div>
 
                     {/* App Preview Section */}
                     <div className="relative flex flex-col items-center justify-center w-[80vw]">
-                        <div className="relative w-">
+                        <div className="relative">
+                            <img
+                                draggable={false}
+                                src={chk}
+                                className="absolute z-20 -top-24 -right-10 w-60 invert drop-shadow-white/40 dark:invert-0 drop-shadow-lg dark:drop-shadow-white/0"
+                                alt="Check this out!"
+                            />
                             <img
                                 draggable={false}
                                 src={isMobile ? s2 : s1}
-                                className={cn("w-full mx-auto -rotate-2 sm:-rotate-1 md:rotate-0 object-cover drop-shadow-2xl drop-shadow-primary/5 rounded-2xl border-primary/20", isMobile ? " max-w-sm border" : "")}
+                                className={cn("w-full mx-auto border -rotate-2 sm:-rotate-1 md:rotate-0 object-cover drop-shadow-2xl drop-shadow-primary/5 rounded border-primary/20", isMobile ? " max-w-sm" : "")}
                                 alt="Subspace app preview"
                             />
                         </div>
