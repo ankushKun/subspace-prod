@@ -33,7 +33,7 @@ function SettingsButton(props: React.ComponentProps<typeof Button>) {
 
 export default function Profile({ className }: { className?: string }) {
     const { address, connected, actions: walletActions } = useWallet()
-    const { profile, servers, actions } = useSubspace()
+    const { profile, servers, actions, subspace } = useSubspace()
 
     // UI State
     const [profileDialogOpen, setProfileDialogOpen] = useState(false)
@@ -45,9 +45,10 @@ export default function Profile({ className }: { className?: string }) {
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
-        if (!connected || !address) return
+        if (!connected || !address || !subspace) return
+
         actions.profile.get()
-    }, [connected, address])
+    }, [connected, address, subspace])
 
     // Load current nickname when server is selected
     useEffect(() => {

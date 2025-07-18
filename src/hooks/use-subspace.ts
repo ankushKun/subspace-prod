@@ -147,6 +147,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     } else {
                         console.error("Failed to get profile")
                         set({ profile: null })
+                        // retry
+                        setTimeout(() => {
+                            get().actions.profile.get(userId)
+                        }, 100)
                     }
                 } catch (e) {
                     console.error(e)
@@ -498,12 +502,14 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 // ------------------------------------------------------------
 
 export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
+    if (!owner) return null
+
     const cuUrl = getCuUrl();
 
     const config: ConnectionConfig = {
         CU_URL: cuUrl,
         GATEWAY_URL: 'https://arweave.net',
-        owner: owner || "0x69420", // Ensure we always have a valid owner for dryrun requests
+        owner: owner
     };
 
     if (signer) {
@@ -511,6 +517,7 @@ export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
     }
 
     try {
+        console.log("Initializing Subspace with config:", config)
         return new Subspace(config);
     } catch (error) {
         console.error("Failed to initialize Subspace:", error);
