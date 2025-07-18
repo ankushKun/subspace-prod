@@ -67,6 +67,7 @@ export class Constants {
     static readonly Module = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw";
 
     static readonly CuEndpoints = {
+        AoTestnet: "https://cu.ao-testnet.xyz",
         ArnodeAsia: "https://cu.arnode.asia",
         Ardrive: "https://cu.ardrive.io",
         Randao: "https://ur-cu.randao.net"

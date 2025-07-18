@@ -71,7 +71,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     serverData: {},
     actions: {
         init: () => {
-            console.log("init")
             const signer = useWallet.getState().actions.getSigner()
             const owner = useWallet.getState().address
 
@@ -115,11 +114,17 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 try {
-                    const profile = await subspace.user.getProfile(userId || walletAddress)
-                    console.log("profile", profile)
+                    let profile: Profile | null = null
+                    try {
+                        profile = await subspace.user.getProfile(userId || walletAddress)
+                    } catch (e) {
+                        // create their profile
+                        const profileId = await subspace.user.createProfile()
+                        profile = await subspace.user.getProfile(profileId)
+                    }
                     if (profile) {
-                        console.log("profile", profile)
-                        const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
+                        console.log('profile', profile)
+                        const { primaryName, primaryLogo } = await getPrimaryName(profile.userId || userId)
                         if (userId) { // means we are getting the profile for someone elses id
                             set({ profiles: { ...get().profiles, [userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile } })
                             return profile as ExtendedProfile // read only
@@ -495,8 +500,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
     const cuUrl = getCuUrl();
 
-    console.log("owner", owner)
-    console.log("signer", signer)
     const config: ConnectionConfig = {
         CU_URL: cuUrl,
         GATEWAY_URL: 'https://arweave.net',
