@@ -201,25 +201,25 @@ export default function MemberList({ className }: { className?: string }) {
     const loading = (servers[activeServerId] as any)?.membersLoading || false
     const membersLoaded = (server as any)?.membersLoaded || false
 
-    // Load members when server changes (only if not already loaded)
-    useEffect(() => {
-        if (!server || !activeServerId) return
+    // // Load members when server changes (only if not already loaded)
+    // useEffect(() => {
+    //     if (!server || !activeServerId) return
 
-        // If members aren't loaded yet, load them
-        if (!membersLoaded && !loading) {
-            actions.servers.getMembers(activeServerId)
-                .then(membersList => {
-                    console.log("Members loaded:", membersList)
+    //     // If members aren't loaded yet, load them
+    //     if (!membersLoaded && !loading) {
+    //         actions.servers.getMembers(activeServerId)
+    //             .then(membersList => {
+    //                 console.log("Members loaded:", membersList)
 
-                    // Load profiles for all members
-                    const userIds = membersList.map(m => m.userId)
-                    if (userIds.length > 0) {
-                        actions.profile.getBulk(userIds).catch(console.error)
-                    }
-                })
-                .catch(console.error)
-        }
-    }, [server, activeServerId, membersLoaded, loading, actions.servers, actions.profile])
+    //                 // Load profiles for all members
+    //                 const userIds = membersList.map(m => m.userId)
+    //                 if (userIds.length > 0) {
+
+    //                 }
+    //             })
+    //             .catch(console.error)
+    //     }
+    // }, [server, activeServerId, membersLoaded, loading, actions.servers, actions.profile])
 
     // Filter members based on search query
     const filteredMembers = useMemo(() => {

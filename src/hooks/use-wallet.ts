@@ -37,6 +37,10 @@ interface WalletActions {
     getSigner: () => AoSigner | null
 }
 
+function triggerAuthenticatedEvent(address: string) {
+    window.dispatchEvent(new CustomEvent("subspace-authenticated", { detail: { address } }))
+}
+
 
 
 export const useWallet = create<WalletState>()(persist((set, get) => ({
@@ -113,6 +117,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                 provider: null
                             }
                         })
+                        triggerAuthenticatedEvent(addr)
                         break;
                     }
                 case ConnectionStrategies.WAuth: {
@@ -161,7 +166,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                             provider: provider
                         }
                     })
-
+                    triggerAuthenticatedEvent(wallet.address)
                     break;
                 }
                 case ConnectionStrategies.GuestUser: {
@@ -193,6 +198,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                         provider: null
                                     }
                                 })
+                                triggerAuthenticatedEvent(address)
                             })
                         })
                     } else {
@@ -229,6 +235,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                                 }
                                             })
                                             wander.close();
+                                            triggerAuthenticatedEvent(address)
                                         })
                                     })
                                 }

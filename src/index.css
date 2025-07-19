@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -521,6 +522,39 @@ html {
     box-shadow: none;
 }
 
+/* Enhanced mentions input styling */
+.mentions-input {
+    position: relative;
+}
+
+.mentions-input textarea {
+    resize: none;
+    font-family: inherit;
+}
+
+.mentions-input .mentions__suggestions__list {
+    border-radius: 8px !important;
+    border: 1px solid hsl(var(--border)) !important;
+    background: hsl(var(--background)) !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+    max-height: 200px !important;
+    overflow-y: auto !important;
+    padding: 4px !important;
+}
+
+.mentions-input .mentions__suggestions__item {
+    padding: 8px 12px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    color: hsl(var(--foreground)) !important;
+    border: none !important;
+}
+
+.mentions-input .mentions__suggestions__item--focused {
+    background-color: hsl(var(--accent)) !important;
+}
+
+/* Markdown styling */
 .markdown>* {
     all: revert !important;
     margin: 0px !important;

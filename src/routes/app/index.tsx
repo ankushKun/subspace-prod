@@ -13,7 +13,7 @@ import { useEffect } from "react"
 
 export default function App() {
     const { actions: stateActions } = useGlobalState()
-    const { actions: subspaceActions } = useSubspace()
+    const { actions: subspaceActions, subspace } = useSubspace()
     const { serverId, channelId } = useParams()
 
     // Initialize subspace when app loads
@@ -26,8 +26,19 @@ export default function App() {
     useEffect(() => {
         stateActions.setActiveServerId(serverId)
         stateActions.setActiveChannelId(channelId)
+        // update server and members
+        if (subspace && serverId) {
+            subspaceActions.servers.get(serverId).then(server => {
+                if (server) {
+                    subspaceActions.servers.refreshMembers(serverId).then(members => {
+                        const userIds = members.map(m => m.userId)
+                        subspaceActions.profile.getBulk(userIds)
+                    })
+                }
+            })
+        }
         console.table({ serverId, channelId })
-    }, [serverId, channelId, stateActions])
+    }, [serverId, channelId, stateActions, subspace])
 
     return <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
         <ServerList className="w-20 min-w-20 border-r h-full" />

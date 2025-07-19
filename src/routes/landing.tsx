@@ -9,10 +9,11 @@ import LoginDialog from "@/components/login-dialog"
 import { useWallet } from "@/hooks/use-wallet"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { ExternalLink } from "lucide-react"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 import s1 from "@/assets/s1.png"
 import s2 from "@/assets/s2.png"
 import chk from "@/assets/chkthisout.png"
+import { useEffect } from "react"
 
 
 function Trapezoid({ className }: { className?: string }) {
@@ -22,8 +23,18 @@ function Trapezoid({ className }: { className?: string }) {
 }
 
 export default function SubspaceLanding() {
+    const navigate = useNavigate()
     const { connected } = useWallet()
     const isMobile = useIsMobile()
+
+    useEffect(() => {
+        function onAuthenticated() {
+            navigate("/app")
+        }
+
+        window.addEventListener("subspace-authenticated", onAuthenticated)
+        return () => window.removeEventListener("subspace-authenticated", onAuthenticated)
+    }, [navigate])
 
     return (
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">
