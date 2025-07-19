@@ -556,7 +556,7 @@ const AddServerButton = ({ onServerJoined }: AddServerButtonProps) => {
                                 <div className="flex items-start gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 flex-shrink-0" />
                                     <p className="text-xs text-muted-foreground">
-                                        Server creation may take 30-60 seconds as we initialize your server on the blockchain.
+                                        Server creation may take 30-60 seconds as we initialize your server on the permaweb.
                                         Please be patient during this process.
                                     </p>
                                 </div>

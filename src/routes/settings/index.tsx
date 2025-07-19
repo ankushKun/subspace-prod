@@ -18,7 +18,7 @@ export default function Settings() {
 
     // Load current CU URL from localStorage on mount
     useEffect(() => {
-        const storedUrl = localStorage.getItem('subspace-cu-url') || Constants.CuEndpoints.Randao
+        const storedUrl = localStorage.getItem('subspace-cu-url') || Constants.CuEndpoints.ArnodeAsia
         setCurrentCuUrl(storedUrl)
     }, [])
 
