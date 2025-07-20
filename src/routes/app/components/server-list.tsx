@@ -335,13 +335,10 @@ const AddServerButton = ({ onServerJoined }: AddServerButtonProps) => {
                 return;
             }
 
-            console.log("Joining server with ID:", serverId);
-
             // Use the new joinServer method from the useSubspace hook
             const success = await actions.servers.join(serverId);
 
             if (success) {
-                console.log("Successfully joined server:", serverId);
                 toast.success("Successfully joined server!", {
                     description: "You can now access the server from the sidebar",
                     duration: 4000

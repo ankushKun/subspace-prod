@@ -5,7 +5,8 @@ import type {
     Profile,
     Server,
     Member,
-    AoSigner
+    AoSigner,
+    Message
 } from "@subspace-protocol/sdk"
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
@@ -38,7 +39,7 @@ interface SubspaceState {
     profile: ExtendedProfile | null
     profiles: Record<string, ExtendedProfile>
     servers: Record<string, Server>
-    serverData: Record<string, any> // For persistence only
+    messages: Record<string, Record<string, Record<string, any>>>  // serverId -> channelId -> messageId -> message
     actions: {
         init: () => void
         profile: {
@@ -56,6 +57,12 @@ interface SubspaceState {
             refreshMembers: (serverId: string) => Promise<Member[]>
             getMember: (serverId: string, userId: string) => Promise<Member | null>
             updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
+            getMessages: (serverId: string, channelId: string, limit?: number) => Promise<any[]>
+            getMessage: (serverId: string, channelId: string, messageId: string) => Promise<any | null>
+            sendMessage: (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => Promise<boolean>
+            editMessage: (serverId: string, channelId: string, messageId: string, content: string) => Promise<boolean>
+            deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
+            getCachedMessages: (serverId: string, channelId: string) => any[]
         }
         internal: {
             rehydrateServers: () => void
@@ -68,7 +75,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     profile: null,
     profiles: {},
     servers: {},
-    serverData: {},
+    messages: {},
     actions: {
         init: () => {
             const signer = useWallet.getState().actions.getSigner()
@@ -79,18 +86,26 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             const subspace = getSubspace(signer, owner)
             set({ subspace })
 
+            // set state from profiles cache and then get the latest profile
+            const cachedProfile = get().profiles[owner]
+            if (cachedProfile) {
+                set({ profile: cachedProfile as ExtendedProfile })
+            } else {
+                set({ profile: null })
+                get().actions.profile.get()
+            }
+
             // Delay rehydration slightly to ensure subspace is ready
             setTimeout(() => {
                 // Rehydrate servers from persisted data
                 get().actions.internal.rehydrateServers()
 
                 // Preload servers if we have persisted data
-                const serverData = get().serverData
-                if (Object.keys(serverData).length > 0) {
-                    console.log("Preloading servers from persisted data")
+                const servers = get().servers
+                if (Object.keys(servers).length > 0) {
                     // Start loading servers in the background
                     setTimeout(() => {
-                        for (const serverId of Object.keys(serverData)) {
+                        for (const serverId of Object.keys(servers)) {
                             get().actions.servers.get(serverId).catch(console.error)
                         }
                     }, 100)
@@ -120,7 +135,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         profile = await subspace.user.getProfile(profileId)
                     }
                     if (profile) {
-                        console.log('profile', profile)
                         const { primaryName, primaryLogo } = await getPrimaryName(profile.userId || userId)
                         if (userId) { // means we are getting the profile for someone elses id
                             set({ profiles: { ...get().profiles, [userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile } })
@@ -144,10 +158,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     } else {
                         console.error("Failed to get profile")
                         set({ profile: null })
-                        // retry
-                        setTimeout(() => {
-                            get().actions.profile.get(userId)
-                        }, 100)
                     }
                 } catch (e) {
                     console.error(e)
@@ -197,12 +207,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 // Force refresh the current user's profile
                 const walletAddress = useWallet.getState().address
                 if (!walletAddress) {
-                    console.warn("No wallet address available for profile refresh")
+                    console.error("No wallet address available for profile refresh")
                     return null
                 }
 
                 try {
-                    console.log("Refreshing user profile...")
                     const refreshedProfile = await get().actions.profile.get()
                     return refreshedProfile
                 } catch (error) {
@@ -240,19 +249,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Store both the server instance and raw data for persistence
                         set({
                             servers: { ...get().servers, [serverId]: server },
-                            serverData: {
-                                ...get().serverData,
-                                [serverId]: {
-                                    serverId: server.serverId,
-                                    name: server.name,
-                                    ownerId: server.ownerId,
-                                    logo: server.logo,
-                                    memberCount: server.memberCount,
-                                    channels: server.channels,
-                                    categories: server.categories,
-                                    roles: server.roles
-                                }
-                            }
                         })
                     }
                     return server
@@ -274,19 +270,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 set({
                     servers: { ...get().servers, [serverId]: server },
-                    serverData: {
-                        ...get().serverData,
-                        [serverId]: {
-                            serverId: server.serverId,
-                            name: server.name,
-                            ownerId: server.ownerId,
-                            logo: server.logo,
-                            memberCount: server.memberCount,
-                            channels: server.channels,
-                            categories: server.categories,
-                            roles: server.roles
-                        }
-                    }
                 })
 
                 // join the server and wait for completion
@@ -296,82 +279,82 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     await get().actions.profile.refresh()
                 } catch (error) {
-                    console.warn("Failed to refresh profile after creating server:", error)
+                    console.error("Failed to refresh profile after creating server:", error)
                 }
 
                 return server
             },
             join: async (serverId: string) => {
                 const subspace = get().subspace
-                if (!subspace) return
+                if (!subspace) return false
 
-                const success = await subspace.user.joinServer(serverId)
-                if (success) {
-                    // After successfully joining, we need to fetch the server details
-                    // and add it to our local state
-                    const server = await subspace.server.getServer(serverId)
-
-                    if (server) {
-                        set({
-                            servers: { ...get().servers, [serverId]: server },
-                            serverData: {
-                                ...get().serverData,
-                                [serverId]: {
-                                    serverId: server.serverId,
-                                    name: server.name,
-                                    ownerId: server.ownerId,
-                                    logo: server.logo,
-                                    memberCount: server.memberCount,
-                                    channels: server.channels,
-                                    categories: server.categories,
-                                    roles: server.roles
-                                }
+                try {
+                    const success = await subspace.user.joinServer(serverId)
+                    if (success) {
+                        // After successfully joining, we need to fetch the server details
+                        // and add it to our local state
+                        try {
+                            const server = await subspace.server.getServer(serverId)
+                            if (server) {
+                                set({
+                                    servers: { ...get().servers, [serverId]: server },
+                                })
+                            } else {
+                                console.error(`Successfully joined server ${serverId} but failed to fetch server details`)
                             }
-                        })
+                        } catch (error) {
+                            console.error(`Successfully joined server ${serverId} but failed to fetch server details:`, error)
+                        }
 
                         // Refresh profile to update the joined servers list
                         try {
                             await get().actions.profile.refresh()
                         } catch (error) {
-                            console.warn("Failed to refresh profile after joining server:", error)
+                            console.error("Failed to refresh profile after joining server:", error)
                         }
                     }
+                    return success
+                } catch (error) {
+                    console.error("Failed to join server:", error)
+                    return false
                 }
-                return success
             },
             leave: async (serverId: string) => {
                 const subspace = get().subspace
-                if (!subspace) return
+                if (!subspace) return false
 
-                const success = await subspace.user.leaveServer(serverId)
-                if (success) {
-                    // Remove the server from local state
-                    const { [serverId]: removedServer, ...remainingServers } = get().servers
-                    const { [serverId]: removedServerData, ...remainingServerData } = get().serverData
-                    set({
-                        servers: remainingServers,
-                        serverData: remainingServerData
-                    })
+                try {
+                    const success = await subspace.user.leaveServer(serverId)
+                    if (success) {
+                        // Remove the server from local state
+                        const { [serverId]: removedServer, ...remainingServers } = get().servers
+                        set({
+                            servers: remainingServers,
+                        })
 
-                    // Clear active server/channel if user was viewing the left server
-                    const globalState = useGlobalState.getState()
-                    if (globalState.activeServerId === serverId) {
-                        globalState.actions.setActiveServerId("")
-                        globalState.actions.setActiveChannelId("")
+                        // Clear active server/channel if user was viewing the left server
+                        const globalState = useGlobalState.getState()
+                        if (globalState.activeServerId === serverId) {
+                            globalState.actions.setActiveServerId("")
+                            globalState.actions.setActiveChannelId("")
+                        }
+
+                        // Refresh profile to update the joined servers list
+                        try {
+                            await get().actions.profile.refresh()
+                        } catch (error) {
+                            console.error("Failed to refresh profile after leaving server:", error)
+                        }
                     }
-
-                    // Refresh profile to update the joined servers list
-                    try {
-                        await get().actions.profile.refresh()
-                    } catch (error) {
-                        console.warn("Failed to refresh profile after leaving server:", error)
-                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to leave server:", error)
+                    return false
                 }
-                return success
             },
-            getMembers: async (serverId: string, forceRefresh: boolean = false) => {
+            getMembers: async (serverId: string, forceRefresh: boolean = false): Promise<any[]> => {
                 const subspace = get().subspace
-                if (!subspace) return
+                if (!subspace) return []
 
                 // Get the proper server instance
                 const server = await get().actions.servers.get(serverId)
@@ -381,14 +364,23 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 // Check if we already have cached members and don't need to refresh
-                if (!forceRefresh && (server as any).members) {
-                    console.log(`Using cached members for server ${serverId}`)
+                if (!forceRefresh && (server as any).members && (server as any).membersLoaded) {
+                    return (server as any).members || [] as Member[]
+                }
+
+                // Check if already loading to prevent duplicate requests
+                if ((server as any).membersLoading) {
                     return (server as any).members || [] as Member[]
                 }
 
                 try {
+                    // Set loading state
+                    (server as any).membersLoading = true;
+                    set({
+                        servers: { ...get().servers, [serverId]: server }
+                    })
+
                     const membersData = await subspace.server.getAllMembers(serverId)
-                    console.log("Raw members data:", membersData)
 
                     // Check if the result is an object (members by userId) or an array
                     let members: Member[] = []
@@ -414,12 +406,16 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                     return members
                 } catch (e) {
-                    console.error("Failed to get members:", e)
+                    console.error("Failed to get members:", e);
+                    // Clear loading state on error
+                    (server as any).membersLoading = false
+                    set({
+                        servers: { ...get().servers, [serverId]: server }
+                    })
                     return []
                 }
             },
             refreshMembers: async (serverId: string) => {
-                console.log(`Force refreshing members for server ${serverId}`)
                 return get().actions.servers.getMembers(serverId, true)
             },
             getMember: async (serverId: string, userId: string) => {
@@ -445,30 +441,227 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     console.error("Failed to update member:", error)
                     return false
                 }
-            }
+            },
+            getMessages: async (serverId: string, channelId: string, limit: number = 50) => {
+                const subspace = get().subspace
+                if (!subspace) return []
+
+                try {
+                    const response = await subspace.server.getMessages(serverId, {
+                        channelId: channelId,
+                        limit
+                    })
+
+                    if (response?.messages) {
+                        // Process messages to ensure proper data types and sort by timestamp (oldest first)
+                        const processedMessages = response.messages
+                            .map((rawMessage: any) => ({
+                                messageId: rawMessage.messageId,
+                                content: rawMessage.content,
+                                authorId: rawMessage.authorId,
+                                timestamp: Number(rawMessage.timestamp),
+                                edited: Boolean(rawMessage.edited),
+                                attachments: rawMessage.attachments || "[]",
+                                replyTo: rawMessage.replyTo,
+                                messageTxId: rawMessage.messageTxId,
+                                replyToMessage: rawMessage.replyToMessage
+                            } as any))
+                            .sort((a: any, b: any) => a.timestamp - b.timestamp)
+
+                        // Cache the messages
+                        const currentMessages = get().messages
+                        const serverMessages = currentMessages[serverId] || {}
+                        const channelMessages = serverMessages[channelId] || {}
+
+                        // Convert array to messageId-keyed object for caching
+                        const messageMap = processedMessages.reduce((acc: Record<string, any>, message: any) => {
+                            acc[message.messageId] = message
+                            return acc
+                        }, {})
+
+                        set({
+                            messages: {
+                                ...currentMessages,
+                                [serverId]: {
+                                    ...serverMessages,
+                                    [channelId]: { ...channelMessages, ...messageMap }
+                                }
+                            }
+                        })
+
+                        return processedMessages
+                    }
+                    return []
+                } catch (error) {
+                    console.error("Failed to get messages:", error)
+                    return []
+                }
+            },
+            getMessage: async (serverId: string, channelId: string, messageId: string) => {
+                // First check cache
+                const cachedMessage = get().messages[serverId]?.[channelId]?.[messageId]
+                if (cachedMessage) {
+                    return cachedMessage
+                }
+
+                const subspace = get().subspace
+                if (!subspace) return null
+
+                try {
+                    const message = await subspace.server.getMessage(serverId, messageId)
+                    if (message) {
+                        // Cache the message
+                        const currentMessages = get().messages
+                        const serverMessages = currentMessages[serverId] || {}
+                        const channelMessages = serverMessages[channelId] || {}
+
+                        set({
+                            messages: {
+                                ...currentMessages,
+                                [serverId]: {
+                                    ...serverMessages,
+                                    [channelId]: {
+                                        ...channelMessages,
+                                        [messageId]: message
+                                    }
+                                }
+                            }
+                        })
+                    }
+                    return message
+                } catch (error) {
+                    console.error("Failed to get message:", error)
+                    return null
+                }
+            },
+            sendMessage: async (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.sendMessage(serverId, params)
+                    if (success) {
+                        // Refresh messages for this channel after sending
+                        setTimeout(() => {
+                            get().actions.servers.getMessages(serverId, params.channelId)
+                        }, 500)
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to send message:", error)
+                    return false
+                }
+            },
+            editMessage: async (serverId: string, channelId: string, messageId: string, content: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.editMessage(serverId, {
+                        messageId,
+                        content
+                    })
+
+                    if (success) {
+                        // Update the cached message
+                        const currentMessages = get().messages
+                        const cachedMessage = currentMessages[serverId]?.[channelId]?.[messageId]
+
+                        if (cachedMessage) {
+                            const updatedMessage = {
+                                ...cachedMessage,
+                                content,
+                                edited: true
+                            }
+
+                            set({
+                                messages: {
+                                    ...currentMessages,
+                                    [serverId]: {
+                                        ...currentMessages[serverId],
+                                        [channelId]: {
+                                            ...currentMessages[serverId][channelId],
+                                            [messageId]: updatedMessage
+                                        }
+                                    }
+                                }
+                            })
+                        }
+
+                        // Also refresh messages to get the latest state
+                        setTimeout(() => {
+                            get().actions.servers.getMessages(serverId, channelId)
+                        }, 500)
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to edit message:", error)
+                    return false
+                }
+            },
+            deleteMessage: async (serverId: string, channelId: string, messageId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.deleteMessage(serverId, messageId)
+
+                    if (success) {
+                        // Remove message from cache
+                        const currentMessages = get().messages
+                        const serverMessages = currentMessages[serverId]
+                        const channelMessages = serverMessages?.[channelId]
+
+                        if (channelMessages && channelMessages[messageId]) {
+                            const { [messageId]: removedMessage, ...remainingMessages } = channelMessages
+
+                            set({
+                                messages: {
+                                    ...currentMessages,
+                                    [serverId]: {
+                                        ...serverMessages,
+                                        [channelId]: remainingMessages
+                                    }
+                                }
+                            })
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to delete message:", error)
+                    return false
+                }
+            },
+            getCachedMessages: (serverId: string, channelId: string) => {
+                const cachedChannelMessages = get().messages[serverId]?.[channelId]
+                if (!cachedChannelMessages) return []
+
+                // Convert the messageId-keyed object back to a sorted array
+                return Object.values(cachedChannelMessages)
+                    .sort((a: any, b: any) => a.timestamp - b.timestamp)
+            },
         },
         internal: {
             rehydrateServers: () => {
                 const subspace = get().subspace
                 if (!subspace) return
 
-                const serverData = get().serverData
-                const servers: Record<string, Server> = {}
+                const persistedServers = get().servers
+                const rehydratedServers: Record<string, Server> = {}
 
                 // Recreate server instances from persisted data
-                for (const [serverId, data] of Object.entries(serverData)) {
+                for (const [serverId, data] of Object.entries(persistedServers)) {
                     try {
                         // Just use the persisted data as server data
-                        servers[serverId] = data as Server
+                        rehydratedServers[serverId] = data as Server
                     } catch (e) {
                         console.error(`Failed to rehydrate server ${serverId}:`, e)
                     }
                 }
 
-                if (Object.keys(servers).length > 0) {
-                    console.log(`Rehydrated ${Object.keys(servers).length} servers`)
+                if (Object.keys(rehydratedServers).length > 0) {
                 }
-                set({ servers })
+                set({ servers: rehydratedServers })
             }
         }
     }
@@ -476,8 +669,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     name: "subspace",
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({
-        // Only persist the raw server data, not the server instances (they need to be recreated)
-        serverData: state.serverData,
+        servers: state.servers,
+        messages: state.messages,
         profile: state.profile,
         profiles: state.profiles,
     })
@@ -501,7 +694,6 @@ export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
     }
 
     try {
-        console.log("Initializing Subspace with config:", config)
         return new Subspace(config);
     } catch (error) {
         console.error("Failed to initialize Subspace:", error);

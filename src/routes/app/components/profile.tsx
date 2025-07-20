@@ -62,7 +62,7 @@ export default function Profile({ className }: { className?: string }) {
                     setEditedNickname(member?.nickname || "")
                 }
             } catch (error) {
-                console.warn("Failed to load current nickname:", error)
+                console.error("Failed to load current nickname:", error)
                 setEditedNickname("")
             }
         }

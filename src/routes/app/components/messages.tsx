@@ -81,6 +81,9 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
 
+import alien from "@/assets/subspace/alien-green.svg"
+
+
 // Global store for mentions data (temporary solution)
 let currentMentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
 
@@ -213,8 +216,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
 
 // Enhanced Message Avatar Component
 const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?: "sm" | "md" | "lg" }) => {
-    const { profiles } = useSubspace()
-    const profile = profiles[authorId]
+    const profile = useSubspace((state) => state.profiles[authorId])
 
     const sizeClasses = {
         sm: "w-6 h-6",
@@ -224,18 +226,22 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
 
     return (
         <div className={cn(
-            "relative rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0",
+            "relative rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0",
             sizeClasses[size]
         )}>
-            {profile?.pfp ? (
+            {profile?.pfp || profile?.primaryLogo ? (
                 <img
-                    src={`https://arweave.net/${profile.pfp}`}
+                    src={`https://arweave.net/${profile.pfp || profile.primaryLogo}`}
                     alt={authorId}
                     className="w-full h-full object-cover"
                 />
             ) : (
-                <div className="w-full h-full flex items-center justify-center text-primary font-semibold text-sm">
-                    {(profile?.primaryName || authorId).charAt(0).toUpperCase()}
+                <div className="w-full h-full flex items-center justify-center">
+                    <img
+                        src={alien}
+                        alt="Default avatar"
+                        className="w-6 h-6 object-contain opacity-30"
+                    />
                 </div>
             )}
         </div>
@@ -245,48 +251,33 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
 MessageAvatar.displayName = "MessageAvatar"
 
 // Enhanced Message Timestamp Component
-const MessageTimestamp = memo(({ timestamp, className, ...props }: { timestamp: number } & React.HTMLAttributes<HTMLSpanElement>) => {
-    const formatTime = (ts: number) => {
-        const date = new Date(ts)
-        const now = new Date()
+const MessageTimestamp = memo(({ timestamp, showDate = false, className, ...props }: { timestamp: number, showDate?: boolean } & React.HTMLAttributes<HTMLSpanElement>) => {
+    const date = new Date(timestamp)
 
-        // Get start of today and yesterday for comparison
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
-        const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    // Format the display string based on showDate
+    const displayString = showDate
+        ? `${date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}`
+        : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
 
-        if (messageDate.getTime() === today.getTime()) {
-            // Same day - show relative time
-            const diffMs = now.getTime() - date.getTime()
-            const diffMinutes = Math.floor(diffMs / (1000 * 60))
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-
-            if (diffMinutes < 1) {
-                return 'just now'
-            } else if (diffMinutes < 60) {
-                return `${diffMinutes}m ago`
-            } else if (diffHours < 24) {
-                return `${diffHours}h ago`
-            } else {
-                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }
-        } else if (messageDate.getTime() === yesterday.getTime()) {
-            // Yesterday
-            return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-        } else {
-            // Older - show short date and time
-            return date.toLocaleDateString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            })
-        }
-    }
+    // Full date and time for tooltip
+    const fullDateTime = date.toLocaleString([], {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    })
 
     return (
-        <span className={cn("text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors", className)} {...props}>
-            {formatTime(timestamp)}
+        <span
+            className={cn("text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors", className)}
+            title={fullDateTime}
+            {...props}
+        >
+            {displayString}
         </span>
     )
 })
@@ -474,11 +465,11 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
     const isEmojiOnly = /^\p{Emoji}{1,10}$/u.test(content)
 
     return (
-        <div className="space-y-2">
+        <div className="">
             {/* Message text */}
             {content && (
                 <div className={cn(
-                    "text-sm whitespace-normal break-words max-w-[80vw] md:max-w-full text-foreground leading-relaxed",
+                    "text-sm whitespace-normal break-words max-w-[80vw] text-left md:max-w-full text-foreground leading-relaxed",
                     isEmojiOnly ? "text-2xl" : ""
                 )}>
                     <Markdown
@@ -598,7 +589,7 @@ const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
     }
 
     return (
-        <div className="relative flex items-center justify-center py-4 my-2">
+        <div className="relative flex items-center justify-center py-1">
             {/* Line */}
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
@@ -687,8 +678,8 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
     return (
         <div
             className={cn(
-                "group relative hover:bg-accent/30 transition-colors duration-150 px-4",
-                isGrouped ? "py-0.5" : "pt-3 pb-1"
+                "group relative hover:bg-accent/30 transition-colors duration-150 px-1",
+                isGrouped ? "py-0.5" : "pt-2 pb-1 px-1"
             )}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -703,26 +694,26 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
                 </div>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
                 {/* Avatar or timestamp spacer */}
-                <div className="w-10 flex-shrink-0 flex justify-center cursor-pointer h-fit">
+                <div className="w-12 flex-shrink-0 flex justify-center cursor-pointer h-fit">
                     {showAvatar ? (
                         <MessageAvatar authorId={message.authorId} />
                     ) : (
-                        <div data-hovered={isHovered} className="data-[hovered=true]:opacity-100 data-[hovered=false]:opacity-0 transition-opacity duration-150 text-xs mt-1 h-fit text-center">
+                        <div data-hovered={isHovered} className="data-[hovered=true]:opacity-100 data-[hovered=false]:opacity-0 transition-opacity duration-150 text-xs mt-0.5 h-fit text-center">
                             <MessageTimestamp timestamp={message.timestamp} />
                         </div>
                     )}
                 </div>
 
                 {/* Message content */}
-                <div className="flex-1 min-w-0">
+                <div className=" min-w-0">
                     {showAvatar && (
                         <div className="flex items-baseline gap-2 mb-1">
                             <span className="hover:underline cursor-pointer font-medium text-foreground text-sm">
                                 {profiles[message.authorId]?.primaryName || shortenAddress(message.authorId)}
                             </span>
-                            <MessageTimestamp timestamp={message.timestamp} />
+                            <MessageTimestamp timestamp={message.timestamp} showDate={new Date(message.timestamp).toDateString() !== new Date().toDateString()} />
                             {message.edited && (
                                 <span className="text-xs text-muted-foreground/80 italic" title="This message has been edited">
                                     (edited)
@@ -1197,7 +1188,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     // Load server if not available
     useEffect(() => {
         if (activeServerId && !server) {
-            console.log('Loading server:', activeServerId);
             actions.servers.get(activeServerId).catch(console.error);
         }
     }, [activeServerId, server, actions.servers]);
@@ -1209,8 +1199,35 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             return;
         }
 
-        loadMessages();
+        // Check if we have cached messages for this channel
+        const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
+        if (cachedMessages && cachedMessages.length > 0) {
+            setMessages(cachedMessages);
+            setLoading(false);
+
+            // Load fresh messages in the background (no loading state)
+            loadMessages(false);
+        } else {
+            // No cached messages, show loading state
+            setMessages([]);
+            loadMessages(true);
+        }
     }, [server, activeChannelId, channel]);
+
+    // Load messages when subspace becomes available
+    useEffect(() => {
+        if (subspace && server && activeChannelId && channel && messages.length === 0) {
+
+            // Check for cached messages first
+            const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
+            if (cachedMessages && cachedMessages.length > 0) {
+                setMessages(cachedMessages);
+                loadMessages(false); // Background refresh
+            } else {
+                loadMessages(true); // Show loading state
+            }
+        }
+    }, [subspace, server, activeChannelId, channel]);
 
     // Auto-refresh messages every 2 seconds when channel is active
     useEffect(() => {
@@ -1220,10 +1237,10 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             intervalRef.current = null;
         }
 
-        // Only start auto-refresh if we have an active channel
-        if (server && activeChannelId && channel) {
+        // Only start auto-refresh if we have an active channel and subspace is ready
+        if (subspace && server && activeChannelId && channel) {
             intervalRef.current = setInterval(() => {
-                loadMessages();
+                loadMessages(false); // Background refresh, no loading state
             }, 2000);
         }
 
@@ -1234,7 +1251,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 intervalRef.current = null;
             }
         };
-    }, [server, activeChannelId, channel]);
+    }, [subspace, server, activeChannelId, channel]);
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
@@ -1248,47 +1265,42 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         }
     }, [replyingTo, editingMessage]);
 
-    const loadMessages = async () => {
+    const loadMessages = async (showLoadingState: boolean = true) => {
         if (!server || !activeChannelId) return;
 
-        setLoading(true);
+        // Don't attempt to load if subspace is not ready yet
+        if (!subspace) {
+            return;
+        }
+
+        if (showLoadingState) {
+            setLoading(true);
+        }
+
         try {
-            if (!subspace) {
-                throw new Error("Subspace not initialized");
-            }
+            const messages = await actions.servers.getMessages(activeServerId, activeChannelId, 50);
 
-            const response = await subspace.server.getMessages(activeServerId, {
-                channelId: activeChannelId,
-                limit: 50
-            });
-
-            if (response?.messages) {
-                // Process messages to ensure proper data types and sort by timestamp (oldest first)
-                const processedMessages = response.messages
-                    .map((rawMessage: any) => ({
-                        ...rawMessage,
-                        // Ensure attachments is handled properly (can be string or array)
-                        attachments: rawMessage.attachments || "[]",
-                        // Ensure edited is boolean
-                        edited: Boolean(rawMessage.edited),
-                        // Ensure timestamp is number
-                        timestamp: Number(rawMessage.timestamp)
-                    }))
-                    .sort((a: Message, b: Message) => a.timestamp - b.timestamp); // Sort oldest first
-
-                setMessages(processedMessages);
+            if (messages && messages.length > 0) {
+                setMessages(messages);
 
                 // Load profiles for message authors
-                const authorIds = [...new Set(processedMessages.map((m: Message) => m.authorId))] as string[];
+                const authorIds = [...new Set(messages.map((m: Message) => m.authorId))] as string[];
                 if (authorIds.length > 0) {
                     actions.profile.getBulk(authorIds).catch(console.error);
                 }
+            } else {
+                setMessages([]);
             }
         } catch (error) {
             console.error("Failed to load messages:", error);
-            toast.error("Failed to load messages");
+            if (showLoadingState) {
+                toast.error("Failed to load messages");
+            }
+            setMessages([]);
         } finally {
-            setLoading(false);
+            if (showLoadingState) {
+                setLoading(false);
+            }
         }
     };
 
@@ -1299,12 +1311,14 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     const sendMessage = async (content: string, attachments: string[] = []) => {
         if (!content.trim() || !server || !activeChannelId) return;
 
-        try {
-            if (!subspace) {
-                throw new Error("Subspace not initialized");
-            }
+        // Don't attempt to send if subspace is not ready yet
+        if (!subspace) {
+            toast.error("Connection not ready, please wait...");
+            return;
+        }
 
-            const success = await subspace.server.sendMessage(activeServerId, {
+        try {
+            const success = await actions.servers.sendMessage(activeServerId, {
                 channelId: activeChannelId,
                 content: content.trim(),
                 replyTo: replyingTo?.messageId || undefined,
@@ -1313,8 +1327,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
             if (success) {
                 setReplyingTo(null);
-                // Reload messages to get the new message
-                setTimeout(() => loadMessages(), 500);
                 toast.success("Message sent!");
             } else {
                 toast.error("Failed to send message");
@@ -1326,22 +1338,19 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     };
 
     const editMessage = async (messageId: string, content: string) => {
-        if (!content.trim() || !server) return;
+        if (!content.trim() || !server || !activeChannelId) return;
+
+        // Don't attempt to edit if subspace is not ready yet
+        if (!subspace) {
+            toast.error("Connection not ready, please wait...");
+            return;
+        }
 
         try {
-            if (!subspace) {
-                throw new Error("Subspace not initialized");
-            }
-
-            const success = await subspace.server.editMessage(activeServerId, {
-                messageId,
-                content: content.trim()
-            });
+            const success = await actions.servers.editMessage(activeServerId, activeChannelId, messageId, content.trim());
 
             if (success) {
                 setEditingMessage(null);
-                // Reload messages to get the updated message
-                setTimeout(() => loadMessages(), 500);
                 toast.success("Message updated!");
             } else {
                 toast.error("Failed to update message");
@@ -1353,10 +1362,16 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     };
 
     const deleteMessage = async (messageId: string) => {
-        if (!server || !subspace) return;
+        if (!server || !activeChannelId) return;
+
+        // Don't attempt to delete if subspace is not ready yet
+        if (!subspace) {
+            toast.error("Connection not ready, please wait...");
+            return;
+        }
 
         try {
-            const success = await subspace.server.deleteMessage(activeServerId, messageId);
+            const success = await actions.servers.deleteMessage(activeServerId, activeChannelId, messageId);
             if (success) {
                 // Remove message from local state
                 setMessages(prev => prev.filter(m => m.messageId !== messageId));
@@ -1435,6 +1450,26 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                     <h3 className="text-lg font-medium text-foreground mb-2">Loading Server</h3>
                     <p className="text-sm text-muted-foreground">
                         Fetching server data...
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show initialization state when subspace is not ready
+    if (!subspace) {
+        return (
+            <div className={cn(
+                "flex flex-col h-full items-center justify-center",
+                "bg-gradient-to-b from-background via-background/95 to-background/90",
+                "border-r border-border/50 backdrop-blur-sm",
+                className
+            )}>
+                <div className="text-center animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
+                    <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-primary" />
+                    <h3 className="text-lg font-medium text-foreground mb-2">Initializing Connection</h3>
+                    <p className="text-sm text-muted-foreground">
+                        Setting up secure connection to the network...
                     </p>
                 </div>
             </div>
@@ -1551,7 +1586,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 onSendMessage={sendMessage}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
-                disabled={!server || !channel}
+                disabled={!server || !channel || !subspace}
                 channelName={channel?.name}
                 messagesInChannel={messages}
                 servers={servers}

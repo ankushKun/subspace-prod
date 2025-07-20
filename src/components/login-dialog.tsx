@@ -61,7 +61,6 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
             const allKeysPresent = requiredKeys.every(key => completeJWK[key])
 
             if (allKeysPresent) {
-                console.log("All required keys are present, connecting...")
                 try {
                     walletActions.connect({ strategy: ConnectionStrategies.ScannedJWK, jwk: completeJWK })
                     toast.success("Wallet connected successfully!")

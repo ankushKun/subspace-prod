@@ -27,7 +27,7 @@ export async function getPrimaryName(address: string): Promise<{ primaryName: st
             if (logoRes) primaryLogo = logoRes
         }
     } catch (e) {
-        console.error(e)
+        console.warn("No primary name found for address:", address)
     }
     return { primaryName, primaryLogo }
 }
@@ -75,7 +75,6 @@ export async function uploadFileAR(file: File, jwk?: JWKInterface) {
     const res = await ar.transactions.post(tx);
 
     if (res.status == 200) {
-        console.log("Uploaded file to AR:", res)
         return tx.id;
     } else {
         console.error("Failed to upload file to AR:", res)
@@ -100,7 +99,6 @@ export async function uploadFileTurbo(file: File, jwk?: JWKInterface) {
                 ],
             }
         })
-        console.log("Uploaded file to Turbo:", res)
         return res.id;
     } catch (error) {
         console.error("Failed to upload file to Turbo:", error)

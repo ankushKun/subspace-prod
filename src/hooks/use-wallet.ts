@@ -148,11 +148,9 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
 
 
                     const data = await state.wauthInstance.connect({ provider })
-                    console.log("[app] data", data)
                     if (!data) return
 
                     const wallet = await state.wauthInstance.getWallet()
-                    console.log("[app] wallet", wallet)
                     if (!wallet) return
 
                     set((state) => {

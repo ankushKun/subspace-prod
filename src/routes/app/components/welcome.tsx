@@ -16,7 +16,6 @@ export default function Welcome({ className }: { className?: string }) {
     const server = activeServerId ? servers[activeServerId] : null
 
     useEffect(() => {
-        console.log("activeServerId", activeServerId)
         if (activeServerId && subspace) {
             subspaceActions.servers.get(activeServerId)
         }
@@ -107,6 +106,9 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
 
 // Server-specific welcome component
 function ServerWelcome({ server, className }: { server: any; className?: string }) {
+    // Get actual member count from loaded members array, fallback to server.memberCount
+    const actualMemberCount = server.members?.length || server.memberCount || 0
+
     const formatDate = (timestamp?: number) => {
         if (!timestamp) return 'Recently'
         return new Date(timestamp * 1000).toLocaleDateString('en-US', {
@@ -166,7 +168,7 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
                         {/* Members Count */}
                         <div className="flex flex-col items-center p-4 rounded-xl bg-primary/5 border border-primary/20 backdrop-blur-sm">
                             <Users className="w-6 h-6 text-primary mb-2" />
-                            <div className="text-xl font-bold text-primary">{server.memberCount || 0}</div>
+                            <div className="text-xl font-bold text-primary">{actualMemberCount}</div>
                             <div className="text-sm text-muted-foreground font-ocr">Members</div>
                         </div>
                     </div>

@@ -2,9 +2,19 @@ import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
 import { cn } from "@/lib/utils";
 import { useState, useMemo, useEffect } from "react";
-import { ChevronRight, ChevronDown, Hash } from "lucide-react";
+import { ChevronRight, ChevronDown, Hash, MoreHorizontal, Settings, LogOut, Copy, Users, Crown } from "lucide-react";
 import type { Channel, Category } from "@subspace-protocol/sdk";
 import { useNavigate } from "react-router";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
+import { useWallet } from "@/hooks/use-wallet";
 
 export default function ChannelList({ className }: { className?: string }) {
     const { activeServerId, activeChannelId, actions } = useGlobalState()
@@ -142,9 +152,96 @@ export default function ChannelList({ className }: { className?: string }) {
 
             {/* Server name header */}
             <div className="mb-4 p-4 flex flex-col justify-center items-center relative">
-                <h2 className="text-lg font-semibold text-foreground truncate w-full text-center">
-                    {server.name}
-                </h2>
+                <div className="flex items-center justify-between w-full group">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {/* Server Logo */}
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30 flex-shrink-0">
+                            {server.logo ? (
+                                <img
+                                    src={`https://arweave.net/${server.logo}`}
+                                    alt={`${server.name} logo`}
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <Hash className="w-4 h-4 text-primary/80" />
+                            )}
+                        </div>
+
+                        {/* Server Name */}
+                        <h2 className="text-lg font-semibold text-foreground text-left truncate flex-1">
+                            {server.name}
+                        </h2>
+                    </div>
+
+                    {/* Server Actions Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="w-8 h-8 opacity-60 hover:opacity-100 hover:bg-muted/50 transition-all duration-200"
+                            >
+                                <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem
+                                onClick={() => {
+                                    const inviteLink = `${window.location.origin}/#/invite/${activeServerId}`;
+                                    navigator.clipboard.writeText(inviteLink);
+                                    toast.success("Invite link copied to clipboard");
+                                }}
+                                className="cursor-pointer"
+                            >
+                                <Copy className="w-4 h-4 mr-2" />
+                                Copy Invite Link
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                                onClick={() => navigate(`/app/${activeServerId}/members`)}
+                                className="cursor-pointer"
+                            >
+                                <Users className="w-4 h-4 mr-2" />
+                                View Members
+                            </DropdownMenuItem>
+
+                            {/* Show server settings only if user is server owner */}
+                            {server.ownerId === useWallet.getState().address && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onClick={() => navigate(`/app/${activeServerId}/settings`)}
+                                        className="cursor-pointer"
+                                    >
+                                        <Settings className="w-4 h-4 mr-2" />
+                                        Server Settings
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuItem
+                                onClick={async () => {
+                                    const { actions } = useSubspace.getState();
+                                    const success = await actions.servers.leave(activeServerId);
+                                    if (success) {
+                                        // Explicitly refresh the user's profile to update joined servers list
+                                        await actions.profile.refresh();
+                                        toast.success("Left server successfully");
+                                        navigate("/app");
+                                    } else {
+                                        toast.error("Failed to leave server");
+                                    }
+                                }}
+                                className="cursor-pointer text-destructive focus:text-destructive"
+                            >
+                                <LogOut className="w-4 h-4 mr-2" />
+                                Leave Server
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
                 <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-border to-transparent absolute bottom-0" />
             </div>
 

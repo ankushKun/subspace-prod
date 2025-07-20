@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Crown, Users, Search, MoreHorizontal, UsersRound, Loader2 } from "lucide-react";
 import alien from "@/assets/subspace/alien-black.svg";
+import alienGreen from "@/assets/subspace/alien-green.svg";
 
 // Avatar Component with alien theme
 const MemberAvatar = ({
@@ -107,12 +108,6 @@ const MemberItem = ({
                                 <Crown className="w-3 h-3 text-primary flex-shrink-0 animate-pulse" />
                             )}
                         </div>
-                        {/* Subtle role indicator */}
-                        {member.roles && member.roles.length > 0 && (
-                            <div className="text-xs text-primary/60 truncate">
-                                {member.roles.length} role{member.roles.length !== 1 ? 's' : ''}
-                            </div>
-                        )}
                     </div>
 
                     {/* Actions on hover */}
@@ -123,7 +118,6 @@ const MemberItem = ({
                             className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/20"
                             onClick={(e) => {
                                 e.stopPropagation()
-                                console.log('Member actions for:', displayName)
                             }}
                         >
                             <MoreHorizontal className="w-3 h-3" />
@@ -201,25 +195,30 @@ export default function MemberList({ className }: { className?: string }) {
     const loading = (servers[activeServerId] as any)?.membersLoading || false
     const membersLoaded = (server as any)?.membersLoaded || false
 
-    // // Load members when server changes (only if not already loaded)
-    // useEffect(() => {
-    //     if (!server || !activeServerId) return
+    // Load members when server changes (only if not already loaded)
+    useEffect(() => {
+        if (!server || !activeServerId) return
 
-    //     // If members aren't loaded yet, load them
-    //     if (!membersLoaded && !loading) {
-    //         actions.servers.getMembers(activeServerId)
-    //             .then(membersList => {
-    //                 console.log("Members loaded:", membersList)
+        // If members aren't loaded yet, load them
+        if (!membersLoaded && !loading && members.length === 0) {
 
-    //                 // Load profiles for all members
-    //                 const userIds = membersList.map(m => m.userId)
-    //                 if (userIds.length > 0) {
+            // Set loading state
+            if (server) {
+                (server as any).membersLoading = true
+            }
 
-    //                 }
-    //             })
-    //             .catch(console.error)
-    //     }
-    // }, [server, activeServerId, membersLoaded, loading, actions.servers, actions.profile])
+            actions.servers.getMembers(activeServerId)
+                .then(membersList => {
+
+                    // Load profiles for all members
+                    const userIds = membersList.map(m => m.userId)
+                    if (userIds.length > 0) {
+                        actions.profile.getBulk(userIds).catch(console.error)
+                    }
+                })
+                .catch(console.error)
+        }
+    }, [server, activeServerId, membersLoaded, loading, members.length, actions.servers, actions.profile])
 
     // Filter members based on search query
     const filteredMembers = useMemo(() => {
@@ -364,8 +363,7 @@ export default function MemberList({ className }: { className?: string }) {
             {/* Header with alien theme */}
             <div className="mb-4 p-4 flex flex-col justify-center items-start relative">
                 <div className="flex items-center gap-3 w-full">
-                    <img src={alien} alt="alien" className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-bold text-primary font-freecam tracking-wider">
+                    <h2 className="text-xs font-bold text-primary font-freecam tracking-wider">
                         LIFE FORMS
                     </h2>
                     <span className="text-sm text-primary/60 ml-auto font-ocr">
@@ -385,8 +383,9 @@ export default function MemberList({ className }: { className?: string }) {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={cn(
                             "pl-9 h-9 bg-primary/5 border-primary/20 focus:border-primary/50 font-ocr text-xs",
-                            "placeholder:text-primary/40 placeholder:uppercase placeholder:tracking-wider",
-                            "focus-visible:ring-2 focus-visible:ring-primary/20 rounded-lg"
+                            "placeholder:text-primary/30 placeholder:top-0.5 placeholder:relative",
+                            "focus-visible:ring-2 focus-visible:ring-primary/20 rounded-lg",
+                            "leading-9"
                         )}
                     />
                 </div>
@@ -396,7 +395,7 @@ export default function MemberList({ className }: { className?: string }) {
             <div className="flex-1 overflow-y-auto space-y-2 px-2">
                 {filteredMembers.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-32 text-center">
-                        <img src={alien} alt="alien" className="w-8 h-8 mb-2 opacity-40" />
+                        <img src={alienGreen} alt="alien" className="w-8 h-8 mb-2 opacity-40" />
                         <p className="text-sm text-primary/60 font-ocr">
                             {searchQuery ? "NO ENTITIES FOUND" : "NO LIFE DETECTED"}
                         </p>

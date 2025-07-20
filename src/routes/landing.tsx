@@ -23,18 +23,18 @@ function Trapezoid({ className }: { className?: string }) {
 }
 
 export default function SubspaceLanding() {
-    const navigate = useNavigate()
     const { connected } = useWallet()
     const isMobile = useIsMobile()
+    const navigate = useNavigate()
 
     useEffect(() => {
-        function onAuthenticated() {
-            navigate("/app")
-        }
+        const onAuthenticated = () => navigate("/app")
+
+        if (!connected) navigate("/")
 
         window.addEventListener("subspace-authenticated", onAuthenticated)
         return () => window.removeEventListener("subspace-authenticated", onAuthenticated)
-    }, [navigate])
+    }, [connected])
 
     return (
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">

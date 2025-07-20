@@ -1,4 +1,4 @@
-import { useParams } from "react-router"
+import { useNavigate, useParams } from "react-router"
 
 import ServerList from "./components/server-list"
 import ChannelList from "./components/channel-list"
@@ -10,35 +10,67 @@ import Profile from "./components/profile"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useEffect } from "react"
+import { useWallet } from "@/hooks/use-wallet"
 
 export default function App() {
+    const { serverId, channelId } = useParams()
+    const navigate = useNavigate()
+    const { connected, address } = useWallet()
     const { actions: stateActions } = useGlobalState()
     const { actions: subspaceActions, subspace } = useSubspace()
-    const { serverId, channelId } = useParams()
-
-    // Initialize subspace when app loads
-    useEffect(() => {
-        subspaceActions.init()
-        // Load profile which will also load user's servers
-        subspaceActions.profile.get().catch(console.error)
-    }, [subspaceActions])
 
     useEffect(() => {
+        if (address) {
+            // Removed navigate("/app") to prevent hot reload navigation issues
+            // The user is already in the App component, no need to navigate
+            if (!subspace) return
+            subspaceActions.init()
+            subspaceActions.profile.refresh()
+        }
+    }, [address])
+
+    useEffect(() => {
+        if (!subspace) return
         stateActions.setActiveServerId(serverId)
         stateActions.setActiveChannelId(channelId)
+
+        // Beautiful navigation logging
+        console.groupCollapsed(
+            '%c🎯 Navigation Update',
+            'color: #9C27B0; font-weight: bold; font-size: 12px;'
+        );
+        console.log('%cServer ID:', 'color: #2196F3; font-weight: bold;', serverId || 'None');
+        console.log('%cChannel ID:', 'color: #4CAF50; font-weight: bold;', channelId || 'None');
+        console.groupEnd();
+
         // update server and members
-        if (subspace && serverId) {
+        if (serverId) {
             subspaceActions.servers.get(serverId).then(server => {
                 if (server) {
-                    subspaceActions.servers.refreshMembers(serverId).then(members => {
-                        const userIds = members.map(m => m.userId)
-                        subspaceActions.profile.getBulk(userIds)
-                    })
+                    // Only refresh members if they haven't been loaded yet
+                    const hasMembers = (server as any)?.members?.length > 0
+                    const membersLoaded = (server as any)?.membersLoaded
+                    const membersLoading = (server as any)?.membersLoading
+
+                    if (!hasMembers && !membersLoaded && !membersLoading) {
+                        subspaceActions.servers.refreshMembers(serverId).then(members => {
+                            const userIds = members.map(m => m.userId)
+                            if (userIds.length > 0) {
+                                subspaceActions.profile.getBulk(userIds).then(console.log)
+                            }
+                        }).catch(console.error)
+                    } else {
+                        // Still load profiles for existing members if we have them
+                        const existingMembers = (server as any)?.members || []
+                        if (existingMembers.length > 0) {
+                            const userIds = existingMembers.map(m => m.userId)
+                            subspaceActions.profile.getBulk(userIds).catch(console.error)
+                        }
+                    }
                 }
-            })
+            }).catch(console.error)
         }
-        console.table({ serverId, channelId })
-    }, [serverId, channelId, stateActions, subspace])
+    }, [serverId, channelId, subspace])
 
     return <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
         <ServerList className="w-20 min-w-20 border-r h-full" />
