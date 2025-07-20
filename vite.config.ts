@@ -28,13 +28,5 @@ export default defineConfig({
   define: {
     __VERSION__: JSON.stringify(packageJson.version),
     __COMMIT_HASH__: JSON.stringify(commitHash),
-  },
-  build: {
-    rollupOptions: {
-      external: [],
-      output: {
-        globals: {}
-      }
-    }
   }
 })
