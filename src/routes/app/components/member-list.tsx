@@ -29,7 +29,7 @@ const MemberAvatar = ({
     return (
         <div className="relative flex-shrink-0">
             <div className={cn(
-                "relative rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/30",
+                "relative rounded-sm overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/30",
                 sizeClasses[size]
             )}>
                 {profile?.pfp ? (
@@ -51,7 +51,7 @@ const MemberAvatar = ({
                 )}
             </div>
             {/* Subtle glow effect */}
-            <div className="absolute inset-0 rounded-full bg-primary/20 blur-sm scale-110 -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="absolute inset-0 rounded-sm bg-primary/20 blur-sm scale-110 -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
     )
 }

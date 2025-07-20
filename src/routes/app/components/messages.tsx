@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
+import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -95,6 +96,8 @@ const mdComponents = {
     a: ({ node, ...props }: any) => {
         const href = props.href;
         const children = props.children;
+        const { actions } = useGlobalState();
+        const navigate = useNavigate();
 
         // Handle user mention placeholders
         if (href?.startsWith('#__user_mention_')) {
@@ -103,9 +106,11 @@ const mdComponents = {
             if (!mention) return <>{children}</>;
 
             return (
-                <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
-                    @{mention.display}
-                </span>
+                <ProfilePopover userId={mention.id} side="bottom" align="center">
+                    <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
+                        @{mention.display}
+                    </span>
+                </ProfilePopover>
             );
         }
 
@@ -115,8 +120,21 @@ const mdComponents = {
             const mention = currentMentions[index];
             if (!mention) return <>{children}</>;
 
+            const handleChannelClick = (e: React.MouseEvent) => {
+                e.preventDefault();
+                // Get current server from global state
+                const { activeServerId } = useGlobalState.getState();
+                if (activeServerId) {
+                    // Navigate to the channel
+                    navigate(`/app/${activeServerId}/${mention.id}`);
+                }
+            };
+
             return (
-                <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-150 rounded-sm cursor-pointer">
+                <span
+                    className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-150 rounded-sm cursor-pointer"
+                    onClick={handleChannelClick}
+                >
                     #{mention.display}
                 </span>
             );
@@ -1465,22 +1483,12 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     // Try multiple ways to find the channel
     let channel = null;
     if (server?.channels) {
-        // Try exact match first
-        channel = server.channels.find(c => c.channelId === activeChannelId);
-
-        // Try converting to number and back to string
-        if (!channel && activeChannelId) {
-            const numericId = parseInt(activeChannelId);
-            channel = server.channels.find(c =>
-                c.channelId === numericId.toString() ||
-                c.orderId === numericId
-            );
-        }
-
-        // If still not found and activeChannelId is "1", try to get the first channel
-        if (!channel && activeChannelId === "1" && server.channels.length > 0) {
-            channel = server.channels[0];
-        }
+        // Handle both string and number channel IDs for compatibility
+        channel = server.channels.find(c =>
+            c.channelId.toString() === activeChannelId ||
+            (typeof c.channelId === 'string' && c.channelId === activeChannelId) ||
+            (typeof c.channelId === 'number' && c.channelId === parseInt(activeChannelId))
+        );
     }
 
     // Helper function to check if two timestamps are on the same day

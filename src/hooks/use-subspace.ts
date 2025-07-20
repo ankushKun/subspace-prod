@@ -49,8 +49,10 @@ interface SubspaceState {
             updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
         }
         servers: {
-            get: (serverId: string) => Promise<Server | null>
+            get: (serverId: string, forceRefresh?: boolean) => Promise<Server | null>
             create: (data: CreateServerParams) => Promise<Server>
+            createCategory: (serverId: string, params: { name: string; orderId?: number }) => Promise<boolean>
+            createChannel: (serverId: string, params: { name: string; categoryId?: string; orderId?: number; type?: 'text' | 'voice' }) => Promise<boolean>
             join: (serverId: string) => Promise<boolean>
             leave: (serverId: string) => Promise<boolean>
             getMembers: (serverId: string, forceRefresh?: boolean) => Promise<any[]>
@@ -233,23 +235,42 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             }
         },
         servers: {
-            get: async (serverId: string) => {
+            get: async (serverId: string, forceRefresh: boolean = false) => {
                 const subspace = get().subspace
-                if (!subspace) return
+                if (!subspace) return null
 
                 // Check if we already have a proper server instance
                 const existingServer = get().servers[serverId]
-                if (existingServer) {
+                if (existingServer && !forceRefresh) {
                     return existingServer
                 }
 
                 try {
                     const server = await subspace.server.getServer(serverId)
                     if (server) {
-                        // Store both the server instance and raw data for persistence
+                        // Preserve existing members data if it exists
+                        const preservedData: any = {}
+                        if (existingServer) {
+                            // Preserve members-related fields
+                            if ((existingServer as any).members) {
+                                preservedData.members = (existingServer as any).members
+                            }
+                            if ((existingServer as any).membersLoaded) {
+                                preservedData.membersLoaded = (existingServer as any).membersLoaded
+                            }
+                            if ((existingServer as any).membersLoading) {
+                                preservedData.membersLoading = (existingServer as any).membersLoading
+                            }
+                        }
+
+                        // Merge server data with preserved data
+                        const mergedServer = { ...server, ...preservedData }
+
+                        // Store the merged server data
                         set({
-                            servers: { ...get().servers, [serverId]: server },
+                            servers: { ...get().servers, [serverId]: mergedServer },
                         })
+                        return mergedServer
                     }
                     return server
                 } catch (e) {
@@ -283,6 +304,64 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 return server
+            },
+            createCategory: async (serverId: string, params: { name: string; orderId?: number }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.createCategory(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated categories while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after category creation")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after category creation")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after category creation:", refreshError)
+                            // Don't fail the operation just because refresh failed
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to create category:", error)
+                    return false
+                }
+            },
+            createChannel: async (serverId: string, params: { name: string; categoryId?: string; orderId?: number; type?: 'text' | 'voice' }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.createChannel(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated channels while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after channel creation")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after channel creation")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after channel creation:", refreshError)
+                            // Don't fail the operation just because refresh failed
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to create channel:", error)
+                    return false
+                }
             },
             join: async (serverId: string) => {
                 const subspace = get().subspace

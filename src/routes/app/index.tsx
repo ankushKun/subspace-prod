@@ -45,7 +45,8 @@ export default function App() {
 
         // update server and members
         if (serverId) {
-            subspaceActions.servers.get(serverId).then(server => {
+            // Force refresh server data when serverId changes, but preserve members
+            subspaceActions.servers.get(serverId, true).then(server => {
                 if (server) {
                     // Only refresh members if they haven't been loaded yet
                     const hasMembers = (server as any)?.members?.length > 0

@@ -2,7 +2,7 @@ import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
 import { cn } from "@/lib/utils";
 import { useState, useMemo, useEffect } from "react";
-import { ChevronRight, ChevronDown, Hash, MoreHorizontal, Settings, LogOut, Copy, Users, Crown, Link, Plus, FolderPlus } from "lucide-react";
+import { ChevronRight, ChevronDown, Hash, MoreHorizontal, Settings, LogOut, Copy, Users, Crown, Link, Plus, FolderPlus, Loader2 } from "lucide-react";
 import type { Channel, Category } from "@subspace-protocol/sdk";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,41 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useWallet } from "@/hooks/use-wallet";
 
 export default function ChannelList({ className }: { className?: string }) {
     const { activeServerId, activeChannelId, actions } = useGlobalState()
-    const { servers } = useSubspace()
+    const { servers, actions: subspaceActions } = useSubspace()
     const navigate = useNavigate()
 
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+
+    // Create/Edit dialogs state
+    const [createChannelOpen, setCreateChannelOpen] = useState(false)
+    const [createCategoryOpen, setCreateCategoryOpen] = useState(false)
+    const [channelName, setChannelName] = useState("")
+    const [categoryName, setCategoryName] = useState("")
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string>("none")
+    const [isCreatingChannel, setIsCreatingChannel] = useState(false)
+    const [isCreatingCategory, setIsCreatingCategory] = useState(false)
 
     // Get the server instance
     const server = servers[activeServerId]
@@ -32,20 +58,23 @@ export default function ChannelList({ className }: { className?: string }) {
             return { categories: [] as Category[], categorizedChannels: new Map(), uncategorizedChannels: [] as Channel[] }
         }
 
+
+
         // Sort categories by order
         const sortedCategories = [...server.categories].sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
 
         // Create map of category ID to channels
         const channelsByCategory = new Map<string, Channel[]>()
-        const categoryIds = new Set(sortedCategories.map(cat => cat.categoryId))
+        const categoryIds = new Set(sortedCategories.map(cat => cat.categoryId.toString()))
 
         // Categorize channels
         for (const channel of server.channels) {
-            if (channel.categoryId && categoryIds.has(channel.categoryId)) {
-                if (!channelsByCategory.has(channel.categoryId)) {
-                    channelsByCategory.set(channel.categoryId, [])
+            if (channel.categoryId && categoryIds.has(channel.categoryId.toString())) {
+                const categoryIdStr = channel.categoryId.toString()
+                if (!channelsByCategory.has(categoryIdStr)) {
+                    channelsByCategory.set(categoryIdStr, [])
                 }
-                channelsByCategory.get(channel.categoryId)?.push(channel)
+                channelsByCategory.get(categoryIdStr)?.push(channel)
             }
         }
 
@@ -59,7 +88,7 @@ export default function ChannelList({ className }: { className?: string }) {
 
         // Get uncategorized channels
         const uncategorized = server.channels
-            .filter(channel => !channel.categoryId || !categoryIds.has(channel.categoryId))
+            .filter(channel => !channel.categoryId || !categoryIds.has(channel.categoryId.toString()))
             .sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
 
         return {
@@ -72,7 +101,7 @@ export default function ChannelList({ className }: { className?: string }) {
     // Initialize expanded categories when server changes
     useEffect(() => {
         if (server?.categories) {
-            setExpandedCategories(new Set(server.categories.map(cat => cat.categoryId)))
+            setExpandedCategories(new Set(server.categories.map(cat => cat.categoryId.toString())))
         }
     }, [server?.categories])
 
@@ -96,9 +125,12 @@ export default function ChannelList({ className }: { className?: string }) {
     const isChannelActive = (channel: Channel): boolean => {
         if (!activeChannelId) return false;
 
-        return channel.channelId === activeChannelId ||
-            channel.channelId === parseInt(activeChannelId).toString() ||
-            channel.orderId === parseInt(activeChannelId);
+        // Handle both string and number channel IDs for compatibility
+        const isActive = channel.channelId.toString() === activeChannelId ||
+            (typeof channel.channelId === 'string' && channel.channelId === activeChannelId) ||
+            (typeof channel.channelId === 'number' && channel.channelId === parseInt(activeChannelId));
+
+        return isActive;
     };
 
     // Auto-redirect to first channel if current channel is not found
@@ -106,9 +138,9 @@ export default function ChannelList({ className }: { className?: string }) {
         if (server && server.channels && server.channels.length > 0 && activeChannelId) {
             // Check if current activeChannelId exists in server channels
             const channelExists = server.channels.some(c =>
-                c.channelId === activeChannelId ||
-                c.channelId === parseInt(activeChannelId).toString() ||
-                c.orderId === parseInt(activeChannelId)
+                c.channelId.toString() === activeChannelId ||
+                (typeof c.channelId === 'string' && c.channelId === activeChannelId) ||
+                (typeof c.channelId === 'number' && c.channelId === parseInt(activeChannelId))
             );
 
             if (!channelExists) {
@@ -119,6 +151,63 @@ export default function ChannelList({ className }: { className?: string }) {
             }
         }
     }, [server, activeChannelId, activeServerId]);
+
+    // CRUD handlers for categories and channels
+    const handleCreateCategory = async () => {
+        if (!activeServerId || !categoryName.trim()) {
+            toast.error("Please enter a category name")
+            return
+        }
+
+        setIsCreatingCategory(true)
+        try {
+            const success = await subspaceActions.servers.createCategory(activeServerId, {
+                name: categoryName.trim()
+            })
+
+            if (success) {
+                toast.success("Category created successfully")
+                setCategoryName("")
+                setCreateCategoryOpen(false)
+            } else {
+                toast.error("Failed to create category")
+            }
+        } catch (error) {
+            console.error("Error creating category:", error)
+            toast.error("Failed to create category")
+        } finally {
+            setIsCreatingCategory(false)
+        }
+    }
+
+    const handleCreateChannel = async () => {
+        if (!activeServerId || !channelName.trim()) {
+            toast.error("Please enter a channel name")
+            return
+        }
+
+        setIsCreatingChannel(true)
+        try {
+            const success = await subspaceActions.servers.createChannel(activeServerId, {
+                name: channelName.trim(),
+                categoryId: selectedCategoryId === "none" ? undefined : selectedCategoryId || undefined
+            })
+
+            if (success) {
+                toast.success("Channel created successfully")
+                setChannelName("")
+                setSelectedCategoryId("none")
+                setCreateChannelOpen(false)
+            } else {
+                toast.error("Failed to create channel")
+            }
+        } catch (error) {
+            console.error("Error creating channel:", error)
+            toast.error("Failed to create channel")
+        } finally {
+            setIsCreatingChannel(false)
+        }
+    }
 
     if (!server) {
         return (
@@ -204,9 +293,7 @@ export default function ChannelList({ className }: { className?: string }) {
                         {server.ownerId === useWallet.getState().address && (
                             <>
                                 <DropdownMenuItem
-                                    onClick={() => {
-                                        toast.info("Create category feature coming soon");
-                                    }}
+                                    onClick={() => setCreateCategoryOpen(true)}
                                     className="cursor-pointer p-3 hover:bg-muted/50 focus:bg-muted/50"
                                 >
                                     <div className="flex items-center gap-3 w-full">
@@ -221,9 +308,7 @@ export default function ChannelList({ className }: { className?: string }) {
                                 </DropdownMenuItem>
 
                                 <DropdownMenuItem
-                                    onClick={() => {
-                                        toast.info("Create channel feature coming soon");
-                                    }}
+                                    onClick={() => setCreateChannelOpen(true)}
                                     className="cursor-pointer p-3 hover:bg-muted/50 focus:bg-muted/50"
                                 >
                                     <div className="flex items-center gap-3 w-full">
@@ -339,11 +424,11 @@ export default function ChannelList({ className }: { className?: string }) {
 
                 {/* Categories */}
                 {categories.map((category) => {
-                    const categoryChannels = categorizedChannels.get(category.categoryId) || []
-                    const isExpanded = expandedCategories.has(category.categoryId)
+                    const categoryChannels = categorizedChannels.get(category.categoryId.toString()) || []
+                    const isExpanded = expandedCategories.has(category.categoryId.toString())
 
                     return (
-                        <div key={category.categoryId} className="space-y-1">
+                        <div key={category.categoryId.toString()} className="space-y-1">
                             {/* Category Header */}
                             <div
                                 className={cn(
@@ -351,7 +436,7 @@ export default function ChannelList({ className }: { className?: string }) {
                                     "text-muted-foreground hover:text-foreground",
                                     "hover:bg-muted/50 rounded-md cursor-pointer"
                                 )}
-                                onClick={() => toggleCategory(category.categoryId)}
+                                onClick={() => toggleCategory(category.categoryId.toString())}
                             >
                                 <div className="flex items-center gap-1">
                                     {isExpanded ? (
@@ -398,6 +483,129 @@ export default function ChannelList({ className }: { className?: string }) {
 
             {/* Ambient glow at bottom */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-24 h-12 bg-primary/3 rounded-full blur-xl" />
+
+            {/* Create Category Dialog */}
+            <Dialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Create Category</DialogTitle>
+                        <DialogDescription>
+                            Add a new category to organize your channels.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="category-name">Category Name</Label>
+                            <Input
+                                id="category-name"
+                                placeholder="e.g. General Discussion"
+                                value={categoryName}
+                                onChange={(e) => setCategoryName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && categoryName.trim()) {
+                                        handleCreateCategory();
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setCreateCategoryOpen(false)}
+                            disabled={isCreatingCategory}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={handleCreateCategory}
+                            disabled={isCreatingCategory || !categoryName.trim()}
+                        >
+                            {isCreatingCategory ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create Category"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Create Channel Dialog */}
+            <Dialog open={createChannelOpen} onOpenChange={setCreateChannelOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Create Channel</DialogTitle>
+                        <DialogDescription>
+                            Add a new channel to your server.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="channel-name">Channel Name</Label>
+                            <Input
+                                id="channel-name"
+                                placeholder="e.g. general"
+                                value={channelName}
+                                onChange={(e) => setChannelName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && channelName.trim()) {
+                                        handleCreateChannel();
+                                    }
+                                }}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="category-select">Parent Category (Optional)</Label>
+                            <Select
+                                value={selectedCategoryId}
+                                onValueChange={setSelectedCategoryId}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a category or leave uncategorized" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">No Category (Uncategorized)</SelectItem>
+                                    {categories.map((category) => (
+                                        <SelectItem key={category.categoryId} value={category.categoryId.toString()}>
+                                            {category.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setCreateChannelOpen(false)}
+                            disabled={isCreatingChannel}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={handleCreateChannel}
+                            disabled={isCreatingChannel || !channelName.trim()}
+                        >
+                            {isCreatingChannel ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create Channel"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
