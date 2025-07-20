@@ -21,12 +21,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./src")
     },
   },
   base: "./",
   define: {
     __VERSION__: JSON.stringify(packageJson.version),
     __COMMIT_HASH__: JSON.stringify(commitHash),
-  }
+  },
 })
