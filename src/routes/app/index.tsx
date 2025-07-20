@@ -73,7 +73,7 @@ export default function App() {
     }, [serverId, channelId, subspace])
 
     return <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
-        <ServerList className="w-20 min-w-20 border-r h-full" />
+        <ServerList className="w-20 min-w-20 max-w-20 !overflow-x-visible overflow-y-scroll border-r h-full" />
         <div className="flex flex-col h-full items-start justify-start">
             <div className="grow h-full border-r border-b rounded-br-xl">
                 {serverId ? <ChannelList className="w-80 min-w-80 h-full" /> : <DmsList className="w-80 min-w-80 h-full" />}

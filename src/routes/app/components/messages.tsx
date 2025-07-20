@@ -80,6 +80,7 @@ import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
 
 import alien from "@/assets/subspace/alien-green.svg"
+import ProfilePopover from "./profile-popover"
 
 
 // Global store for mentions data (temporary solution)
@@ -154,6 +155,43 @@ const shortenAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
+// Helper function to get display name with priority: server nickname → primary name → shortened address
+const getDisplayName = (userId: string, profiles: Record<string, any>, activeServerId?: string, servers?: Record<string, any>) => {
+    // Priority 1: Server nickname (if in an active server)
+    if (activeServerId && servers?.[activeServerId]) {
+        const server = servers[activeServerId]
+        const member = server.members?.find((m: any) => m.userId === userId)
+        if (member?.nickname) return member.nickname
+    }
+
+    // Priority 2: Primary name
+    const profile = profiles[userId]
+    if (profile?.primaryName) return profile.primaryName
+
+    // Priority 3: Shortened wallet address
+    return shortenAddress(userId)
+};
+
+// Helper function to get user's highest priority role color
+const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Record<string, any>) => {
+    if (!activeServerId || !servers?.[activeServerId]) return undefined
+
+    const server = servers[activeServerId]
+    const member = server.members?.find((m: any) => m.userId === userId)
+
+    if (!member?.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
+        return undefined
+    }
+
+    const serverRoles = Object.values(server?.roles || {})
+    const memberRoles = serverRoles
+        .filter((role: any) => member.roles.includes(role.roleId))
+        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+
+    const highestRole = memberRoles[0] as any
+    return highestRole?.color || undefined
+};
+
 // Enhanced Channel Header Component
 const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
@@ -172,7 +210,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
             <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                     <Hash className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                    <h1 className="text-lg font-semibold text-foreground truncate">
+                    <h1 className="text-base font-semibold text-foreground truncate">
                         {channelName || 'channel'}
                     </h1>
                 </div>
@@ -288,7 +326,8 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
     onJumpToMessage?: (messageId: string) => void;
     replyToId?: string;
 }) => {
-    const { profiles } = useSubspace()
+    const { profiles, servers } = useSubspace()
+    const { activeServerId } = useGlobalState()
 
     if (!replyToMessage) {
         return (
@@ -301,8 +340,9 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
         )
     }
 
+    const displayName = getDisplayName(replyToMessage.authorId, profiles, activeServerId, servers)
     const authorProfile = profiles[replyToMessage.authorId]
-    const displayName = authorProfile?.primaryName || shortenAddress(replyToMessage.authorId)
+    const roleColor = getUserRoleColor(replyToMessage.authorId, activeServerId, servers)
 
     // Truncate content for preview
     const previewContent = replyToMessage.content.length > 50
@@ -320,25 +360,32 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
             <CornerLeftDown className="w-3 h-3 text-muted-foreground/50 group-hover/reply:text-primary/70 mt-0.5 flex-shrink-0 transition-colors" />
             <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Small avatar */}
-                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
-                    {authorProfile?.pfp ? (
-                        <img
-                            src={`https://arweave.net/${authorProfile.pfp}`}
-                            alt={displayName}
-                            className="w-full h-full object-cover"
-                        />
-                    ) : (
-                        <span className="text-[8px] font-semibold text-primary">
-                            {displayName.charAt(0).toUpperCase()}
-                        </span>
-                    )}
-                </div>
+                <ProfilePopover userId={replyToMessage.authorId} side="bottom" align="start">
+                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
+                        {authorProfile?.pfp ? (
+                            <img
+                                src={`https://arweave.net/${authorProfile.pfp}`}
+                                alt={displayName}
+                                className="w-full h-full object-cover"
+                            />
+                        ) : (
+                            <span className="text-[8px] font-semibold text-primary">
+                                {displayName.charAt(0).toUpperCase()}
+                            </span>
+                        )}
+                    </div>
+                </ProfilePopover>
 
                 {/* Author name and content preview */}
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span className="text-xs font-medium group-hover/reply:text-primary flex-shrink-0 hover:underline text-foreground">
-                        {displayName}
-                    </span>
+                    <ProfilePopover userId={replyToMessage.authorId} side="bottom" align="start">
+                        <span
+                            className="text-xs font-medium group-hover/reply:text-primary flex-shrink-0 hover:underline text-foreground cursor-pointer transition-colors hover:text-primary"
+                            style={{ color: roleColor || undefined }}
+                        >
+                            {displayName}
+                        </span>
+                    </ProfilePopover>
                     <span className="text-xs text-muted-foreground/60 group-hover/reply:text-muted-foreground truncate">
                         {previewContent}
                     </span>
@@ -675,9 +722,11 @@ EmptyChannelState.displayName = "EmptyChannelState"
 
 function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage, channel, showAvatar = true, isGrouped = false, onJumpToMessage }: MessageItemProps) {
     const [isHovered, setIsHovered] = useState(false);
-    const { profiles } = useSubspace()
+    const { profiles, servers } = useSubspace()
+    const { activeServerId } = useGlobalState()
 
     const isMyReply = message.replyToMessage?.authorId === profile?.userId
+    const authorRoleColor = getUserRoleColor(message.authorId, activeServerId, servers)
 
 
     return (
@@ -705,7 +754,11 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
                 {/* Avatar or timestamp spacer */}
                 <div className="w-12 flex-shrink-0 flex justify-center cursor-pointer h-fit">
                     {showAvatar ? (
-                        <MessageAvatar authorId={message.authorId} />
+                        <ProfilePopover userId={message.authorId} side="right" align="start">
+                            <div className="cursor-pointer">
+                                <MessageAvatar authorId={message.authorId} />
+                            </div>
+                        </ProfilePopover>
                     ) : (
                         <div data-hovered={isHovered} className="data-[hovered=true]:opacity-100 data-[hovered=false]:opacity-0 transition-opacity duration-150 text-xs mt-0.5 h-fit text-center">
                             <MessageTimestamp timestamp={message.timestamp} />
@@ -717,9 +770,14 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
                 <div className=" min-w-0">
                     {showAvatar && (
                         <div className="flex items-baseline gap-2 mb-1">
-                            <span className="hover:underline cursor-pointer font-medium text-foreground text-sm">
-                                {profiles[message.authorId]?.primaryName || shortenAddress(message.authorId)}
-                            </span>
+                            <ProfilePopover userId={message.authorId} side="bottom" align="start">
+                                <span
+                                    className="hover:underline cursor-pointer font-medium text-foreground text-sm transition-colors hover:text-primary"
+                                    style={{ color: authorRoleColor || undefined }}
+                                >
+                                    {getDisplayName(message.authorId, profiles, activeServerId, servers)}
+                                </span>
+                            </ProfilePopover>
                             <MessageTimestamp timestamp={message.timestamp} showDate={new Date(message.timestamp).toDateString() !== new Date().toDateString()} />
                             {message.edited && (
                                 <span className="text-xs text-muted-foreground/80 italic" title="This message has been edited">
@@ -844,7 +902,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
         // Add server members
         serverMembers.forEach((member: any) => {
-            const displayName = profiles[member.userId]?.primaryName || shortenAddress(member.userId)
+            const displayName = getDisplayName(member.userId, profiles, activeServerId, servers)
             allUsers.set(member.userId, {
                 id: member.userId,
                 display: displayName,
@@ -856,7 +914,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         // Add chat participants who might not be in server members list
         chatParticipants.forEach(userId => {
             if (!allUsers.has(userId)) {
-                const displayName = profiles[userId]?.primaryName || shortenAddress(userId)
+                const displayName = getDisplayName(userId, profiles, activeServerId, servers)
                 allUsers.set(userId, {
                     id: userId,
                     display: displayName,
@@ -932,6 +990,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         const profile = profiles[suggestion.id]
         const serverMember = servers[activeServerId]?.members?.find((m: any) => m.userId === suggestion.id)
         const isChatParticipant = messagesInChannel.some(m => m.authorId === suggestion.id)
+        const roleColor = getUserRoleColor(suggestion.id, activeServerId, servers)
 
         return (
             <div
@@ -950,7 +1009,10 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-sm text-foreground group-hover:text-foreground truncate">
+                        <span
+                            className="font-semibold text-sm text-foreground group-hover:text-foreground truncate"
+                            style={{ color: roleColor || undefined }}
+                        >
                             {highlightedDisplay}
                         </span>
                         {serverMember && (
@@ -1141,22 +1203,35 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     }
 
     return (
-        <div className="bg-background/50 backdrop-blur-sm">
+        <div className="backdrop-blur-sm">
             {/* Reply indicator */}
             {replyingTo && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-muted/20">
-                    <Reply className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                        Replying to {profiles[replyingTo.authorId]?.primaryName || shortenAddress(replyingTo.authorId)}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onCancelReply}
-                    >
-                        Cancel
-                    </Button>
-                </div>
+                <>
+                    <div className="flex items-center gap-2 px-4 -mb-3">
+                        <Reply className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                            Replying to <ProfilePopover userId={replyingTo.authorId} side="top" align="start">
+                                <span className="cursor-pointer hover:underline transition-colors hover:text-primary">
+                                    {getDisplayName(replyingTo.authorId, profiles, activeServerId, servers)}
+                                </span>
+                            </ProfilePopover>
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onCancelReply}
+                        >
+                            Cancel
+                        </Button>
+                    </div>
+                    {replyingTo.replyToMessage ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-muted/20">
+                            <span className="text-sm text-muted-foreground">
+                                {replyingTo.replyToMessage.content}
+                            </span>
+                        </div>
+                    ) : null}
+                </>
             )}
 
             {/* Message Input */}
@@ -1288,7 +1363,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                 trigger="@"
                                 markup="@[__display__](__id__)"
                                 displayTransform={(id) => {
-                                    const displayName = profiles[id]?.primaryName || shortenAddress(id)
+                                    const displayName = getDisplayName(id, profiles, activeServerId, servers)
                                     return `@${displayName}`
                                 }}
                                 appendSpaceOnAdd
@@ -1349,7 +1424,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                     onChange={handleFileChange}
                 />
 
-                <div className="flex items-center justify-between mt-1 -mb-2.5 text-xs text-muted-foreground/50">
+                <div className="flex items-center justify-between text-[10px] mt-1 -mb-2.5 px-2 text-xs text-muted-foreground/50">
                     <span>
                         Press Enter to send, Shift+Enter for new line
                     </span>

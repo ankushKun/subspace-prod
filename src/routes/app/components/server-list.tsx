@@ -69,7 +69,7 @@ const ServerButton = ({ server, isActive = false, onClick, isUpdating = false, u
             <div className="flex justify-center relative">
                 <div
                     className={cn(
-                        "w-12 h-12 p-0 transition-all duration-300 ease-out group relative overflow-hidden cursor-pointer",
+                        "w-12 h-12 p-0 transition-all duration-300 ease-out group relative cursor-pointer",
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
                         isActive ? "rounded-2xl shadow-lg shadow-primary/20" : "rounded-3xl hover:rounded-2xl hover:shadow-md hover:shadow-foreground/10",
                         "hover:bg-muted/50"
@@ -800,7 +800,7 @@ export default function ServerList({ className }: { className?: string }) {
     return (
         <div
             className={cn(
-                "flex flex-col w-[72px] h-full py-4 pb-2 px-3 relative z-10 overflow-y-scroll overflow-x-hidden",
+                "flex flex-col h-full py-4 pb-2 px-3 relative !z-20",
                 "bg-gradient-to-b from-background via-background/95 to-background/90",
                 "border-r border-border/50 backdrop-blur-sm",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40",

@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { HashRouter, Route, Routes, useParams } from "react-router";
-import { ThemeProvider } from '@/components/theme-provider';
+import { ThemeProvider, useTheme } from '@/components/theme-provider';
 import SubspaceLanding from './routes/landing';
 import App from '@/routes/app';
 import Settings from '@/routes/settings';
@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import alien from '@/assets/subspace/alien-green.svg';
+import { Toaster } from 'sonner';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -209,6 +210,23 @@ window.addEventListener('error', (event) => {
     handleAsyncError(event.error || new Error(event.message));
 });
 
+// Component to render the themed toaster inside the theme provider
+function ThemedToaster() {
+    const { theme } = useTheme();
+
+    return (
+        <Toaster
+            theme={theme === "system" ? undefined : theme as "light" | "dark"}
+            // richColors
+            style={{
+                "--normal-bg": "var(--background)",
+                "--normal-text": "var(--foreground)",
+                "--normal-border": "var(--border)",
+            } as React.CSSProperties}
+        />
+    );
+}
+
 function Main() {
     const { actions: subspaceActions } = useSubspace()
     const { jwk, address, connected, connectionStrategy, provider, actions: walletActions } = useWallet()
@@ -262,7 +280,8 @@ function Main() {
             ref={setErrorBoundary}
             onError={handleAsyncError}
         >
-            <ThemeProvider>
+            <ThemeProvider defaultTheme="dark">
+                <ThemedToaster />
                 <HashRouter>
                     <Routes>
                         <Route path="/" element={<SubspaceLanding />} />

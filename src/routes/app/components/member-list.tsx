@@ -1,6 +1,6 @@
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
-import { cn } from "@/lib/utils";
+import { cn, shortenAddress } from "@/lib/utils";
 import type { Member, Role } from "@subspace-protocol/sdk";
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Crown, Users, Search, MoreHorizontal, UsersRound, Loader2 } from "lucide-react";
 import alien from "@/assets/subspace/alien-black.svg";
 import alienGreen from "@/assets/subspace/alien-green.svg";
+import ProfilePopover from "./profile-popover";
 
 // Avatar Component with alien theme
 const MemberAvatar = ({
@@ -71,60 +72,64 @@ const MemberItem = ({
 }) => {
     const [isHovered, setIsHovered] = useState(false)
 
-    const displayName = member.nickname || profile?.primaryName || member.userId.slice(0, 8) + "..."
+    const displayName = member.nickname || profile?.primaryName || shortenAddress(member.userId)
 
     return (
         <div className="relative group">
-            <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                    "w-full h-10 px-3 justify-start text-sm transition-all duration-300 relative overflow-hidden",
-                    "hover:bg-primary/10 rounded-lg border border-transparent hover:border-primary/20",
-                    "text-muted-foreground hover:text-foreground font-ocr",
-                    "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
-                )}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-            >
-                <div className="flex items-center gap-3 w-full relative z-10">
-                    {/* Avatar */}
-                    <MemberAvatar userId={member.userId} profile={profile} size="sm" />
+            <ProfilePopover userId={member.userId} side="left" align="start">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                        "w-full h-10 px-3 justify-start text-sm transition-all duration-300 relative overflow-hidden cursor-pointer",
+                        "hover:bg-primary/10 rounded-lg border border-transparent hover:border-primary/20",
+                        "text-muted-foreground hover:text-foreground font-ocr",
+                        "before:absolute before:inset-0 before:bg-gradient-to-r before:from-primary/5 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
+                    )}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
+                    <div className="flex items-center gap-3 w-full relative z-10">
+                        {/* Avatar */}
+                        <div className="flex-shrink-0">
+                            <MemberAvatar userId={member.userId} profile={profile} size="sm" />
+                        </div>
 
-                    {/* Member info */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                            <span
-                                className="font-medium truncate transition-colors"
-                                style={{
-                                    color: roleColor || undefined
+                        {/* Member info */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                                <span
+                                    className="font-medium truncate transition-colors"
+                                    style={{
+                                        color: roleColor || undefined
+                                    }}
+                                >
+                                    {displayName}
+                                </span>
+
+                                {/* Owner indicator */}
+                                {isOwner && (
+                                    <Crown className="w-3 h-3 text-primary flex-shrink-0 animate-pulse" />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Actions on hover */}
+                        {isHovered && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/20"
+                                onClick={(e) => {
+                                    e.stopPropagation()
                                 }}
                             >
-                                {displayName}
-                            </span>
-
-                            {/* Owner indicator */}
-                            {isOwner && (
-                                <Crown className="w-3 h-3 text-primary flex-shrink-0 animate-pulse" />
-                            )}
-                        </div>
+                                <MoreHorizontal className="w-3 h-3" />
+                            </Button>
+                        )}
                     </div>
-
-                    {/* Actions on hover */}
-                    {isHovered && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/20"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                            }}
-                        >
-                            <MoreHorizontal className="w-3 h-3" />
-                        </Button>
-                    )}
-                </div>
-            </Button>
+                </Button>
+            </ProfilePopover>
         </div>
     )
 }
@@ -159,7 +164,7 @@ const MemberSection = ({
                         <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
                         <span className="truncate">{title}</span>
                     </div>
-                    <span className="text-xs text-primary/60 font-freecam">{memberCount}</span>
+                    <span className="text-[8px] text-primary/60 font-ocr">{memberCount}</span>
                 </div>
                 {/* Subtle line under section */}
                 <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
@@ -191,17 +196,26 @@ export default function MemberList({ className }: { className?: string }) {
     const server = servers[activeServerId]
 
     // Get members from cached server data
-    const members = server?.members || []
-    const loading = (servers[activeServerId] as any)?.membersLoading || false
+    const members = server?.members && Array.isArray(server.members)
+        ? server.members
+        : server?.members && typeof server.members === 'object'
+            ? Object.values(server.members)
+            : []
+    const isLoadingMembers = (servers[activeServerId] as any)?.membersLoading || false
     const membersLoaded = (server as any)?.membersLoaded || false
+
+
+
+    // Only show loading state if we have no members AND we're loading
+    // Don't show loading when refreshing existing members (better UX)
+    const shouldShowLoading = isLoadingMembers && members.length === 0
 
     // Load members when server changes (only if not already loaded)
     useEffect(() => {
         if (!server || !activeServerId) return
 
         // If members aren't loaded yet, load them
-        if (!membersLoaded && !loading && members.length === 0) {
-
+        if (!membersLoaded && !isLoadingMembers && members.length === 0) {
             // Set loading state
             if (server) {
                 (server as any).membersLoading = true
@@ -209,7 +223,6 @@ export default function MemberList({ className }: { className?: string }) {
 
             actions.servers.getMembers(activeServerId)
                 .then(membersList => {
-
                     // Load profiles for all members
                     const userIds = membersList.map(m => m.userId)
                     if (userIds.length > 0) {
@@ -218,7 +231,7 @@ export default function MemberList({ className }: { className?: string }) {
                 })
                 .catch(console.error)
         }
-    }, [server, activeServerId, membersLoaded, loading, members.length, actions.servers, actions.profile])
+    }, [server, activeServerId, membersLoaded, isLoadingMembers, members.length, actions.servers, actions.profile])
 
     // Filter members based on search query
     const filteredMembers = useMemo(() => {
@@ -226,7 +239,7 @@ export default function MemberList({ className }: { className?: string }) {
 
         return members.filter(member => {
             const profile = profiles[member.userId]
-            const displayName = member.nickname || profile?.primaryName || member.userId
+            const displayName = member.nickname || profile?.primaryName || shortenAddress(member.userId)
             const lowerQuery = searchQuery.toLowerCase()
 
             return displayName.toLowerCase().includes(lowerQuery) ||
@@ -240,9 +253,9 @@ export default function MemberList({ className }: { className?: string }) {
             return null
         }
 
-        const serverRoles = server?.roles || []
+        const serverRoles = Object.values(server?.roles || {})
         const memberRoles = serverRoles
-            .filter((role: any) => member.roles.includes(role.id))
+            .filter((role: any) => member.roles.includes(role.roleId))
             .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
 
         return memberRoles[0] || null
@@ -253,9 +266,9 @@ export default function MemberList({ className }: { className?: string }) {
         const roleGroups: Record<string, { role: any | null; members: any[] }> = {}
 
         // Initialize with all roles
-        const serverRoles = server?.roles || []
+        const serverRoles = Object.values(server?.roles || {})
         serverRoles.forEach((role: any) => {
-            roleGroups[`role-${role.id}`] = { role, members: [] }
+            roleGroups[`role-${role.roleId}`] = { role, members: [] }
         })
 
         // Add "No Role" section for members without roles
@@ -266,7 +279,7 @@ export default function MemberList({ className }: { className?: string }) {
             const highestRole = getMemberHighestRole(member)
 
             if (highestRole) {
-                const key = `role-${highestRole.id}`
+                const key = `role-${highestRole.roleId}`
                 if (roleGroups[key]) {
                     roleGroups[key].members.push(member)
                 }
@@ -281,8 +294,8 @@ export default function MemberList({ className }: { className?: string }) {
                 const profileA = profiles[a.userId]
                 const profileB = profiles[b.userId]
 
-                const displayNameA = a.nickname || profileA?.primaryName || a.userId
-                const displayNameB = b.nickname || profileB?.primaryName || b.userId
+                const displayNameA = a.nickname || profileA?.primaryName || shortenAddress(a.userId)
+                const displayNameB = b.nickname || profileB?.primaryName || shortenAddress(b.userId)
 
                 return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
             })
@@ -329,7 +342,7 @@ export default function MemberList({ className }: { className?: string }) {
         )
     }
 
-    if (loading) {
+    if (shouldShowLoading) {
         return (
             <div className={cn(
                 "flex flex-col w-60 h-full py-4 px-3",

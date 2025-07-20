@@ -1,6 +1,7 @@
 import { useSubspace } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
-import { cn, shortenAddress, uploadFileAR } from "@/lib/utils"
+import { useGlobalState } from "@/hooks/use-global-state"
+import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils"
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Settings, LogOut, User, Edit2, Save, X, Camera } from "lucide-react"
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import alien from "@/assets/subspace/alien-black.svg"
 import LoginDialog from "@/components/login-dialog"
 import { useNavigate } from "react-router"
+import { toast } from "sonner"
 
 
 function SettingsButton(props: React.ComponentProps<typeof Button>) {
@@ -32,7 +34,7 @@ function SettingsButton(props: React.ComponentProps<typeof Button>) {
 }
 
 export default function Profile({ className }: { className?: string }) {
-    const { address, connected, actions: walletActions } = useWallet()
+    const { address, connected, actions: walletActions, jwk } = useWallet()
     const { profile, servers, actions, subspace } = useSubspace()
 
     // UI State
@@ -42,6 +44,8 @@ export default function Profile({ className }: { className?: string }) {
     const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [profilePicFile, setProfilePicFile] = useState<File | null>(null)
+    const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
@@ -70,6 +74,43 @@ export default function Profile({ className }: { className?: string }) {
         loadCurrentNickname()
     }, [selectedServerId, profile?.userId, servers])
 
+    // Reset form state when dialog opens or editing changes
+    useEffect(() => {
+        if (profileDialogOpen) {
+            setProfilePicFile(null)
+            setProfilePicPreview(null)
+            setIsUploading(false)
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""
+            }
+
+            // Auto-select active server if available
+            const { activeServerId } = useGlobalState.getState()
+            if (activeServerId && servers[activeServerId]) {
+                // Check if active server is in the joined servers list
+                const joinedServers = profile?.serversJoined || []
+                const isActiveServerJoined = joinedServers.some(server => {
+                    const serverIdToCheck = typeof server === 'string' ? server : (server as any).serverId
+                    return serverIdToCheck === activeServerId
+                })
+
+                if (isActiveServerJoined) {
+                    setSelectedServerId(activeServerId)
+                }
+            }
+        }
+    }, [profileDialogOpen, servers, profile?.serversJoined])
+
+    useEffect(() => {
+        if (!isEditing) {
+            setProfilePicFile(null)
+            setProfilePicPreview(null)
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""
+            }
+        }
+    }, [isEditing])
+
     // Profile data for UI display
     const profileProxy = {
         userId: profile?.userId || address || "",
@@ -88,9 +129,60 @@ export default function Profile({ className }: { className?: string }) {
     )
 
     const getDisplayName = () => {
+        // Priority 1: Server nickname (if in an active server)
+        const { activeServerId } = useGlobalState.getState()
+        if (activeServerId && servers[activeServerId] && profile?.userId) {
+            const server = servers[activeServerId]
+            if (server.members && Array.isArray(server.members)) {
+                // Handle members as array
+                const member = server.members.find((m: any) => m.userId === profile.userId)
+                if (member?.nickname) return member.nickname
+            } else if (server.members && server.members[profile.userId]) {
+                // Handle members as object
+                const member = server.members[profile.userId]
+                if (member?.nickname) return member.nickname
+            }
+        }
+
+        // Priority 2: Primary name
         if (profileProxy.primaryName) return profileProxy.primaryName
+
+        // Priority 3: Shortened wallet address
         if (profileProxy.userIdShort) return profileProxy.userIdShort
+
         return 'NOT_CONNECTED'
+    }
+
+    const getSecondaryInfo = () => {
+        // Check what we're showing in the first line
+        const { activeServerId } = useGlobalState.getState()
+        let hasNickname = false
+
+        if (activeServerId && servers[activeServerId] && profile?.userId) {
+            const server = servers[activeServerId]
+            if (server.members && Array.isArray(server.members)) {
+                // Handle members as array
+                const member = server.members.find((m: any) => m.userId === profile.userId)
+                hasNickname = !!member?.nickname
+            } else if (server.members && server.members[profile.userId]) {
+                // Handle members as object
+                const member = server.members[profile.userId]
+                hasNickname = !!member?.nickname
+            }
+        }
+
+        // If showing nickname in first line and user has primary name, show "primary name | shortened address"
+        if (hasNickname && profileProxy.primaryName) {
+            return `${profileProxy.primaryName} | ${profileProxy.userIdShort}`
+        }
+
+        // If first line shows nickname (but no primary name) or primary name, show shortened address in second line
+        if (hasNickname || profileProxy.primaryName) {
+            return profileProxy.userIdShort
+        }
+
+        // If first line shows shortened address, show nothing to avoid duplication
+        return ""
     }
 
     const handleOpenProfile = () => {
@@ -100,56 +192,112 @@ export default function Profile({ className }: { className?: string }) {
     const handleCancelEdit = () => {
         setIsEditing(false)
         setEditedNickname("")
+        setProfilePicFile(null)
+        setProfilePicPreview(null)
     }
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]
-        if (!file || !profile) return
+        if (!file) return
 
         // Validate file size (max 100KB)
         if (file.size > 100 * 1024) {
-            alert("File size must be less than 100KB")
+            toast.error("Profile picture must be less than 100KB")
             return
         }
 
         // Validate file type
-        if (!file.type.startsWith('image/')) {
-            alert("Please select an image file")
+        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+            toast.error("Please select a PNG or JPEG image file")
             return
         }
 
-        setIsUploading(true)
-        try {
-            const pfpId = await uploadFileAR(file)
-            await actions.profile.updateProfile({ pfp: pfpId })
-            await actions.profile.refresh()
-        } catch (error) {
-            console.error("Failed to upload profile picture:", error)
-            alert("Failed to upload profile picture. Please try again.")
-        } finally {
-            setIsUploading(false)
-            if (fileInputRef.current) {
-                fileInputRef.current.value = ""
-            }
+        setProfilePicFile(file)
+
+        // Create preview
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            setProfilePicPreview(e.target?.result as string)
         }
+        reader.readAsDataURL(file)
     }
 
-    const handleSaveNickname = async () => {
-        if (!selectedServerId || !profile) return
+    const handleSaveProfile = async () => {
+        if (!profile) return
 
         setIsSaving(true)
         try {
-            const server = servers[selectedServerId]
-            if (server) {
-                await actions.servers.updateMember(selectedServerId, {
-                    userId: profile.userId,
-                    nickname: editedNickname || undefined
-                })
-                setIsEditing(false)
+            let profileUpdated = false
+
+            // Upload and update profile picture if changed
+            if (profilePicFile) {
+                try {
+                    setIsUploading(true)
+                    toast.loading("Uploading profile picture to Arweave...")
+
+                    const pfpId = await uploadFileTurbo(profilePicFile, jwk)
+                    if (pfpId) {
+                        toast.dismiss()
+                        toast.loading("Updating profile...")
+
+                        const success = await actions.profile.updateProfile({ pfp: pfpId })
+                        if (success) {
+                            toast.dismiss()
+                            toast.success("Profile picture updated successfully")
+                            profileUpdated = true
+
+                            // Update the local profile cache immediately for instant UI feedback
+                            if (profile) {
+                                // Update the main profile state
+                                const updatedProfile = { ...profile, pfp: pfpId }
+
+                                // Force refresh to get the latest data from the server
+                                await actions.profile.refresh()
+                            }
+
+                            // Clear the file selection and preview
+                            setProfilePicFile(null)
+                            setProfilePicPreview(null)
+                            if (fileInputRef.current) {
+                                fileInputRef.current.value = ""
+                            }
+                        } else {
+                            toast.dismiss()
+                            toast.error("Failed to update profile picture")
+                        }
+                    } else {
+                        toast.dismiss()
+                        toast.error("Failed to upload profile picture")
+                    }
+                } catch (error) {
+                    console.error("Error uploading profile picture:", error)
+                    toast.dismiss()
+                    toast.error("Failed to upload profile picture")
+                } finally {
+                    setIsUploading(false)
+                }
             }
+
+            // Update server nickname if changed and server is selected
+            if (selectedServerId && profile?.userId) {
+                const server = servers[selectedServerId]
+                if (server) {
+                    const success = await actions.servers.updateMember(selectedServerId, {
+                        userId: profile.userId,
+                        nickname: editedNickname || undefined
+                    })
+                    if (success) {
+                        toast.success("Nickname updated successfully")
+                    } else {
+                        toast.error("Failed to update nickname")
+                    }
+                }
+            }
+
+            setIsEditing(false)
         } catch (error) {
-            console.error("Failed to update nickname:", error)
-            alert("Failed to update nickname. Please try again.")
+            console.error("Error updating profile:", error)
+            toast.error("Failed to update profile")
         } finally {
             setIsSaving(false)
         }
@@ -226,7 +374,7 @@ export default function Profile({ className }: { className?: string }) {
                                         {getDisplayName()}
                                     </div>
                                     <div className="text-xs text-primary/60 flex items-center gap-1">
-                                        <span className="truncate max-w-52">{profileProxy.userIdShort}</span>
+                                        <span className="truncate max-w-52">{getSecondaryInfo()}</span>
                                     </div>
                                 </div>
                             </Button>
@@ -276,7 +424,7 @@ export default function Profile({ className }: { className?: string }) {
                     <DialogHeader className="flex-shrink-0 border-b border-primary/20 pb-4">
                         <DialogTitle className="flex items-center justify-between font-freecam text-xl text-primary">
                             <div className="flex items-center gap-2">
-                                <img src={alien} alt="alien" className="w-6 h-6" />
+                                {/* <img src={alien} alt="alien" className="w-6 h-6" /> */}
                                 <span>Profile Settings</span>
                             </div>
                             {!isEditing ? (
@@ -302,17 +450,19 @@ export default function Profile({ className }: { className?: string }) {
                                     </Button>
                                     <Button
                                         size="sm"
-                                        onClick={handleSaveNickname}
-                                        disabled={isSaving}
+                                        onClick={handleSaveProfile}
+                                        disabled={isSaving || isUploading}
                                         className="flex items-center gap-2 font-ocr bg-primary text-black hover:bg-primary/90 disabled:opacity-50"
                                     >
                                         <Save className="h-4 w-4" />
-                                        <span className="hidden sm:inline">{isSaving ? "Saving..." : "Save"}</span>
+                                        <span className="hidden sm:inline">
+                                            {isUploading ? "Uploading..." : isSaving ? "Saving..." : "Save"}
+                                        </span>
                                     </Button>
                                 </div>
                             )}
                         </DialogTitle>
-                        <DialogDescription className="font-ocr text-primary/60 text-center">
+                        <DialogDescription className="font-ocr text-primary/60 text-left">
                             Manage your profile and server settings.
                         </DialogDescription>
                     </DialogHeader>
@@ -341,7 +491,14 @@ export default function Profile({ className }: { className?: string }) {
                                                     } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                 onClick={isEditing && !isUploading ? () => fileInputRef.current?.click() : undefined}
                                             >
-                                                {profileProxy.pfp ? (
+                                                {profilePicPreview ? (
+                                                    <img
+                                                        src={profilePicPreview}
+                                                        alt="Profile Preview"
+                                                        className={`w-full h-full object-cover transition-all duration-200 ${isEditing ? 'group-hover:brightness-75' : ''
+                                                            }`}
+                                                    />
+                                                ) : profileProxy.pfp ? (
                                                     <img
                                                         src={`https://arweave.net/${profileProxy.pfp}`}
                                                         alt="Profile"
@@ -359,28 +516,37 @@ export default function Profile({ className }: { className?: string }) {
                                             </div>
                                             {isEditing && (
                                                 <>
-                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-sm cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+                                                    <div
+                                                        className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-sm cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                    >
                                                         <div className="flex flex-col items-center gap-1">
                                                             <Camera className="h-6 w-6 text-primary" />
                                                             <span className="text-xs text-primary font-ocr">UPLOAD</span>
                                                         </div>
                                                     </div>
-                                                    <div className="absolute -bottom-1 -right-1 bg-primary text-black rounded-sm p-1.5 shadow-lg border border-primary/30 z-20">
+                                                    <div className="absolute -bottom-1 -right-1 bg-primary text-black rounded-sm p-1.5 shadow-lg border border-primary/30 z-20 pointer-events-none">
                                                         <Camera className="h-3 w-3" />
                                                     </div>
-                                                    <div className="absolute inset-0 rounded-sm border-2 border-primary/30 animate-pulse z-0"></div>
+                                                    <div className="absolute inset-0 rounded-sm border-2 border-primary/30 animate-pulse z-0 pointer-events-none"></div>
                                                 </>
                                             )}
                                         </div>
                                         <div className="flex-1 text-center sm:text-left">
                                             <h3 className="text-lg font-freecam text-primary">Profile Picture</h3>
-                                            <p className="text-sm text-primary/60 font-ocr">
-                                                {isEditing
-                                                    ? isUploading ? "Uploading..." : "Click to upload new avatar (max 100KB)"
-                                                    : "Your avatar is visible across all servers"
-                                                }
-                                            </p>
-                                            {isEditing && (
+                                            {!profilePicFile ? (
+                                                <p className="text-sm text-primary/60 font-ocr">
+                                                    {isEditing
+                                                        ? isUploading ? "Uploading..." : "Click to upload new avatar (max 100KB)"
+                                                        : "Your avatar is visible across all servers"
+                                                    }
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-green-600 dark:text-green-400 font-ocr">
+                                                    Selected: {profilePicFile.name} ({(profilePicFile.size / 1024).toFixed(1)} KB)
+                                                </p>
+                                            )}
+                                            {isEditing && !profilePicFile && (
                                                 <p className="text-xs text-primary/40 mt-1 font-ocr">
                                                     Supported formats: PNG, JPEG • Max size: 100KB
                                                 </p>
