@@ -228,13 +228,10 @@ function Main() {
         try {
             if (connectionStrategy === ConnectionStrategies.ScannedJWK) {
                 await walletActions.connect({ strategy: connectionStrategy, jwk })
-                console.log("connected with jwk")
             } else if (connectionStrategy === ConnectionStrategies.WAuth) {
                 await walletActions.connect({ strategy: connectionStrategy, provider })
-                console.log("connected with strategy", connectionStrategy, provider)
             } else {
                 await walletActions.connect({ strategy: connectionStrategy })
-                console.log("connected with strategy", connectionStrategy)
             }
         } catch (error) {
             console.error("Connection failed:", error)

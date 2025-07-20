@@ -230,8 +230,7 @@ html {
 
 /* width */
 ::-webkit-scrollbar {
-    width: 1px;
-    height: 0px;
+    width: 0.5px;
 }
 
 /* Track */
@@ -243,13 +242,12 @@ html {
 ::-webkit-scrollbar-thumb {
     background: oklch(0.9314 0.2229 122.1);
     opacity: 0.2 !important;
-    border-radius: 0px;
+    border-radius: 4px;
 }
 
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-    background: white;
-    opacity: 0.6;
+    cursor: pointer;
 }
 
 @layer base {
@@ -397,161 +395,8 @@ html {
     }
 }
 
-
-/* Shimmer animation for skeleton loaders */
-@keyframes shimmer {
-    0% {
-        transform: translateX(-100%);
-    }
-
-    100% {
-        transform: translateX(100%);
-    }
-}
-
-.animate-shimmer {
-    animation: shimmer 2s infinite;
-}
-
 #wanderConnectButtonHost {
     display: none;
-}
-
-/* Custom styles for mentions input */
-.mentions-input {
-    position: relative;
-}
-
-.mentions-input textarea {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
-}
-
-.mentions-input textarea::-webkit-scrollbar {
-    width: 6px;
-}
-
-.mentions-input textarea::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.mentions-input textarea::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.3);
-    border-radius: 3px;
-}
-
-.mentions-input textarea::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
-}
-
-/* Mobile-specific improvements for mentions input */
-@media (max-width: 768px) {
-    .mentions-input {
-        /* Ensure proper touch handling */
-        -webkit-user-select: text;
-        user-select: text;
-    }
-
-    .mentions-input textarea,
-    .mentions-input input {
-        /* Better mobile touch handling */
-        -webkit-user-select: text;
-        user-select: text;
-        /* Prevent unwanted zooming while maintaining 14px design */
-        /* font-size: max(16px, 14px) !important; */
-        /* Ensure consistent line height */
-        line-height: 1.5 !important;
-        /* Improve tap targets */
-        min-height: 44px;
-        /* Better mobile scrolling - use modern approach */
-        overscroll-behavior: auto;
-    }
-
-    /* Hide scrollbars on mobile for mentions input */
-    .mentions-input textarea::-webkit-scrollbar {
-        display: none;
-    }
-
-    .mentions-input textarea {
-        scrollbar-width: none;
-    }
-
-    /* Ensure suggestions are properly sized on mobile */
-    .mentions-input .mentions__suggestions__list {
-        min-width: 280px !important;
-        max-width: calc(100vw - 32px) !important;
-        /* font-size: 14px !important; */
-    }
-}
-
-/* Mention highlight styling */
-.mention-highlight {
-    display: inline;
-    position: relative;
-    z-index: 1;
-}
-
-/* Ensure proper text wrapping in mentions */
-.mentions-input .mentions__control {
-    word-wrap: break-word;
-    white-space: pre-wrap;
-}
-
-.mentions-input .mentions__highlighter {
-    word-wrap: break-word;
-    white-space: pre-wrap;
-}
-
-.mentions-input .mentions__input {
-    word-wrap: break-word;
-    white-space: pre-wrap;
-}
-
-/* Smooth scrolling for mentions suggestions */
-.mentions__suggestions__list {
-    scroll-behavior: smooth;
-}
-
-/* Focus states for better accessibility */
-.mentions-input:focus-within {
-    outline: none;
-}
-
-.mentions-input textarea:focus {
-    outline: none;
-    box-shadow: none;
-}
-
-/* Enhanced mentions input styling */
-.mentions-input {
-    position: relative;
-}
-
-.mentions-input textarea {
-    resize: none;
-    font-family: inherit;
-}
-
-.mentions-input .mentions__suggestions__list {
-    border-radius: 8px !important;
-    border: 1px solid hsl(var(--border)) !important;
-    background: hsl(var(--background)) !important;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
-    max-height: 200px !important;
-    overflow-y: auto !important;
-    padding: 4px !important;
-}
-
-.mentions-input .mentions__suggestions__item {
-    padding: 8px 12px !important;
-    border-radius: 4px !important;
-    cursor: pointer !important;
-    color: hsl(var(--foreground)) !important;
-    border: none !important;
-}
-
-.mentions-input .mentions__suggestions__item--focused {
-    background-color: hsl(var(--accent)) !important;
 }
 
 /* Markdown styling */

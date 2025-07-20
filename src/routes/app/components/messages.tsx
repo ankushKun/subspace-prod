@@ -43,9 +43,7 @@ import {
     UserX,
     Clock,
     Edit,
-    FileIcon,
-    FileQuestion,
-    LinkIcon
+    FileIcon, FileQuestion, LinkIcon, Eye
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -285,9 +283,10 @@ const MessageTimestamp = memo(({ timestamp, showDate = false, className, ...prop
 MessageTimestamp.displayName = "MessageTimestamp"
 
 // Reply Preview Component
-const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: React.HTMLAttributes<HTMLDivElement> & {
+const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: React.HTMLAttributes<HTMLDivElement> & {
     replyToMessage: Message['replyToMessage'];
     onJumpToMessage?: (messageId: string) => void;
+    replyToId?: string;
 }) => {
     const { profiles } = useSubspace()
 
@@ -295,7 +294,9 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: React.HTMLA
         return (
             <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground/60">
                 <CornerLeftDown className="w-3 h-3" />
-                <span className="italic">Original message not found</span>
+                <span className="italic">
+                    {replyToId ? "Replying to a message not in current view" : "Original message not found"}
+                </span>
             </div>
         )
     }
@@ -308,10 +309,11 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, ...props }: React.HTMLA
         ? replyToMessage.content.substring(0, 50) + "..."
         : replyToMessage.content
 
+
     return (
         <div
             {...props}
-            className={cn("flex items-start gap-2 border-l-2 border-muted-foreground/30 hover:border-primary/50 transition-all duration-200 cursor-pointer rounded-r-md hover:bg-muted/30 py-1.5 pl-3 -my-1 group/reply", props.className)}
+            className={cn("flex items-start gap-2 border-muted-foreground/30 hover:border-primary/50 transition-all duration-200 cursor-pointer rounded-r-md hover:bg-muted/30 py-1.5 pl-2 -mb-2 group/reply", props.className)}
             onClick={() => onJumpToMessage?.(replyToMessage.messageId)}
             title="Click to jump to original message"
         >
@@ -469,8 +471,8 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
             {/* Message text */}
             {content && (
                 <div className={cn(
-                    "text-sm whitespace-normal break-words max-w-[80vw] text-left md:max-w-full text-foreground leading-relaxed",
-                    isEmojiOnly ? "text-2xl" : ""
+                    "text-sm whitespace-pre-wrap break-words max-w-[80vw] text-left md:max-w-full text-foreground leading-relaxed",
+                    isEmojiOnly ? "text-3xl" : ""
                 )}>
                     <Markdown
                         skipHtml
@@ -675,10 +677,14 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
     const [isHovered, setIsHovered] = useState(false);
     const { profiles } = useSubspace()
 
+    const isMyReply = message.replyToMessage?.authorId === profile?.userId
+
+
     return (
         <div
+            data-highlight={isMyReply}
             className={cn(
-                "group relative hover:bg-accent/30 transition-colors duration-150 px-1",
+                "group relative hover:bg-accent/30 transition-colors duration-150 px-1 data-[highlight=true]:bg-amber-400/10 data-[highlight=true]:border-l data-[highlight=true]:border-amber-300",
                 isGrouped ? "py-0.5" : "pt-2 pb-1 px-1"
             )}
             onMouseEnter={() => setIsHovered(true)}
@@ -690,6 +696,7 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
                     <ReplyPreview
                         replyToMessage={message.replyToMessage}
                         onJumpToMessage={onJumpToMessage}
+                        replyToId={message.replyTo}
                     />
                 </div>
             )}
@@ -757,6 +764,7 @@ interface MessageInputProps {
     messagesInChannel?: Message[];
     servers?: any;
     activeServerId?: string;
+    activeChannelId?: string;
 }
 
 const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
@@ -767,11 +775,14 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     channelName,
     messagesInChannel = [],
     servers = {},
-    activeServerId
+    activeServerId,
+    activeChannelId
 }, ref) => {
     const [message, setMessage] = useState("")
     const [isSending, setIsSending] = useState(false)
+    const [attachments, setAttachments] = useState<string[]>([])
     const mentionsInputRef = useRef<any>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const { profiles } = useSubspace()
     const isMobile = useIsMobile()
 
@@ -780,13 +791,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         focus: () => {
             if (isMobile) return
             setTimeout(() => {
-                const mentionsContainer = mentionsInputRef.current
-                if (mentionsContainer) {
-                    const textarea = mentionsContainer.querySelector('textarea')
-                    if (textarea) {
-                        textarea.focus()
-                    }
-                }
+                focusTextarea()
             }, 100)
         },
         blur: () => {
@@ -799,6 +804,20 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             }
         }
     }))
+
+    const focusTextarea = () => {
+        if (isMobile) return
+        const mentionsContainer = mentionsInputRef.current
+        if (mentionsContainer) {
+            const textarea = mentionsContainer.querySelector('textarea')
+            if (textarea) {
+                textarea.focus()
+                // Move cursor to end
+                const length = textarea.value.length
+                textarea.setSelectionRange(length, length)
+            }
+        }
+    }
 
     // Function to get members data for mentions
     const getMembersData = (query: string, callback: (data: any[]) => void) => {
@@ -902,6 +921,75 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         callback(filteredUsers)
     }
 
+    // Custom render function for member suggestions
+    const renderMemberSuggestion = (
+        suggestion: { id: string; display: string },
+        search: string,
+        highlightedDisplay: React.ReactNode,
+        index: number,
+        focused: boolean
+    ) => {
+        const profile = profiles[suggestion.id]
+        const serverMember = servers[activeServerId]?.members?.find((m: any) => m.userId === suggestion.id)
+        const isChatParticipant = messagesInChannel.some(m => m.authorId === suggestion.id)
+
+        return (
+            <div
+                className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg transition-all duration-150 group",
+                    "hover:bg-gradient-to-r hover:from-accent/80 hover:to-accent/60 hover:shadow-sm",
+                    focused
+                        ? "bg-gradient-to-r from-primary/20 to-primary/10 text-foreground ring-1 ring-primary/20 shadow-md"
+                        : "hover:bg-accent/60"
+                )}
+            >
+                <div className="relative">
+                    <MessageAvatar authorId={suggestion.id} size="sm" />
+                    {/* Online indicator - you could add real online status here */}
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full opacity-80" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-semibold text-sm text-foreground group-hover:text-foreground truncate">
+                            {highlightedDisplay}
+                        </span>
+                        {serverMember && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary border-primary/20">
+                                <Users className="w-2.5 h-2.5 mr-1" />
+                                Member
+                            </Badge>
+                        )}
+                        {isChatParticipant && !serverMember && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-muted/50 text-muted-foreground border-muted-foreground/30">
+                                <AtSign className="w-2.5 h-2.5 mr-1" />
+                                Participant
+                            </Badge>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground/80 truncate font-mono">
+                            {shortenAddress(suggestion.id)}
+                        </span>
+                        {profile?.primaryName && (
+                            <>
+                                <span className="text-xs text-muted-foreground/60">•</span>
+                                <span className="text-xs text-muted-foreground/80 truncate">
+                                    {profile.primaryName}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
+                <div className={cn(
+                    "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+                    focused && "opacity-100"
+                )}>
+                    <AtSign className="w-3.5 h-3.5 text-muted-foreground/60" />
+                </div>
+            </div>
+        )
+    }
+
     // Function to get channels data for mentions
     const getChannelsData = (query: string, callback: (data: any[]) => void) => {
         if (!activeServerId) {
@@ -942,13 +1030,82 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         callback(filteredChannels);
     };
 
+    // Custom render function for channel suggestions
+    const renderChannelSuggestion = (
+        suggestion: { id: string; display: string },
+        search: string,
+        highlightedDisplay: React.ReactNode,
+        index: number,
+        focused: boolean
+    ) => {
+        const channel = servers[activeServerId]?.channels?.find((c: any) => c.channelId.toString() === suggestion.id)
+        const isCurrentChannel = activeChannelId === suggestion.id
+
+        return (
+            <div
+                className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg transition-all duration-150 group",
+                    "hover:bg-gradient-to-r hover:from-blue-50/80 hover:to-blue-50/60 dark:hover:from-blue-950/40 dark:hover:to-blue-950/30 hover:shadow-sm",
+                    focused
+                        ? "bg-gradient-to-r from-blue-100/60 to-blue-50/40 dark:from-blue-900/30 dark:to-blue-950/20 text-foreground ring-1 ring-blue-200 dark:ring-blue-800 shadow-md"
+                        : "hover:bg-accent/60",
+                    isCurrentChannel && "opacity-60"
+                )}
+            >
+                <div className={cn(
+                    "flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150",
+                    "bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/50 dark:to-blue-800/50",
+                    "group-hover:from-blue-200 group-hover:to-blue-300 dark:group-hover:from-blue-800/60 dark:group-hover:to-blue-700/60",
+                    "border border-blue-200/50 dark:border-blue-700/50 shadow-sm",
+                    focused && "ring-2 ring-blue-300/50 dark:ring-blue-600/50"
+                )}>
+                    <Hash className={cn(
+                        "w-3.5 h-3.5 transition-colors duration-150",
+                        "text-blue-600 dark:text-blue-400",
+                        "group-hover:text-blue-700 dark:group-hover:text-blue-300"
+                    )} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-semibold text-sm text-foreground group-hover:text-foreground truncate">
+                            {highlightedDisplay}
+                        </span>
+                        {isCurrentChannel && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-muted/50 text-muted-foreground border-muted-foreground/30">
+                                <Eye className="w-2.5 h-2.5 mr-1" />
+                                Current
+                            </Badge>
+                        )}
+                    </div>
+                    {channel?.description && (
+                        <span className="text-xs text-muted-foreground/80 truncate">
+                            {channel.description}
+                        </span>
+                    )}
+                    {!channel?.description && (
+                        <span className="text-xs text-muted-foreground/60 truncate">
+                            Channel #{suggestion.id}
+                        </span>
+                    )}
+                </div>
+                <div className={cn(
+                    "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+                    focused && "opacity-100"
+                )}>
+                    <Hash className="w-3.5 h-3.5 text-blue-500/60" />
+                </div>
+            </div>
+        )
+    }
+
     const handleSend = async () => {
-        if (!message.trim() || isSending) return
+        if ((!message.trim() && attachments.length === 0) || isSending) return
 
         setIsSending(true)
         try {
-            await onSendMessage(message.trim())
+            await onSendMessage(message.trim(), attachments)
             setMessage("") // Clear input after sending
+            setAttachments([]) // Clear attachments
             if (replyingTo && onCancelReply) {
                 onCancelReply()
             }
@@ -969,8 +1126,22 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         }
     }
 
+    const handleFileUpload = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault()
+        fileInputRef.current?.click()
+    }
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files) return
+
+        // Handle file upload logic here
+        // This would need to be implemented based on your file upload system
+        toast.info("File upload not implemented yet")
+    }
+
     return (
-        <div className="border-t border-border/50 bg-background/50 backdrop-blur-sm">
+        <div className="bg-background/50 backdrop-blur-sm">
             {/* Reply indicator */}
             {replyingTo && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-muted/20">
@@ -990,47 +1161,89 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
             {/* Message Input */}
             <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="p-4">
-                <div className="flex items-end gap-2">
-                    <div className="flex-1 relative" ref={mentionsInputRef}>
+                {/* Attachments preview */}
+                {attachments.length > 0 && (
+                    <div className="mb-3 p-2 border border-border rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Paperclip className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                                {attachments.length} attachment{attachments.length > 1 ? 's' : ''}
+                            </span>
+                        </div>
+                        <div className="space-y-1">
+                            {attachments.map((attachment, index) => (
+                                <div key={index} className="flex items-center gap-2 text-xs">
+                                    <FileIcon className="w-3 h-3 text-muted-foreground" />
+                                    <span className="truncate flex-1">{attachment}</span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-4 w-4 p-0"
+                                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex items-center border gap-0.5 rounded p-0.5">
+                    {/* File upload button */}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-11 w-11"
+                        onClick={handleFileUpload}
+                        disabled={isSending || disabled}
+                    >
+                        <Paperclip className="w-4 h-4" />
+                    </Button>
+
+                    <div className="relative grow h-fit p-0" ref={mentionsInputRef}>
                         <MentionsInput
                             value={message}
                             onChange={(event, newValue) => setMessage(newValue)}
                             onKeyDown={handleKeyPress}
                             placeholder={`Message #${channelName || 'channel'}`}
-                            disabled={disabled}
+                            disabled={isSending || disabled}
                             singleLine={false}
-                            className="grow p-3 border border-border rounded-lg bg-background mentions-input min-h-[44px] max-h-32"
+                            forceSuggestionsAboveCursor
+                            className="mentions-input"
                             style={{
                                 control: {
                                     backgroundColor: 'transparent',
                                     fontWeight: 'normal',
-                                    border: 'none',
-                                    outline: 'none',
                                     minHeight: '44px',
                                     maxHeight: '128px',
                                     padding: '0',
+                                    margin: '0',
                                     lineHeight: '1.5',
                                     fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                    outline: 'none',
                                 },
                                 '&multiLine': {
                                     control: {
                                         fontFamily: 'inherit',
-                                        minHeight: '44px',
-                                        maxHeight: '128px',
-                                        border: 'none',
+                                        minHeight: message.split("\n").length > 1 ? '44px' : '22px',
+                                        maxHeight: message.split("\n").length > 1 ? '128px' : '22px',
                                         outline: 'none',
-                                        overflow: 'auto',
+                                        overflow: 'hidden',
                                     },
                                     highlighter: {
-                                        padding: '12px',
+                                        padding: '0px !important',
                                         border: 'none',
                                         minHeight: '44px',
                                         maxHeight: '128px',
                                         overflow: 'auto',
-                                        zIndex: 1,
+                                        boxSizing: 'border-box',
                                     },
                                     input: {
-                                        padding: '12px',
+                                        padding: '0px !important',
                                         fontSize: '14px',
                                         border: 'none',
                                         outline: 'none',
@@ -1042,26 +1255,29 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                         maxHeight: '128px',
                                         resize: 'none',
                                         overflow: 'auto',
+                                        boxSizing: 'border-box',
                                     },
                                 },
                                 suggestions: {
-                                    zIndex: 99,
+                                    zIndex: 1999,
+                                    backgroundColor: 'transparent',
                                     list: {
                                         backgroundColor: 'var(--background)',
                                         border: '1px solid var(--border)',
                                         borderRadius: '8px',
                                         fontSize: '14px',
-                                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                                        boxShadow: '0 8px 16px -4px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05)',
                                         maxHeight: '200px',
                                         overflowY: 'auto',
                                         padding: '4px',
+                                        margin: '4px 0',
                                     },
                                     item: {
-                                        padding: '8px 12px',
+                                        padding: '0',
                                         borderRadius: '4px',
                                         cursor: 'pointer',
                                         '&focused': {
-                                            backgroundColor: 'var(--accent)',
+                                            backgroundColor: 'transparent',
                                         },
                                     },
                                 },
@@ -1076,12 +1292,14 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                     return `@${displayName}`
                                 }}
                                 appendSpaceOnAdd
+                                renderSuggestion={renderMemberSuggestion}
                                 style={{
-                                    backgroundColor: 'var(--primary)',
-                                    color: 'var(--primary-foreground)',
-                                    padding: '2px 4px',
-                                    borderRadius: '3px',
-                                    fontWeight: '500',
+                                    color: 'var(--primary)',
+                                    borderRadius: '4px',
+                                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                                    position: "relative",
+                                    zIndex: 500,
+                                    pointerEvents: "none",
                                 }}
                             />
                             <Mention
@@ -1093,12 +1311,14 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                     return `#${channel?.name || id}`
                                 }}
                                 appendSpaceOnAdd
+                                renderSuggestion={renderChannelSuggestion}
                                 style={{
-                                    backgroundColor: 'rgb(59 130 246)',
-                                    color: 'white',
-                                    padding: '2px 4px',
-                                    borderRadius: '3px',
-                                    fontWeight: '500',
+                                    color: '#2563eb',
+                                    backgroundColor: 'rgba(37, 99, 235, 0.2)',
+                                    borderRadius: '4px',
+                                    position: "relative",
+                                    zIndex: 500,
+                                    pointerEvents: "none",
                                 }}
                             />
                         </MentionsInput>
@@ -1106,8 +1326,10 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
                     <Button
                         type="submit"
-                        disabled={!message.trim() || isSending}
-                        className="h-11"
+                        variant="ghost"
+                        size="icon"
+                        disabled={(!message.trim() && attachments.length === 0) || isSending || disabled}
+                        className="h-11 w-11"
                     >
                         {isSending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1117,7 +1339,17 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                     </Button>
                 </div>
 
-                <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                {/* Hidden file input */}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                    onChange={handleFileChange}
+                />
+
+                <div className="flex items-center justify-between mt-1 -mb-2.5 text-xs text-muted-foreground/50">
                     <span>
                         Press Enter to send, Shift+Enter for new line
                     </span>
@@ -1185,6 +1417,28 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             date1.getDate() === date2.getDate()
     }
 
+    // Helper function to populate replyToMessage field for messages that have replyTo
+    const populateReplyToMessages = (messages: Message[]): Message[] => {
+        if (!messages || messages.length === 0) return messages;
+
+        // Create a map for quick lookups
+        const messageMap = new Map<string, Message>();
+        messages.forEach(message => {
+            messageMap.set(message.messageId, message);
+        });
+
+        // Populate replyToMessage field
+        return messages.map(message => {
+            if (message.replyTo && messageMap.has(message.replyTo)) {
+                return {
+                    ...message,
+                    replyToMessage: messageMap.get(message.replyTo)
+                };
+            }
+            return message;
+        });
+    }
+
     // Load server if not available
     useEffect(() => {
         if (activeServerId && !server) {
@@ -1202,7 +1456,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         // Check if we have cached messages for this channel
         const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
         if (cachedMessages && cachedMessages.length > 0) {
-            setMessages(cachedMessages);
+            setMessages(populateReplyToMessages(cachedMessages));
             setLoading(false);
 
             // Load fresh messages in the background (no loading state)
@@ -1221,7 +1475,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             // Check for cached messages first
             const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
             if (cachedMessages && cachedMessages.length > 0) {
-                setMessages(cachedMessages);
+                setMessages(populateReplyToMessages(cachedMessages));
                 loadMessages(false); // Background refresh
             } else {
                 loadMessages(true); // Show loading state
@@ -1281,7 +1535,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             const messages = await actions.servers.getMessages(activeServerId, activeChannelId, 50);
 
             if (messages && messages.length > 0) {
-                setMessages(messages);
+                setMessages(populateReplyToMessages(messages));
 
                 // Load profiles for message authors
                 const authorIds = [...new Set(messages.map((m: Message) => m.authorId))] as string[];
@@ -1309,7 +1563,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     };
 
     const sendMessage = async (content: string, attachments: string[] = []) => {
-        if (!content.trim() || !server || !activeChannelId) return;
+        if ((!content.trim() && attachments.length === 0) || !server || !activeChannelId) return;
 
         // Don't attempt to send if subspace is not ready yet
         if (!subspace) {
@@ -1591,6 +1845,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 messagesInChannel={messages}
                 servers={servers}
                 activeServerId={activeServerId}
+                activeChannelId={activeChannelId}
             />
         </div>
     );
