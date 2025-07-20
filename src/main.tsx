@@ -13,6 +13,7 @@ import { useGlobalState } from '@/hooks/use-global-state';
 import { useSubspace } from '@/hooks/use-subspace';
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
+import { PostHogProvider } from 'posthog-js/react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
@@ -297,4 +298,16 @@ function Main() {
     )
 }
 
-createRoot(document.getElementById('root')!).render(<Main />)
+createRoot(document.getElementById('root')!).render(
+    <PostHogProvider
+        apiKey="phc_SqWBgq3YjrOdX1UmcMh3OtYlxoSfjA5cqJbq0IGrCz1"
+        options={{
+            api_host: "https://eu.i.posthog.com",
+            defaults: '2025-05-24',
+            capture_exceptions: true,
+            debug: import.meta.env.MODE === "development",
+        }}
+    >
+        <Main />
+    </PostHogProvider>
+)
