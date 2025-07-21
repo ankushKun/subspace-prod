@@ -220,25 +220,30 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                             },
                             onAuth: (auth) => {
                                 if (!!auth) {
-                                    window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION", "ACCESS_PUBLIC_KEY"]).then(() => {
-                                        window.arweaveWallet.getActiveAddress().then((address) => {
-                                            set((state) => {
-                                                return {
-                                                    address: address,
-                                                    connected: true,
-                                                    connectionStrategy: ConnectionStrategies.WanderConnect,
-                                                    wanderInstance: wander,
-                                                    jwk: null,
-                                                    provider: null
-                                                }
+                                    console.log("Wander Connect auth", auth)
+                                    console.log("window.arweaveWallet", window.arweaveWallet)
+                                    if (window.arweaveWallet) {
+                                        window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION", "ACCESS_PUBLIC_KEY", "ACCESS_ALL_ADDRESSES"]).then(() => {
+                                            window.arweaveWallet.getActiveAddress().then((address) => {
+                                                set((state) => {
+                                                    return {
+                                                        address: address,
+                                                        connected: true,
+                                                        connectionStrategy: ConnectionStrategies.WanderConnect,
+                                                        wanderInstance: wander,
+                                                        jwk: null,
+                                                        provider: null
+                                                    }
+                                                })
+                                                wander.close();
+                                                triggerAuthenticatedEvent(address)
                                             })
-                                            wander.close();
-                                            triggerAuthenticatedEvent(address)
                                         })
-                                    })
+                                    }
                                 }
                             }
                         })
+                        console.log("Wander Connect open")
                         wander.open();
                         return { wanderInstance: wander }
 

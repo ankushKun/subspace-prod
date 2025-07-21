@@ -21,11 +21,11 @@ export default function App() {
 
     useEffect(() => {
         if (address) {
-            // Removed navigate("/app") to prevent hot reload navigation issues
-            // The user is already in the App component, no need to navigate
             if (!subspace) return
             subspaceActions.init()
             subspaceActions.profile.refresh()
+        } else {
+            navigate("/app")
         }
     }, [address])
 

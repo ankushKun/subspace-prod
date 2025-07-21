@@ -80,6 +80,7 @@
     "tailwindcss": "^4.1.11",
     "vaul": "^1.1.2",
     "vite-plugin-node-polyfills": "^0.24.0",
+    "vite-plugin-open-graph": "^2.0.6",
     "zod": "^3.25.76",
     "zustand": "^5.0.6"
   },
@@ -96,6 +97,7 @@
     "tw-animate-css": "^1.3.5",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.37.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^1.0.1"
   }
 }

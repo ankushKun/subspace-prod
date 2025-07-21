@@ -201,8 +201,9 @@ const handleAsyncError = (error: Error) => {
 // Set up global error handlers for unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
-    handleAsyncError(new Error(event.reason?.message || event.reason || 'Unhandled promise rejection'));
     event.preventDefault(); // Prevent the default browser error handling
+    if (`${event.reason}`.includes("No wallets added")) return
+    handleAsyncError(new Error(event.reason?.message || event.reason || 'Unhandled promise rejection'));
 });
 
 // Set up global error handler for uncaught errors

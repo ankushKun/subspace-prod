@@ -19,6 +19,8 @@ import type { Server } from "@subspace-protocol/sdk";
 import { useSubspace } from "@/hooks/use-subspace";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useNavigate } from "react-router";
+import { useWallet } from "@/hooks/use-wallet";
+import { usePWA } from "@/hooks/use-pwa";
 
 import alien from "@/assets/subspace/alien-black.svg"
 import alienGreen from "@/assets/subspace/alien-green.svg"
@@ -267,6 +269,7 @@ const AddServerButton = ({ onServerJoined }: AddServerButtonProps) => {
     const [isUploadingIcon, setIsUploadingIcon] = useState(false);
     const [creationStep, setCreationStep] = useState<string>("");
     const { actions } = useSubspace();
+    const { connected } = useWallet();
 
     const handleCreateServer = async () => {
         if (!serverName.trim()) return;
@@ -411,7 +414,7 @@ const AddServerButton = ({ onServerJoined }: AddServerButtonProps) => {
 
             <div className="flex justify-center relative">
                 <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                    <PopoverTrigger asChild>
+                    <PopoverTrigger asChild disabled={!connected}>
                         <Button
                             size="icon"
                             variant="ghost"
@@ -648,6 +651,11 @@ const AddServerButton = ({ onServerJoined }: AddServerButtonProps) => {
 // Install PWA Button Component
 const InstallPWAButton = () => {
     const [isHovered, setIsHovered] = useState(false);
+    const { showInstallPrompt, isInstallable, isInstalled, debugInfo } = usePWA();
+
+    if (isInstalled || !isInstallable) {
+        return null;
+    }
 
     return (
         <div className="relative group mb-3">
@@ -669,6 +677,7 @@ const InstallPWAButton = () => {
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-background/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
                         "rounded-3xl hover:rounded-2xl bg-muted/30 hover:bg-gradient-to-br hover:from-primary hover:to-primary/80 hover:shadow-md hover:shadow-primary/20"
                     )}
+                    onClick={showInstallPrompt}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
                 >
@@ -768,8 +777,9 @@ export default function ServerList({ className }: { className?: string }) {
     const { profile, servers, actions } = useSubspace()
     const { activeServerId } = useGlobalState()
     const navigate = useNavigate()
+    const { connected } = useWallet();
 
-    const displayServers = (profile?.serversJoined || [])
+    const displayServers = connected ? (profile?.serversJoined || [])
         .map(server => {
             // Handle both string and object server identifiers
             const serverId = typeof server === 'string' ? server : (server as any).serverId
@@ -788,6 +798,7 @@ export default function ServerList({ className }: { className?: string }) {
             return null
         })
         .filter(server => server !== null)
+        : []
 
     function onServerJoined(data: any) {
         // Server was created and is already in the state

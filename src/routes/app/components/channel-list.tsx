@@ -324,21 +324,6 @@ export default function ChannelList({ className }: { className?: string }) {
                             </>
                         )}
 
-                        <DropdownMenuItem
-                            onClick={() => navigate(`/app/${activeServerId}/members`)}
-                            className="cursor-pointer p-3 hover:bg-muted/50 focus:bg-muted/50"
-                        >
-                            <div className="flex items-center gap-3 w-full">
-                                <div className="w-8 h-8 rounded-sm bg-purple-500/10 flex items-center justify-center">
-                                    <Users className="w-4 h-4 text-purple-500" />
-                                </div>
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <span className="font-medium text-sm text-foreground">View Members</span>
-                                    <span className="text-xs text-muted-foreground">See who's in this server</span>
-                                </div>
-                            </div>
-                        </DropdownMenuItem>
-
                         {/* Show server settings only if user is server owner */}
                         {server.ownerId === useWallet.getState().address && (
                             <>
