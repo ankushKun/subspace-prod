@@ -75,10 +75,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     }
                 case ConnectionStrategies.WAuth:
                     {
-                        // WAuth doesn't support signing operations yet
-                        // Return null to allow read-only operations
-                        console.warn("WAuth connection strategy doesn't support signing operations yet. Some features may be limited.");
-                        return null;
+                        return get().wauthInstance?.getAoSigner() as any;
                     }
                 case ConnectionStrategies.GuestUser:
                     {
