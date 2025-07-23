@@ -141,7 +141,10 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                         return
                     }
 
-                    state.wauthInstance.logout();
+                    if (state.wauthInstance) state.wauthInstance.logout();
+                    else {
+                        state.wauthInstance = new WAuth({ dev: false })
+                    }
 
 
                     const data = await state.wauthInstance.connect({ provider })

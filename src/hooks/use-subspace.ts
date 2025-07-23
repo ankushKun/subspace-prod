@@ -85,9 +85,13 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     actions: {
         init: () => {
             const signer = useWallet.getState().actions.getSigner()
-            const owner = useWallet.getState().address
+            let owner = useWallet.getState().address
 
-            if (!owner) return
+            if (!owner) {
+                owner = "0x69420"
+                console.log("no owner, using default")
+                return
+            }
 
             const subspace = getSubspace(signer, owner)
             set({ subspace })

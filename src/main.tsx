@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import alien from '@/assets/subspace/alien-green.svg';
 import { Toaster } from 'sonner';
+import Invite from '@/routes/invite';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -295,6 +296,7 @@ function Main() {
                     <Routes>
                         <Route path="/" element={<SubspaceLanding />} />
                         <Route path="/app" element={<App />} />
+                        <Route path="/invite/:invite" element={<Invite />} />
                         <Route path="/app/settings" element={<Settings />} />
                         <Route path="/app/:serverId" element={<App />} />
                         <Route path="/app/:serverId/:channelId" element={<App />} />
