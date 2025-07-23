@@ -27,6 +27,13 @@ interface ErrorBoundaryState {
     showDetails: boolean;
 }
 
+const skipErrors = [
+    "no wallets added",
+    "profile already exists",
+    "user cancelled the authrequest",
+    "profile not found"
+]
+
 class ErrorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, ErrorBoundaryState> {
     constructor(props: { children: ReactNode; onError?: (error: Error) => void }) {
         super(props);
@@ -202,7 +209,7 @@ const handleAsyncError = (error: Error) => {
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
     event.preventDefault(); // Prevent the default browser error handling
-    if (`${event.reason}`.includes("No wallets added")) return
+    if (skipErrors.some(error => `${event.reason}`.toLowerCase().includes(error))) return
     handleAsyncError(new Error(event.reason?.message || event.reason || 'Unhandled promise rejection'));
 });
 

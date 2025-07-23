@@ -40,12 +40,14 @@ interface SubspaceState {
     profiles: Record<string, ExtendedProfile>
     servers: Record<string, Server>
     messages: Record<string, Record<string, Record<string, any>>>  // serverId -> channelId -> messageId -> message
+    isCreatingProfile: boolean
+    isLoadingProfile: boolean
     actions: {
         init: () => void
         profile: {
             get: (userId?: string) => Promise<ExtendedProfile | null>
             getBulk: (userIds: string[]) => Promise<ExtendedProfile[]>
-            refresh: () => Promise<ExtendedProfile | null>
+            refresh: (silent?: boolean) => Promise<ExtendedProfile | null>
             updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
         }
         servers: {
@@ -78,6 +80,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     profiles: {},
     servers: {},
     messages: {},
+    isCreatingProfile: false,
+    isLoadingProfile: false,
     actions: {
         init: () => {
             const signer = useWallet.getState().actions.getSigner()
@@ -92,6 +96,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             const cachedProfile = get().profiles[owner]
             if (cachedProfile) {
                 set({ profile: cachedProfile as ExtendedProfile })
+                // Still refresh in background but don't show loading state
+                get().actions.profile.refresh(true)
             } else {
                 set({ profile: null })
                 get().actions.profile.get()
@@ -129,13 +135,37 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 try {
                     let profile: Profile | null = null
+                    set({ isLoadingProfile: true })
+
                     try {
                         profile = await subspace.user.getProfile(userId || walletAddress)
                     } catch (e) {
-                        // create their profile
-                        const profileId = await subspace.user.createProfile()
-                        profile = await subspace.user.getProfile(profileId)
+                        // Only show creating profile dialog if this is our own profile
+                        // and we don't already have a profile in the store
+                        if (!userId && !get().profile) {
+                            set({ isCreatingProfile: true })
+
+                            try {
+                                // create their profile
+                                const profileId = await subspace.user.createProfile()
+                                profile = await subspace.user.getProfile(profileId)
+
+                                // If profile was created successfully, refresh the page
+                                if (profile) {
+                                    window.location.reload()
+                                }
+                            } catch (error) {
+                                console.error("Failed to create profile:", error)
+                                throw error
+                            } finally {
+                                set({ isCreatingProfile: false })
+                            }
+                        } else {
+                            // For other users' profiles, just throw the error
+                            throw e
+                        }
                     }
+
                     if (profile) {
                         const { primaryName, primaryLogo } = await getPrimaryName(profile.userId || userId)
                         if (userId) { // means we are getting the profile for someone elses id
@@ -161,24 +191,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         console.error("Failed to get profile")
                         set({ profile: null })
                     }
-                } catch (e) {
-                    console.error(e)
-                    // create their profile
-                    if (!userId) {
-                        const profileId = await subspace.user.createProfile()
-                        if (profileId) {
-                            const profile = await subspace.user.getProfile(profileId)
-                            if (profile) {
-                                const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
-                                set({ profile: { ...profile, primaryName, primaryLogo } as ExtendedProfile })
-                                return profile as ExtendedProfile
-                            }
-                        }
-                        return null
-                    } else {
-                        console.error(e)
-                        return null
-                    }
+                } catch (error) {
+                    console.error("Error in profile.get:", error)
+                    throw error
+                } finally {
+                    set({ isLoadingProfile: false })
                 }
             },
             getBulk: async (userIds: string[]) => {
@@ -205,7 +222,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 return profiles
             },
-            refresh: async () => {
+            refresh: async (silent: boolean = false) => {
                 // Force refresh the current user's profile
                 const walletAddress = useWallet.getState().address
                 if (!walletAddress) {
@@ -214,11 +231,19 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 try {
+                    // If silent refresh, don't show loading states
+                    if (!silent) {
+                        set({ isLoadingProfile: true })
+                    }
                     const refreshedProfile = await get().actions.profile.get()
                     return refreshedProfile
                 } catch (error) {
                     console.error("Failed to refresh profile:", error)
                     return null
+                } finally {
+                    if (!silent) {
+                        set({ isLoadingProfile: false })
+                    }
                 }
             },
             updateProfile: async (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => {

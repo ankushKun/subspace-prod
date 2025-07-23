@@ -123,7 +123,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     let state = get();
                     if (state.connected && state.connectionStrategy !== ConnectionStrategies.WAuth) state.actions.disconnect();
 
-                    if (state.wauthInstance.isLoggedIn()) {
+                    if (state.wauthInstance && state.wauthInstance.isLoggedIn()) {
                         const wallet = await state.wauthInstance.getWallet()
                         if (!wallet) return state.actions.disconnect();
 

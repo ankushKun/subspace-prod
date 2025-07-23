@@ -82,8 +82,8 @@ export async function uploadFileAR(file: File, jwk?: JWKInterface) {
     }
 }
 
-export async function uploadFileTurbo(file: File, jwk?: JWKInterface) {
-    const signer = jwk ? new ArweaveSigner(jwk) : new ArconnectSigner(window.arweaveWallet)
+export async function uploadFileTurbo(file: File, jwk?: JWKInterface, customSigner?: any) {
+    const signer = customSigner ? customSigner : jwk ? new ArweaveSigner(jwk) : new ArconnectSigner(window.arweaveWallet)
     try {
         const turbo = TurboFactory.authenticated({ signer })
         const res = await turbo.uploadFile({

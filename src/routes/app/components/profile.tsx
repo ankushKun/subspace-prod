@@ -4,7 +4,7 @@ import { useGlobalState } from "@/hooks/use-global-state"
 import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils"
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Settings, LogOut, User, Edit2, Save, X, Camera } from "lucide-react"
+import { Settings, LogOut, User, Edit2, Save, X, Camera, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -34,11 +34,12 @@ function SettingsButton(props: React.ComponentProps<typeof Button>) {
 }
 
 export default function Profile({ className }: { className?: string }) {
-    const { address, connected, actions: walletActions, jwk } = useWallet()
-    const { profile, servers, actions, subspace } = useSubspace()
+    const { address, connected, actions: walletActions, jwk, wauthInstance } = useWallet()
+    const { profile, servers, actions, subspace, isCreatingProfile } = useSubspace()
 
     // UI State
     const [profileDialogOpen, setProfileDialogOpen] = useState(false)
+    const [pfpPromptOpen, setPfpPromptOpen] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [editedNickname, setEditedNickname] = useState("")
     const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
@@ -47,12 +48,20 @@ export default function Profile({ className }: { className?: string }) {
     const [profilePicFile, setProfilePicFile] = useState<File | null>(null)
     const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const pfpPromptFileInputRef = useRef<HTMLInputElement>(null)
 
+    // Check if user needs PFP prompt
     useEffect(() => {
-        if (!connected || !address || !subspace) return
+        // Don't show PFP prompt if profile is being created
+        if (!profile || isCreatingProfile) return
 
-        actions.profile.get()
-    }, [connected, address, subspace])
+        const DEFAULT_PFP = "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A"
+        const needsPfpPrompt = !profile.pfp || profile.pfp === DEFAULT_PFP
+
+        if (needsPfpPrompt) {
+            setPfpPromptOpen(true)
+        }
+    }, [profile, isCreatingProfile])
 
     // Load current nickname when server is selected
     useEffect(() => {
@@ -235,7 +244,7 @@ export default function Profile({ className }: { className?: string }) {
                     setIsUploading(true)
                     toast.loading("Uploading profile picture to Arweave...")
 
-                    const pfpId = await uploadFileTurbo(profilePicFile, jwk)
+                    const pfpId = await uploadFileTurbo(profilePicFile, jwk, wauthInstance?.getWauthSigner())
                     if (pfpId) {
                         toast.dismiss()
                         toast.loading("Updating profile...")
@@ -300,6 +309,61 @@ export default function Profile({ className }: { className?: string }) {
             toast.error("Failed to update profile")
         } finally {
             setIsSaving(false)
+        }
+    }
+
+    const handlePfpPromptFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        // Validate file size (max 100KB)
+        if (file.size > 100 * 1024) {
+            toast.error("Profile picture must be less than 100KB")
+            return
+        }
+
+        // Validate file type
+        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+            toast.error("Please select a PNG or JPEG image file")
+            return
+        }
+
+        try {
+            setIsUploading(true)
+            toast.loading("Uploading profile picture to Arweave...")
+
+            const pfpId = await uploadFileTurbo(file, jwk, wauthInstance?.getWauthSigner())
+            if (pfpId) {
+                toast.dismiss()
+                toast.loading("Updating profile...")
+
+                const success = await actions.profile.updateProfile({ pfp: pfpId })
+                if (success) {
+                    toast.dismiss()
+                    toast.success("Profile picture updated successfully")
+
+                    // Force refresh to get the latest data from the server
+                    await actions.profile.refresh()
+
+                    // Close the prompt
+                    setPfpPromptOpen(false)
+                } else {
+                    toast.dismiss()
+                    toast.error("Failed to update profile picture")
+                }
+            } else {
+                toast.dismiss()
+                toast.error("Failed to upload profile picture")
+            }
+        } catch (error) {
+            console.error("Error uploading profile picture:", error)
+            toast.dismiss()
+            toast.error("Failed to upload profile picture")
+        } finally {
+            setIsUploading(false)
+            if (pfpPromptFileInputRef.current) {
+                pfpPromptFileInputRef.current.value = ""
+            }
         }
     }
 
@@ -417,6 +481,101 @@ export default function Profile({ className }: { className?: string }) {
                     <SettingsButton />
                 </div>
             </div>
+
+            {/* PFP Prompt Dialog */}
+            <Dialog open={pfpPromptOpen} onOpenChange={setPfpPromptOpen}>
+                <DialogContent className="max-w-md w-[95vw] p-4 outline-0 overflow-hidden flex flex-col bg-background border border-primary/30 shadow-2xl">
+                    <DialogHeader className="flex-shrink-0 border-b border-primary/20 pb-4">
+                        <DialogTitle className="flex items-center gap-2 font-freecam text-xl text-primary">
+                            <Camera className="h-5 w-5" />
+                            <span>Add Profile Picture</span>
+                        </DialogTitle>
+                        <DialogDescription className="font-ocr text-primary/60 text-left">
+                            Make your profile more personal by adding a profile picture.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex flex-col items-center justify-center py-8 gap-6">
+                        <div
+                            className="relative group cursor-pointer"
+                            onClick={() => !isUploading && pfpPromptFileInputRef.current?.click()}
+                        >
+                            <div className={cn(
+                                "w-24 h-24 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center border-2 border-dashed border-primary/60 group-hover:border-primary group-hover:scale-105 transition-all duration-200",
+                                isUploading && "opacity-50"
+                            )}>
+                                <img
+                                    src={alien}
+                                    alt="alien"
+                                    className={cn(
+                                        "w-12 h-12 opacity-60 group-hover:opacity-40 transition-opacity duration-200",
+                                        isUploading && "animate-pulse"
+                                    )}
+                                />
+                            </div>
+                            {!isUploading && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-sm opacity-0 group-hover:opacity-100 transition-all duration-200">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Camera className="h-8 w-8 text-primary" />
+                                        <span className="text-xs text-primary font-ocr">UPLOAD</span>
+                                    </div>
+                                </div>
+                            )}
+                            {isUploading && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-sm">
+                                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-center space-y-2">
+                            <p className="text-sm text-primary/80 font-ocr">
+                                {isUploading ? "Uploading your profile picture..." : "Stand out in the community with a unique profile picture."}
+                            </p>
+                            <p className="text-xs text-primary/60 font-ocr">
+                                Supported formats: PNG, JPEG • Max size: 100KB
+                            </p>
+                        </div>
+                        {/* Hidden file input */}
+                        <input
+                            ref={pfpPromptFileInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg"
+                            onChange={handlePfpPromptFileUpload}
+                            className="hidden"
+                            disabled={isUploading}
+                        />
+                    </div>
+
+                    <DialogFooter className="px-4 pt-4 border-t border-primary/20 bg-background flex-shrink-0">
+                        <DialogClose
+                            className={cn(
+                                "cursor-pointer font-ocr text-primary hover:text-primary/80 bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors px-4 py-2 rounded-sm",
+                                isUploading && "opacity-50 cursor-not-allowed pointer-events-none"
+                            )}
+                            disabled={isUploading}
+                        >
+                            Maybe Later
+                        </DialogClose>
+                        <Button
+                            onClick={() => !isUploading && pfpPromptFileInputRef.current?.click()}
+                            disabled={isUploading}
+                            className={cn(
+                                "font-ocr bg-primary text-black hover:bg-primary/90",
+                                isUploading && "opacity-50 cursor-not-allowed"
+                            )}
+                        >
+                            {isUploading ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span>Uploading...</span>
+                                </div>
+                            ) : (
+                                "Choose Picture"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Profile Settings Dialog */}
             <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>

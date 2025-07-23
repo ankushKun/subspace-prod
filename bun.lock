@@ -40,8 +40,8 @@
         "@tailwindcss/vite": "^4.1.11",
         "@types/react-mentions": "^4.4.1",
         "@wanderapp/connect": "^0.1.11",
-        "@wauth/sdk": "^0.0.8",
-        "@wauth/strategy": "^0.0.8",
+        "@wauth/sdk": "^0.0.9",
+        "@wauth/strategy": "^0.0.9",
         "@yudiel/react-qr-scanner": "^2.3.1",
         "arweave": "^1.15.7",
         "buffer": "^6.0.3",
@@ -828,9 +828,9 @@
 
     "@wanderapp/connect": ["@wanderapp/connect@0.1.11", "", { "dependencies": { "ts-deepmerge": "^7.0.3" } }, "sha512-Aeu7Xetav9tuXgoBIbTv7rOdmgu6WO7IsUk07c8apQHbUkCTmDn+1/uS1Hs1yb9+ZDO2i8vmenTPGR2Ioc2E4w=="],
 
-    "@wauth/sdk": ["@wauth/sdk@0.0.8", "", { "dependencies": { "@dha-team/arbundles": "^1.0.3", "arconnect": "^1.0.4", "arweave": "^2.0.0-ec.1", "axios": "^1.10.0", "vite-plugin-node-polyfills": "^0.24.0" }, "peerDependencies": { "pocketbase": "^0.26.1" } }, "sha512-RYctiwM4p2FUuS+1tObBalgN9bIl1Pl4MqHO994Rye45gUzO5p/r/IEkm8GyQOf8oddABs/zVQmuUsqTEKEnZA=="],
+    "@wauth/sdk": ["@wauth/sdk@0.0.9", "", { "dependencies": { "@dha-team/arbundles": "^1.0.3", "arconnect": "^1.0.4", "arweave": "^2.0.0-ec.1", "axios": "^1.10.0", "vite-plugin-node-polyfills": "^0.24.0" }, "peerDependencies": { "pocketbase": "^0.26.1" } }, "sha512-6DNVSZlYpFMbk5rmD4jJkHVFCz7aECobnXqxDUB/gLwBKVuH1GvR0U+eD0PxLQQsV5PKAnr/XMktT9+ingL3fA=="],
 
-    "@wauth/strategy": ["@wauth/strategy@0.0.8", "", { "dependencies": { "@arweave-wallet-kit/core": "^0.1.1", "@dha-team/arbundles": "^1.0.3", "@wauth/sdk": "^0.0.8", "axios": "^1.10.0", "vite-plugin-node-polyfills": "^0.24.0" } }, "sha512-8xpXiaZnmhGSqQtwx+FvBkbVLEIiwBRKBVycejGnp8ZGFghpghxPLzqOBG+cfhd8Domn9qoitr9mNxSqmMLbqg=="],
+    "@wauth/strategy": ["@wauth/strategy@0.0.9", "", { "dependencies": { "@arweave-wallet-kit/core": "^0.1.1", "@dha-team/arbundles": "^1.0.3", "@wauth/sdk": "^0.0.9", "axios": "^1.10.0", "vite-plugin-node-polyfills": "^0.24.0" } }, "sha512-Uqzxcfl4fByxnAbK4j0nTd3zJwKi5Qf4/CFnd6aP/iwijSI8MCBzYswPsLW15cdNWmGjl4Gx8fnN8NcVRklWPw=="],
 
     "@yudiel/react-qr-scanner": ["@yudiel/react-qr-scanner@2.3.1", "", { "dependencies": { "barcode-detector": "3.0.3", "webrtc-adapter": "9.0.3" }, "peerDependencies": { "react": "^17 || ^18 || ^19", "react-dom": "^17 || ^18 || ^19" } }, "sha512-fE7217QvMKT/AxAEeKIheFhkKO13PSGHiqJfg4dLK/SGPpelpXNpZZ0Qeph1Cm08/AqMlGhvzQbCmoPeD/VVIg=="],
 
