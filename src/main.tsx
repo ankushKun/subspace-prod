@@ -204,9 +204,9 @@ let errorBoundaryRef: ErrorBoundary | null = null;
 const handleAsyncError = (error: Error) => {
     console.error('Async error caught:', error);
     if (`${error}`.includes("password not available")) {
-        localStorage.removeItem("pocketbase_auth")
-        sessionStorage.removeItem("wauth_encrypted_password")
-        sessionStorage.removeItem("wauth_session_key")
+        // localStorage.removeItem("pocketbase_auth")
+        // sessionStorage.removeItem("wauth_encrypted_password")
+        // sessionStorage.removeItem("wauth_session_key")
     }
     if (skipErrors.some(error => `${error}`.toLowerCase().includes(error))) return
     if (errorBoundaryRef) {
