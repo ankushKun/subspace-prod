@@ -94,6 +94,18 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
         }
     }
 
+    function handleLoginOptionClicked(strategy: ConnectionStrategies, provider?: WAuthProviders) {
+        clickClose()
+        if (strategy === ConnectionStrategies.ScannedJWK) {
+            // walletActions.connect({ strategy: ConnectionStrategies.ScannedJWK, jwk: scannedJWK})
+        } else if (strategy === ConnectionStrategies.WAuth) {
+            walletActions.connect({ strategy: ConnectionStrategies.WAuth, provider: provider })
+        } else if (strategy === ConnectionStrategies.ArWallet) {
+            walletActions.connect({ strategy: ConnectionStrategies.ArWallet })
+        } else if (strategy === ConnectionStrategies.WanderConnect) {
+        }
+    }
+
     return (
         <Dialog onOpenChange={(open) => {
             if (!open) {
@@ -143,17 +155,17 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                     </> : <>
                         <div className="flex gap-1 justify-evenly items-center">
                             <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => walletActions.connect({ strategy: ConnectionStrategies.WAuth, provider: WAuthProviders.Discord })}
+                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Discord)}
                             >
                                 <img src={discord} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
                             </Button>
                             <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => walletActions.connect({ strategy: ConnectionStrategies.WAuth, provider: WAuthProviders.Github })}
+                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Github)}
                             >
                                 <img src={github} className="w-8 h-8 p-1 ml-auto aspect-square object-contain invert dark:invert-0" />
                             </Button>
                             <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => walletActions.connect({ strategy: ConnectionStrategies.WAuth, provider: WAuthProviders.Google })}
+                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Google)}
                             >
                                 <img src={google} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
                             </Button>
@@ -167,7 +179,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                         <div className="flex gap-1 justify-evenly items-center">
                             {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" &&
                                 <Button variant="ghost" className="text-start justify-start border border-border/50 h-12 grow"
-                                    onClick={() => walletActions.connect({ strategy: ConnectionStrategies.ArWallet })}
+                                    onClick={() => handleLoginOptionClicked(ConnectionStrategies.ArWallet)}
                                 >
                                     <div>Arweave Wallet</div>
                                     <img src={arweave} className="w-8 h-8 p-0.5 ml-auto aspect-square opacity-60 group-hover:opacity-100 transition-opacity duration-200 invert dark:invert-0" />
@@ -176,7 +188,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             <Button variant="ghost" className="text-start grow justify-start border border-border/50 h-12"
                                 onClick={() => {
                                     if (wanderInstance) wanderInstance.open()
-                                    else walletActions.connect({ strategy: ConnectionStrategies.WanderConnect })
+                                    else handleLoginOptionClicked(ConnectionStrategies.WanderConnect)
                                     clickClose()
                                 }}
                             >
@@ -206,7 +218,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                     const jwkObj = JSON.parse(jwk)
                                     jwkObj.kty = "RSA"
                                     jwkObj.e = "AQAB"
-                                    walletActions.connect({ strategy: ConnectionStrategies.ScannedJWK, jwk: jwkObj })
+                                    handleLoginOptionClicked(ConnectionStrategies.ScannedJWK, jwkObj)
                                 }
                             }}
                         >

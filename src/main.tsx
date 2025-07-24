@@ -32,7 +32,9 @@ const skipErrors = [
     "no wallets added",
     "profile already exists",
     "user cancelled the authrequest",
-    "profile not found"
+    "profile not found",
+    "session password not available - please reconnect",
+    "removeChild"
 ]
 
 class ErrorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, ErrorBoundaryState> {
@@ -201,6 +203,12 @@ let errorBoundaryRef: ErrorBoundary | null = null;
 // Global error handler for uncaught async errors
 const handleAsyncError = (error: Error) => {
     console.error('Async error caught:', error);
+    if (`${error}`.includes("password not available")) {
+        localStorage.removeItem("pocketbase_auth")
+        sessionStorage.removeItem("wauth_encrypted_password")
+        sessionStorage.removeItem("wauth_session_key")
+    }
+    if (skipErrors.some(error => `${error}`.toLowerCase().includes(error))) return
     if (errorBoundaryRef) {
         errorBoundaryRef.setError(error);
     }
