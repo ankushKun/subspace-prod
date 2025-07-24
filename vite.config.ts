@@ -43,6 +43,9 @@ export default defineConfig({
       devOptions: {
         enabled: process.env.NODE_ENV === "development"
       },
+      workbox: {
+        maximumFileSizeToCacheInBytes: 25 * 1024 * 1024, // 25MB
+      },
       manifest: {
         name: 'Subspace Chat',
         short_name: 'Subspace',
