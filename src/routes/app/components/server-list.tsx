@@ -528,15 +528,15 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: any) => v
                                     <AlertDialogContent className="max-w-lg w-[95vw] sm:w-full p-0 max-h-[90vh] overflow-hidden flex flex-col bg-background border border-primary/30 shadow-2xl">
                                         <AlertDialogHeader className="relative px-4 sm:px-6 pt-6 pb-4 border-b border-primary/20">
                                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-8 bg-primary/5 rounded-full blur-xl" />
-                                            <AlertDialogTitle className="text-xl font-freecam flex items-center gap-3 relative tracking-wide">
-                                                <div className="w-8 h-8 bg-primary/20 flex items-center justify-center border border-primary/30">
+                                            <AlertDialogTitle className="text-xl font-ocr flex items-center gap-3 relative tracking-wide">
+                                                <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
                                                     <Plus className="w-4 h-4 text-primary" />
                                                 </div>
                                                 <div>
-                                                    <div className="text-primary">
-                                                        CREATE SERVER
+                                                    <div className="text-primary font-bold">
+                                                        Create Server
                                                     </div>
-                                                    <div className="text-sm font-ocr font-normal text-primary/60 mt-1 tracking-normal">
+                                                    <div className="text-sm font-ocr font-normal text-muted-foreground mt-1 tracking-normal">
                                                         Start your own community
                                                     </div>
                                                 </div>
@@ -557,25 +557,25 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: any) => v
                                                     </div>
                                                     <div className="flex-1 space-y-4">
                                                         <div className="space-y-2">
-                                                            <label className="text-sm font-freecam text-primary tracking-wide">
-                                                                SERVER NAME *
+                                                            <label className="text-sm font-ocr text-primary tracking-wide font-medium">
+                                                                Server Name *
                                                             </label>
                                                             <Input
                                                                 type="text"
-                                                                placeholder="MY AWESOME SERVER"
+                                                                placeholder="My Awesome Server"
                                                                 value={serverName}
                                                                 onChange={(e) => setServerName(e.target.value)}
-                                                                className="font-ocr bg-primary/10 border-primary/30 text-primary placeholder:text-primary/40 focus:border-primary focus:ring-primary/20"
+                                                                className="font-ocr bg-primary/10 border-primary/30 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20"
                                                             />
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Info note */}
-                                                <div className="px-4 py-3 mt-4 bg-primary/5 border border-primary/20 relative">
-                                                    <div className="flex items-start gap-2 relative">
-                                                        <div className="w-1.5 h-1.5 bg-primary mt-2 flex-shrink-0" />
-                                                        <p className="text-xs text-primary/60 font-ocr">
+                                                <div className="px-4 py-3 mt-4 bg-primary/5 border border-primary/20 rounded-lg">
+                                                    <div className="flex items-start gap-2">
+                                                        <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+                                                        <p className="text-xs text-muted-foreground">
                                                             Server creation may take 30-60 seconds as we initialize your server on the permaweb.
                                                             Please be patient during this process.
                                                         </p>
@@ -587,22 +587,22 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: any) => v
                                         <AlertDialogFooter className="px-4 sm:px-6 pb-6 pt-4 gap-3 border-t border-primary/20 bg-background">
                                             <AlertDialogCancel
                                                 disabled={isCreating || isUploadingIcon}
-                                                className="font-ocr bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:border-primary/50"
+                                                className="bg-primary/10 border-primary/30 text-muted-foreground hover:bg-primary/20 hover:border-primary/50"
                                             >
-                                                CANCEL
+                                                Cancel
                                             </AlertDialogCancel>
                                             <Button
                                                 onClick={handleCreateServer}
                                                 disabled={!serverName.trim() || isCreating || isUploadingIcon}
-                                                className="font-ocr bg-primary text-black hover:bg-primary/90 disabled:opacity-50"
+                                                className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                                             >
                                                 {(isCreating || isUploadingIcon) ? (
                                                     <>
                                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                        {creationStep ? creationStep.toUpperCase() : "CREATING..."}
+                                                        {creationStep ? creationStep : "Creating..."}
                                                     </>
                                                 ) : (
-                                                    "CREATE SERVER"
+                                                    "Create Server"
                                                 )}
                                             </Button>
                                         </AlertDialogFooter>
@@ -966,15 +966,15 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
             <AlertDialogContent className="max-w-lg w-[95vw] sm:w-full p-0 bg-background border border-primary/30 shadow-2xl">
                 <AlertDialogHeader className="relative px-4 sm:px-6 pt-6 pb-4 border-b border-primary/20">
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-8 bg-primary/5 rounded-full blur-xl" />
-                    <AlertDialogTitle className="text-xl font-freecam flex items-center gap-3 relative tracking-wide">
-                        <div className="w-8 h-8 bg-primary/20 flex items-center justify-center border border-primary/30">
+                    <AlertDialogTitle className="text-xl font-ocr flex items-center gap-3 relative tracking-wide">
+                        <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
                             <Users className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                            <div className="text-primary">
-                                JOIN SERVER
+                            <div className="text-primary font-bold">
+                                Join Server
                             </div>
-                            <div className="text-sm font-ocr font-normal text-primary/60 mt-1 tracking-normal">
+                            <div className="text-sm font-ocr font-normal text-muted-foreground mt-1 tracking-normal">
                                 Connect to an existing community
                             </div>
                         </div>
@@ -984,19 +984,19 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
                 <AlertDialogDescription asChild>
                     <div className="px-4 sm:px-6 space-y-4 mt-4 relative">
                         <div className="space-y-2 relative">
-                            <label className="text-sm font-freecam text-primary tracking-wide">
-                                INVITE CODE OR LINK
+                            <label className="text-sm font-ocr text-primary tracking-wide font-medium">
+                                Invite Code or Link
                             </label>
                             <Input
                                 type="text"
-                                placeholder="Paste invite link or server ID..."
+                                placeholder="Enter server ID or paste invite link..."
                                 value={inviteCode}
                                 onChange={handleInputChange}
                                 onPaste={handlePaste}
                                 disabled={isJoining}
                                 className={cn(
-                                    "font-ocr bg-primary/10 border-primary/30 text-primary placeholder:text-primary/40 focus:border-primary focus:ring-primary/20 transition-all duration-200",
-                                    error && "border-red-500/50 focus:border-red-500 focus:ring-red-500/20",
+                                    "bg-primary/10 border-primary/30 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-primary/20 transition-all duration-200",
+                                    error && "border-destructive/50 focus:border-destructive focus:ring-destructive/20",
                                     serverInfo && "border-primary focus:border-primary focus:ring-primary/20",
                                     isLoading && "border-primary/60 focus:border-primary focus:ring-primary/20"
                                 )}
@@ -1008,24 +1008,24 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                                            <span className="text-primary/80">VALIDATING INVITE...</span>
+                                            <span className="text-muted-foreground">Validating invite...</span>
                                         </>
                                     ) : parseInviteCode(inviteCode) ? (
                                         serverInfo ? (
                                             <>
-                                                <div className="w-3 h-3 bg-primary border border-primary/30" />
-                                                <span className="text-primary">VALID SERVER FOUND</span>
+                                                <div className="w-3 h-3 bg-primary rounded-full" />
+                                                <span className="text-primary">Valid server found</span>
                                             </>
                                         ) : error ? (
                                             <>
-                                                <AlertCircle className="w-3 h-3 text-red-500" />
-                                                <span className="text-red-500">INVALID INVITE</span>
+                                                <AlertCircle className="w-3 h-3 text-destructive" />
+                                                <span className="text-destructive">Invalid invite</span>
                                             </>
                                         ) : null
                                     ) : (
                                         <>
                                             <AlertCircle className="w-3 h-3 text-yellow-500" />
-                                            <span className="text-yellow-500">INVALID FORMAT</span>
+                                            <span className="text-yellow-500">Invalid format</span>
                                         </>
                                     )}
                                 </div>
@@ -1033,30 +1033,30 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
 
                             {/* Server Preview */}
                             {isLoading ? (
-                                <div className="p-4 space-y-4 bg-primary/5 border border-primary/20 animate-pulse">
+                                <div className="p-4 space-y-4 bg-primary/5 border border-primary/20 rounded-lg animate-pulse">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 bg-primary/10 border border-primary/20">
-                                            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
+                                        <div className="w-16 h-16 bg-primary/10 border border-primary/20 rounded-lg">
+                                            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse rounded-lg" />
                                         </div>
                                         <div className="space-y-2 flex-1">
-                                            <div className="h-5 w-32 bg-primary/10 animate-pulse" />
-                                            <div className="h-4 w-24 bg-primary/10 animate-pulse" />
+                                            <div className="h-5 w-32 bg-primary/10 animate-pulse rounded" />
+                                            <div className="h-4 w-24 bg-primary/10 animate-pulse rounded" />
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 text-sm text-primary font-ocr">
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        <span>LOADING SERVER INFORMATION...</span>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                        <span>Loading server information...</span>
                                     </div>
                                 </div>
                             ) : serverInfo ? (
-                                <div className="p-4 space-y-4 bg-primary/5 border border-primary/20">
+                                <div className="p-4 space-y-4 bg-primary/5 border border-primary/20 rounded-lg">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30">
+                                        <div className="w-16 h-16 overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30 rounded-lg">
                                             {serverInfo.logo ? (
                                                 <img
                                                     src={`https://arweave.net/${serverInfo.logo}`}
                                                     alt={serverInfo.name}
-                                                    className="w-full h-full object-cover"
+                                                    className="w-full h-full object-cover rounded-lg"
                                                     onError={(e) => {
                                                         const target = e.target as HTMLImageElement
                                                         target.style.display = 'none'
@@ -1071,15 +1071,15 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
                                             />
                                         </div>
                                         <div className="space-y-1 flex-1">
-                                            <h3 className="text-lg font-freecam text-primary truncate tracking-wide">{serverInfo.name.toUpperCase()}</h3>
-                                            <div className="flex items-center gap-2 text-sm text-primary/60 font-ocr">
+                                            <h3 className="text-lg font-ocr font-bold text-primary truncate tracking-wide">{serverInfo.name}</h3>
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                 <Users className="w-4 h-4" />
-                                                <span>{serverInfo.memberCount || 0} MEMBERS</span>
-                                                <div className="w-1 h-1 bg-primary" />
-                                                <span>ONLINE</span>
+                                                <span>{serverInfo.memberCount || 0} members</span>
+                                                <div className="w-1 h-1 bg-primary rounded-full" />
+                                                <span>online</span>
                                             </div>
                                             {serverInfo.description && (
-                                                <p className="text-xs text-primary/60 font-ocr line-clamp-2">
+                                                <p className="text-xs text-muted-foreground line-clamp-2">
                                                     {serverInfo.description}
                                                 </p>
                                             )}
@@ -1087,67 +1087,65 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
                                     </div>
                                 </div>
                             ) : error ? (
-                                <div className="p-4 space-y-2 bg-red-500/10 border border-red-500/20">
-                                    <div className="flex items-center gap-2 text-red-500">
+                                <div className="p-4 space-y-2 bg-destructive/10 border border-destructive/20 rounded-lg">
+                                    <div className="flex items-center gap-2 text-destructive">
                                         <AlertCircle className="w-4 h-4" />
-                                        <p className="text-sm font-freecam tracking-wide">{error.toUpperCase()}</p>
+                                        <p className="text-sm font-medium tracking-wide">{error}</p>
                                     </div>
-                                    <p className="text-xs text-red-500/80 font-ocr">
+                                    <p className="text-xs text-destructive/80">
                                         Please check the invite link or server ID and try again.
                                     </p>
                                 </div>
                             ) : inviteCode.trim() && !parseInviteCode(inviteCode) ? (
-                                <div className="p-4 space-y-2 bg-yellow-500/10 border border-yellow-500/20">
+                                <div className="p-4 space-y-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                                     <div className="flex items-center gap-2 text-yellow-500">
                                         <AlertCircle className="w-4 h-4" />
-                                        <p className="text-sm font-freecam tracking-wide">INVALID INVITE FORMAT</p>
+                                        <p className="text-sm font-medium tracking-wide">Invalid invite format</p>
                                     </div>
-                                    <p className="text-xs text-yellow-500/80 font-ocr">
+                                    <p className="text-xs text-yellow-500/80">
                                         Server IDs must be exactly 43 characters long.
                                     </p>
                                 </div>
                             ) : null}
 
-                            {/* Help Text */}
-                            <div className="space-y-3">
-                                <p className="text-xs text-primary/60 font-ocr">
-                                    Enter a server ID or invite link.
-                                </p>
-                                <div className="space-y-2">
-                                    <p className="text-xs text-primary/40 font-ocr">
-                                        Examples (click to try):
-                                    </p>
-                                    <div className="space-y-1.5">
+                            {/* How to join section */}
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-base font-ocr font-medium text-foreground mb-2 mt-4">How to join:</h4>
+                                    <ul className="space-y-1 text-xs ml-2">
+                                        <li className="flex items-start gap-1.5">
+                                            <div className="w-1 h-1 bg-primary rounded-full mt-1.5 flex-shrink-0" />
+                                            <span className="text-muted-foreground">Paste a server ID (exactly 43 characters)</span>
+                                        </li>
+                                        <li className="flex items-start gap-1.5">
+                                            <div className="w-1 h-1 bg-primary rounded-full mt-1.5 flex-shrink-0" />
+                                            <span className="text-muted-foreground">Paste an invite link from a server member</span>
+                                        </li>
+                                        <li className="flex items-start gap-1.5">
+                                            <div className="w-1 h-1 bg-primary rounded-full mt-1.5 flex-shrink-0" />
+                                            <span className="text-muted-foreground">Server IDs contain only letters, numbers, hyphens, and underscores</span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-base font-ocr font-medium text-foreground mb-4">Example invites:</h4>
+                                    <div className="space-y-3">
                                         {sampleInvites.map((sample, index) => (
-                                            <div key={index} className="group">
-                                                <button
-                                                    type="button"
-                                                    className={cn(
-                                                        "w-full text-left p-2 border border-dashed border-primary/30 transition-all duration-200",
-                                                        "hover:border-primary hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/20",
-                                                        "group-hover:shadow-sm"
-                                                    )}
-                                                    onClick={() => {
-                                                        setInviteCode(sample)
-                                                        fetchServerInfo(sample)
-                                                    }}
-                                                    title="Click to use this example"
-                                                >
-                                                    <div className="flex items-start gap-2 min-w-0">
-                                                        <div className="text-xs text-primary/60 font-ocr shrink-0">
-                                                            {index === 0 ? 'SERVER ID:' : 'INVITE URL:'}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <code className="text-xs text-primary/80 font-mono group-hover:text-primary transition-colors block break-all">
-                                                                {sample}
-                                                            </code>
-                                                        </div>
-                                                        <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <div className="w-1.5 h-1.5 bg-primary" />
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            </div>
+                                            <button
+                                                key={index}
+                                                type="button"
+                                                onClick={() => {
+                                                    setInviteCode(sample)
+                                                    fetchServerInfo(sample)
+                                                }}
+                                                className="w-full p-4 cursor-pointer bg-muted/20 hover:bg-primary/10 rounded-lg border border-border/50 hover:border-border transition-all duration-200 text-left group"
+                                                title="Click to use this example"
+                                            >
+                                                <code className="text-sm text-muted-foreground group-hover:text-foreground font-mono block break-all transition-colors">
+                                                    {sample}
+                                                </code>
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
@@ -1159,30 +1157,30 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
                 <AlertDialogFooter className="px-4 sm:px-6 pb-6 pt-4 gap-3 border-t border-primary/20 bg-background">
                     <AlertDialogCancel
                         disabled={isJoining}
-                        className="font-ocr bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:border-primary/50"
+                        className="bg-primary/10 border-primary/30 text-muted-foreground hover:bg-primary/20 hover:border-primary/50"
                     >
-                        CANCEL
+                        Cancel
                     </AlertDialogCancel>
                     <Button
                         onClick={handleJoinServer}
                         disabled={!canJoinServer}
                         className={cn(
-                            "min-w-[120px] transition-all duration-200 font-ocr",
-                            "bg-primary text-black hover:bg-primary/90",
+                            "min-w-[120px] transition-all duration-200",
+                            "bg-primary text-primary-foreground hover:bg-primary/90",
                             "disabled:opacity-50 disabled:cursor-not-allowed"
                         )}
                     >
                         {isJoining ? (
                             <div className="flex items-center gap-2">
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>JOINING...</span>
+                                <span>Joining...</span>
                             </div>
                         ) : !connected ? (
-                            "CONNECT WALLET TO JOIN"
+                            "Connect Wallet to Join"
                         ) : (
                             <div className="flex items-center gap-2">
                                 <Users className="w-4 h-4" />
-                                <span>JOIN SERVER</span>
+                                <span>Join Server</span>
                             </div>
                         )}
                     </Button>

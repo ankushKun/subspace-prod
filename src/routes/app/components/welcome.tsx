@@ -49,17 +49,17 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
             <div className="relative z-10 max-w-lg mx-auto px-6 space-y-12">
                 {/* Logo - Bright Green to match ServerWelcome */}
                 <div className="flex justify-center">
-                    <div className="w-20 h-20 rounded-2xl bg-lime-400 flex items-center justify-center shadow-2xl">
-                        <Hash className="w-10 h-10 text-black" />
+                    <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center shadow-2xl">
+                        <Hash className="w-10 h-10 text-primary-foreground" />
                     </div>
                 </div>
 
                 {/* Welcome Text */}
-                <div className="space-y-2 font-ocr">
-                    <h1 className="text-4xl md:text-5xl font-bold text-muted-foreground">
+                <div className="space-y-2">
+                    <h1 className="text-4xl md:text-5xl font-bold text-muted-foreground font-ocr">
                         Welcome to
                     </h1>
-                    <h2 className="text-4xl md:text-5xl font-bold text-lime-400">
+                    <h2 className="text-4xl md:text-5xl font-bold text-primary font-ocr">
                         Subspace
                     </h2>
                     <p className="text-base text-muted-foreground mt-4 leading-relaxed max-w-md mx-auto">
@@ -68,10 +68,10 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
                 </div>
 
                 {/* Action Options - Simple Design like ServerWelcome */}
-                <div className="space-y-6 max-w-md mx-auto flex flex-col items-center justify-center">
+                <div className="space-y-6 max-w-md mx-auto">
                     <div className="flex items-center gap-4 text-left">
-                        <div className="w-8 h-8 rounded-lg bg-lime-400/20 flex items-center justify-center flex-shrink-0">
-                            <UserPlus className="w-4 h-4 text-lime-400" />
+                        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <UserPlus className="w-4 h-4 text-primary" />
                         </div>
                         <span className="text-muted-foreground text-sm">
                             Join a server to connect with communities
@@ -79,8 +79,8 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
                     </div>
 
                     <div className="flex items-center gap-4 text-left">
-                        <div className="w-8 h-8 rounded-lg bg-lime-400/20 flex items-center justify-center flex-shrink-0">
-                            <MessageCircle className="w-4 h-4 text-lime-400" />
+                        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <MessageCircle className="w-4 h-4 text-primary" />
                         </div>
                         <span className="text-muted-foreground text-sm">
                             Start a direct message conversation
@@ -94,10 +94,10 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
                         <LoginDialog>
                             <Button
                                 size="lg"
-                                className="bg-lime-400 hover:bg-lime-400/90 text-black px-8 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="w-6 h-6 rounded-sm overflow-hidden bg-black/20 flex items-center justify-center">
+                                    <div className="w-6 h-6 rounded-sm overflow-hidden bg-primary-foreground/20 flex items-center justify-center">
                                         <img src={alien} alt="alien" className="w-4 h-4" />
                                     </div>
                                     <span>Sign In to Get Started</span>
@@ -133,11 +133,11 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
             <div className="relative z-10 max-w-lg mx-auto px-6 space-y-12">
                 {/* Server Logo - Bright Green */}
                 <div className="flex justify-center">
-                    <div className="w-20 h-20 rounded-2xl bg-lime-400 flex items-center justify-center shadow-2xl">
+                    <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center shadow-2xl">
                         {server.logo ? (
                             <img src={`https://arweave.net/${server.logo}`} alt={`${server.name} logo`} className="w-19 h-19 rounded-2xl object-cover" />
                         ) : (
-                            <div className="w-10 h-10 text-black">
+                            <div className="w-10 h-10 text-primary-foreground">
                                 <img src={alien} alt="server" className="w-full h-full opacity-90" />
                             </div>
                         )}
@@ -145,11 +145,11 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
                 </div>
 
                 {/* Welcome Text */}
-                <div className="space-y-2 font-ocr">
-                    <h1 className="text-4xl md:text-5xl font-bold text-muted-foreground">
+                <div className="space-y-2">
+                    <h1 className="text-4xl md:text-5xl font-bold text-muted-foreground font-ocr">
                         Welcome to
                     </h1>
-                    <h2 className="text-4xl md:text-5xl font-bold text-lime-400">
+                    <h2 className="text-4xl md:text-5xl font-bold text-primary font-ocr">
                         {server.name}
                     </h2>
                     {server.description && (
@@ -163,32 +163,32 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
                 <div className="grid grid-cols-2 gap-6 max-w-xs mx-auto">
                     {/* Channels Count */}
                     <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-card/30 border border-border/20 backdrop-blur-sm">
-                        <div className="w-10 h-10 rounded-full bg-lime-400/20 flex items-center justify-center mb-2">
-                            <Hash className="w-5 h-5 text-lime-400" />
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center mb-2">
+                            <Hash className="w-5 h-5 text-primary" />
                         </div>
                         <div className="flex items-center justify-center gap-2">
-                            <div className="text-xl font-bold text-lime-400">{server.channels?.length || 0}</div>
+                            <div className="text-xl font-bold text-primary">{server.channels?.length || 0}</div>
                             <div className="text-base text-muted-foreground">Channels</div>
                         </div>
                     </div>
 
                     {/* Members Count */}
                     <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-card/30 border border-border/20 backdrop-blur-sm">
-                        <div className="w-10 h-10 rounded-full bg-lime-400/20 flex items-center justify-center mb-2">
-                            <Users className="w-5 h-5 text-lime-400" />
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center mb-2">
+                            <Users className="w-5 h-5 text-primary" />
                         </div>
                         <div className="flex items-center justify-center gap-2">
-                            <div className="text-xl font-bold text-lime-400">{actualMemberCount}</div>
+                            <div className="text-xl font-bold text-primary">{actualMemberCount}</div>
                             <div className="text-base text-muted-foreground">Members</div>
                         </div>
                     </div>
                 </div>
 
                 {/* Action hints - Simple Design */}
-                <div className="space-y-6 max-w-md mx-auto flex flex-col items-center justify-center">
+                <div className="space-y-6 max-w-md mx-auto">
                     <div className="flex items-center gap-4 text-left">
-                        <div className="w-8 h-8 rounded-lg bg-lime-400/20 flex items-center justify-center flex-shrink-0">
-                            <Hash className="w-4 h-4 text-lime-400" />
+                        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <Hash className="w-4 h-4 text-primary" />
                         </div>
                         <span className="text-muted-foreground text-sm">
                             Select a channel from the sidebar to start chatting
@@ -196,8 +196,8 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
                     </div>
 
                     <div className="flex items-center gap-4 text-left">
-                        <div className="w-8 h-8 rounded-lg bg-lime-400/20 flex items-center justify-center flex-shrink-0">
-                            <Users className="w-4 h-4 text-lime-400" />
+                        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <Users className="w-4 h-4 text-primary" />
                         </div>
                         <span className="text-muted-foreground text-sm">
                             Check out the member list to see who's online
