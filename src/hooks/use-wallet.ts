@@ -34,8 +34,9 @@ interface WalletActions {
     updateAddress: (address: string) => void
     connect: ({ strategy, jwk, provider }: { strategy: ConnectionStrategies, jwk?: JWKInterface, provider?: WAuthProviders }) => Promise<void>
     disconnect: () => void
-    getSigner: () => AoSigner | null
+    getSigner: () => Promise<AoSigner | null>
     waitForWAuthInit: () => Promise<void>
+    initializeAuthState: () => void
 }
 
 function triggerAuthenticatedEvent(address: string) {
@@ -78,6 +79,8 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
     wauthInstance: new WAuth({ dev: process.env.NODE_ENV === "development" }),
     jwk: undefined,
 
+
+
     actions: {
         setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance }),
         updateAddress: (address: string) => set((state) => ({ address, originalAddress: state.address })),
@@ -89,7 +92,42 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
             }
         },
 
-        getSigner: () => {
+        initializeAuthState: () => {
+            const state = get();
+            if (state.connected && state.connectionStrategy === ConnectionStrategies.WAuth && state.wauthInstance) {
+                // Check if WAuth is actually logged in
+                if (!state.wauthInstance.isLoggedIn()) {
+                    console.log("[useWallet] WAuth authentication state lost, disconnecting");
+                    // Clear the persisted state since authentication is lost
+                    set({
+                        address: "",
+                        connected: false,
+                        connectionStrategy: null,
+                        provider: null,
+                    });
+                } else {
+                    console.log("[useWallet] WAuth authentication state restored successfully");
+                    // Try to get the wallet to ensure everything is working
+                    state.wauthInstance.getWallet().then(wallet => {
+                        if (wallet && wallet.address !== state.address) {
+                            console.log("[useWallet] Updating address from restored wallet:", wallet.address);
+                            set({ address: wallet.address });
+                        }
+                    }).catch(error => {
+                        console.error("[useWallet] Failed to get wallet after auth restore:", error);
+                        // If we can't get the wallet, the authentication might be invalid
+                        set({
+                            address: "",
+                            connected: false,
+                            connectionStrategy: null,
+                            provider: null,
+                        });
+                    });
+                }
+            }
+        },
+
+        getSigner: async () => {
             const connectionStrategy = get().connectionStrategy;
             if (!connectionStrategy) return null
 
@@ -107,14 +145,40 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     }
                 case ConnectionStrategies.WAuth:
                     {
+                        const wauthInstance = get().wauthInstance;
+                        if (!wauthInstance) {
+                            throw new Error("WAuth instance not found");
+                        }
+
+                        // Ensure user is logged in
+                        if (!wauthInstance.isLoggedIn()) {
+                            // If not logged in but we think we should be, clear the state
+                            const state = get();
+                            if (state.connected && state.connectionStrategy === ConnectionStrategies.WAuth) {
+                                console.log("[getSigner] WAuth authentication lost, clearing state");
+                                set({
+                                    address: "",
+                                    connected: false,
+                                    connectionStrategy: null,
+                                    provider: null,
+                                });
+                            }
+                            throw new Error("Not logged in to WAuth");
+                        }
+
+                        // Try to get the signer, but if wallet isn't loaded, try to refresh it first
                         try {
-                            return get().wauthInstance?.getAoSigner() as any;
+                            return wauthInstance.getAoSigner() as any;
                         } catch (error) {
-                            // If wallet isn't loaded yet (e.g., waiting for password), return null
-                            // This allows Subspace to initialize without a signer initially
-                            if (`${error}`.includes("No wallet found") || `${error}`.includes("Not logged in")) {
-                                console.log("[getSigner] WAuth wallet not ready yet, returning null");
-                                return null;
+                            if (`${error}`.includes("No wallet found")) {
+                                // Try to refresh the wallet first
+                                try {
+                                    await wauthInstance.refreshWallet();
+                                    return wauthInstance.getAoSigner() as any;
+                                } catch (refreshError) {
+                                    console.error("[getSigner] Failed to refresh WAuth wallet:", refreshError);
+                                    throw new Error("WAuth wallet not available. Please try logging in again.");
+                                }
                             }
                             throw error; // Re-throw other errors
                         }
@@ -165,36 +229,39 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     let state = get();
                     if (state.connected && state.connectionStrategy !== ConnectionStrategies.WAuth) state.actions.disconnect();
 
+                    // Check if we have a WAuth instance that's already logged in
                     if (state.wauthInstance && state.wauthInstance.isLoggedIn()) {
                         // Wait for WAuth initialization to complete before trying to get wallet
                         await waitForWAuthInitialization(state.wauthInstance);
 
-                        const wallet = await state.wauthInstance.getWallet()
-                        if (!wallet) {
-                            console.warn("No wallet found after WAuth initialization, attempting fresh login");
-                            // Don't disconnect immediately, try to connect fresh
-                        } else {
-                            set((state) => {
-                                return {
-                                    address: wallet.address,
-                                    connected: true,
-                                    connectionStrategy: ConnectionStrategies.WAuth,
-                                    wanderInstance: null,
-                                    wauthInstance: state.wauthInstance,
-                                    jwk: null,
-                                    provider: provider
-                                }
-                            })
-                            triggerAuthenticatedEvent(wallet.address)
-                            return
+                        try {
+                            const wallet = await state.wauthInstance.getWallet()
+                            if (wallet) {
+                                set((state) => {
+                                    return {
+                                        address: wallet.address,
+                                        connected: true,
+                                        connectionStrategy: ConnectionStrategies.WAuth,
+                                        wanderInstance: null,
+                                        wauthInstance: state.wauthInstance,
+                                        jwk: null,
+                                        provider: provider
+                                    }
+                                })
+                                triggerAuthenticatedEvent(wallet.address)
+                                return
+                            }
+                        } catch (error) {
+                            console.warn("Failed to get wallet from existing WAuth session:", error);
+                            // Continue to fresh login
                         }
                     }
 
-                    if (state.wauthInstance) state.wauthInstance.logout();
-                    else {
-                        state.wauthInstance = new WAuth({ dev: process.env.NODE_ENV === "development" })
+                    // Clear any existing WAuth instance and start fresh
+                    if (state.wauthInstance) {
+                        state.wauthInstance.logout();
                     }
-
+                    state.wauthInstance = new WAuth({ dev: process.env.NODE_ENV === "development" })
 
                     const data = await state.wauthInstance.connect({ provider })
                     if (!data) return

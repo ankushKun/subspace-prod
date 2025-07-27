@@ -281,10 +281,16 @@ function Main() {
     }
 
     useEffect(() => {
-        handleConnection().catch((error) => {
-            console.error("Connection effect failed:", error);
-            handleAsyncError(error);
-        });
+        // Initialize authentication state first (especially for WAuth)
+        walletActions.initializeAuthState();
+        
+        // Add a small delay to ensure WAuth has time to restore its state
+        setTimeout(() => {
+            handleConnection().catch((error) => {
+                console.error("Connection effect failed:", error);
+                handleAsyncError(error);
+            });
+        }, 100);
     }, [])
 
     useEffect(() => {

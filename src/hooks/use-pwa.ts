@@ -49,33 +49,26 @@ export const usePWA = (): UsePWAReturn => {
     };
 
     useEffect(() => {
-        // Log debug information
-        console.log('PWA Debug Info:', debugInfo);
 
         // Check if already installed
         setIsInstalled(isStandalone);
-        console.log('PWA isStandalone:', isStandalone);
 
         const handleBeforeInstallPrompt = (e: Event) => {
-            console.log('beforeinstallprompt event fired:', e);
 
             // Prevent the mini-infobar from appearing on mobile
             e.preventDefault();
 
             const beforeInstallPromptEvent = e as BeforeInstallPromptEvent;
-            console.log('beforeinstallprompt platforms:', beforeInstallPromptEvent.platforms);
 
             setDeferredPrompt(beforeInstallPromptEvent);
             setIsInstallable(true);
 
-            console.log('PWA install prompt is now available');
         };
 
         const handleAppInstalled = () => {
             setIsInstalled(true);
             setIsInstallable(false);
             setDeferredPrompt(null);
-            console.log('PWA was installed');
         };
 
         // Listen for the beforeinstallprompt event
@@ -87,25 +80,21 @@ export const usePWA = (): UsePWAReturn => {
         // Check if app is already installable (some browsers fire the event before listeners are added)
         if ('getInstalledRelatedApps' in navigator) {
             (navigator as any).getInstalledRelatedApps().then((relatedApps: any[]) => {
-                console.log('getInstalledRelatedApps result:', relatedApps);
                 if (relatedApps.length > 0) {
                     setIsInstalled(true);
                 }
             }).catch((error: any) => {
-                console.log('getInstalledRelatedApps error (this is normal):', error);
                 // Ignore errors - this API is not widely supported
             });
         }
 
         // Additional PWA criteria checks
         const checkPWACriteria = async () => {
-            console.log('Checking PWA installation criteria...');
 
             // Check service worker
             if ('serviceWorker' in navigator) {
                 try {
                     const registration = await navigator.serviceWorker.getRegistration();
-                    console.log('Service Worker registration:', registration);
                 } catch (error) {
                     console.error('Service Worker check failed:', error);
                 }
@@ -113,15 +102,12 @@ export const usePWA = (): UsePWAReturn => {
 
             // Check manifest
             const manifestLink = document.querySelector('link[rel="manifest"]');
-            console.log('Manifest link found:', !!manifestLink);
             if (manifestLink) {
-                console.log('Manifest href:', (manifestLink as HTMLLinkElement).href);
 
                 // Try to fetch and validate manifest
                 try {
                     const response = await fetch((manifestLink as HTMLLinkElement).href);
                     const manifest = await response.json();
-                    console.log('Manifest content:', manifest);
 
                     // Check required manifest fields
                     const requiredFields = ['name', 'short_name', 'start_url', 'display', 'icons'];
@@ -132,20 +118,14 @@ export const usePWA = (): UsePWAReturn => {
 
                     // Check icons
                     if (manifest.icons && manifest.icons.length > 0) {
-                        console.log('Manifest icons:', manifest.icons);
                         const hasRequiredSizes = manifest.icons.some((icon: any) =>
                             icon.sizes && (icon.sizes.includes('192x192') || icon.sizes.includes('512x512'))
                         );
-                        console.log('Has required icon sizes (192x192 or 512x512):', hasRequiredSizes);
                     }
                 } catch (error) {
                     console.error('Failed to fetch or parse manifest:', error);
                 }
             }
-
-            // Check HTTPS
-            console.log('Is secure context:', window.isSecureContext);
-            console.log('Protocol:', window.location.protocol);
         };
 
         checkPWACriteria();
@@ -157,21 +137,12 @@ export const usePWA = (): UsePWAReturn => {
     }, [isStandalone]);
 
     const showInstallPrompt = useCallback(async (): Promise<void> => {
-        console.log('showInstallPrompt called, deferredPrompt available:', !!deferredPrompt);
 
         if (!deferredPrompt) {
-            console.warn('Install prompt is not available. Possible reasons:');
-            console.warn('1. App is already installed');
-            console.warn('2. Browser does not support PWA installation');
-            console.warn('3. PWA criteria not met (manifest, service worker, HTTPS)');
-            console.warn('4. beforeinstallprompt event has not fired yet');
-            console.warn('5. User has previously dismissed the prompt');
-            console.warn('Debug info:', debugInfo);
             return;
         }
 
         try {
-            console.log('Showing install prompt...');
 
             // Show the install prompt
             await deferredPrompt.prompt();
@@ -179,13 +150,12 @@ export const usePWA = (): UsePWAReturn => {
             // Wait for the user to respond to the prompt
             const { outcome } = await deferredPrompt.userChoice;
 
-            console.log('User choice outcome:', outcome);
             setInstallPromptOutcome(outcome);
 
             if (outcome === 'accepted') {
-                console.log('User accepted the install prompt');
+                // User accepted the install prompt
             } else {
-                console.log('User dismissed the install prompt');
+                // User dismissed the install prompt
             }
 
             // Clear the deferredPrompt so it can only be used once

@@ -83,46 +83,51 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     isCreatingProfile: false,
     isLoadingProfile: false,
     actions: {
-        init: () => {
-            const signer = useWallet.getState().actions.getSigner()
-            let owner = useWallet.getState().address
+        init: async () => {
+            try {
+                const signer = await useWallet.getState().actions.getSigner()
+                let owner = useWallet.getState().address
 
-            if (!owner) {
-                owner = "0x69420"
-                console.log("no owner, using default")
-                return
-            }
-
-            const subspace = getSubspace(signer, owner)
-            set({ subspace })
-
-            // set state from profiles cache and then get the latest profile
-            const cachedProfile = get().profiles[owner]
-            if (cachedProfile) {
-                set({ profile: cachedProfile as ExtendedProfile })
-                // Still refresh in background but don't show loading state
-                get().actions.profile.refresh(true)
-            } else {
-                set({ profile: null })
-                get().actions.profile.get()
-            }
-
-            // Delay rehydration slightly to ensure subspace is ready
-            setTimeout(() => {
-                // Rehydrate servers from persisted data
-                get().actions.internal.rehydrateServers()
-
-                // Preload servers if we have persisted data
-                const servers = get().servers
-                if (Object.keys(servers).length > 0) {
-                    // Start loading servers in the background
-                    setTimeout(() => {
-                        for (const serverId of Object.keys(servers)) {
-                            get().actions.servers.get(serverId).catch(console.error)
-                        }
-                    }, 100)
+                if (!owner) {
+                    owner = "0x69420"
+                    console.log("no owner, using default")
+                    return
                 }
-            }, 50)
+
+                const subspace = getSubspace(signer, owner)
+                set({ subspace })
+
+                // set state from profiles cache and then get the latest profile
+                const cachedProfile = get().profiles[owner]
+                if (cachedProfile) {
+                    set({ profile: cachedProfile as ExtendedProfile })
+                    // Still refresh in background but don't show loading state
+                    get().actions.profile.refresh(true)
+                } else {
+                    set({ profile: null })
+                    get().actions.profile.get()
+                }
+
+                // Delay rehydration slightly to ensure subspace is ready
+                setTimeout(() => {
+                    // Rehydrate servers from persisted data
+                    get().actions.internal.rehydrateServers()
+
+                    // Preload servers if we have persisted data
+                    const servers = get().servers
+                    if (Object.keys(servers).length > 0) {
+                        // Start loading servers in the background
+                        setTimeout(() => {
+                            for (const serverId of Object.keys(servers)) {
+                                get().actions.servers.get(serverId).catch(console.error)
+                            }
+                        }, 100)
+                    }
+                }, 50)
+            } catch (error) {
+                console.error("Failed to initialize Subspace:", error)
+                // Don't throw here, just log the error
+            }
         },
         profile: {
             get: async (userId?: string) => {
@@ -162,7 +167,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                     return null
                                 }
                             }
-                            
+
                             set({ isCreatingProfile: true })
 
                             try {

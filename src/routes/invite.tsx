@@ -23,7 +23,7 @@ export default function Invite() {
     const [hasJoined, setHasJoined] = useState(false)
 
     // Initialize Subspace instance
-    const getSubspaceInstance = () => {
+    const getSubspaceInstance = async () => {
         const config = {
             CU_URL: Constants.CuEndpoints.ArnodeAsia,
             GATEWAY_URL: 'https://arweave.net',
@@ -36,7 +36,11 @@ export default function Invite() {
             } else if (ConnectionStrategies.ScannedJWK) {
                 config['jwk'] = jwk
             } else if (ConnectionStrategies.WAuth) {
-                config['signer'] = wauthInstance?.getAoSigner()
+                try {
+                    config['signer'] = wauthInstance?.getAoSigner()
+                } catch (error) {
+                    console.error("Failed to get WAuth signer:", error)
+                }
             } else if (ConnectionStrategies.WanderConnect) {
                 config['signer'] = createSigner(window.arweaveWallet)
             }
@@ -143,7 +147,7 @@ export default function Invite() {
 
         setIsJoining(true)
         try {
-            const subspace = getSubspaceInstance()
+            const subspace = await getSubspaceInstance()
             const success = await subspace.user.joinServer(invite)
 
             if (success) {

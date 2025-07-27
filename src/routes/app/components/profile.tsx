@@ -244,7 +244,9 @@ export default function Profile({ className }: { className?: string }) {
                     setIsUploading(true)
                     toast.loading("Uploading profile picture to Arweave...")
 
-                    const pfpId = await uploadFileTurbo(profilePicFile, jwk, wauthInstance?.getWauthSigner())
+                    const signer = wauthInstance?.getWauthSigner()
+                    console.log("signer", signer)
+                    const pfpId = await uploadFileTurbo(profilePicFile, jwk, signer)
                     if (pfpId) {
                         toast.dismiss()
                         toast.loading("Updating profile...")
@@ -332,7 +334,9 @@ export default function Profile({ className }: { className?: string }) {
             setIsUploading(true)
             toast.loading("Uploading profile picture to Arweave...")
 
-            const pfpId = await uploadFileTurbo(file, jwk, wauthInstance?.getWauthSigner())
+            const signer = wauthInstance?.getWauthSigner()
+            console.log("signer", signer)
+            const pfpId = await uploadFileTurbo(file, jwk, signer)
             if (pfpId) {
                 toast.dismiss()
                 toast.loading("Updating profile...")
