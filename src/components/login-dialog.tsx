@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 import wander from "@/assets/logos/wander.png"
 import arweave from "@/assets/logos/arweave.svg"
@@ -120,9 +120,9 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    What do you want to login with?
+                    <DialogTitle>What do you want to login with?</DialogTitle>
                 </DialogHeader>
-                <DialogDescription className="flex flex-col gap-4 mt-4">
+                <div className="flex flex-col gap-4 mt-4">
                     {scanning ? <>
                         <div className="space-y-4">
                             <div className="relative">
@@ -238,7 +238,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             clear login <span className="text-muted-foreground/50 text-xs">(dev only)</span>
                         </Button>}
                     </>}
-                </DialogDescription>
+                </div>
             </DialogContent>
         </Dialog>
     )

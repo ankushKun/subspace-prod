@@ -293,8 +293,8 @@ export default function Invite() {
                             <div className="w-full space-y-3 flex flex-col items-center">
                                 {!connected ? (
                                     <LoginDialog>
-                                        <Button className="w-fit mx-auto bg-white h-12 text-base font-medium bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary">
-                                            Connect Wallet to Join
+                                        <Button asChild className="w-fit mx-auto bg-white h-12 text-base font-medium bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary">
+                                            <span>Connect Wallet to Join</span>
                                         </Button>
                                     </LoginDialog>
                                 ) : hasJoined ? (

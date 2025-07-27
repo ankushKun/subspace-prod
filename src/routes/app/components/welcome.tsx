@@ -65,26 +65,29 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
                         <div className="mt-8">
                             <LoginDialog>
                                 <Button
+                                    asChild
                                     variant="outline"
                                     className="flex items-center gap-3 px-6 py-3 h-auto hover:bg-primary/10 transition-colors font-ocr text-primary border-primary/30 hover:border-primary/50 bg-primary/5 backdrop-blur-sm shadow-lg"
                                 >
-                                    {/* Alien Avatar */}
-                                    <div className="relative flex-shrink-0">
-                                        <div className="w-8 h-8 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30">
-                                            <img src={alien} alt="alien" className="w-5 h-5 opacity-80" />
+                                    <div className="flex items-center gap-3">
+                                        {/* Alien Avatar */}
+                                        <div className="relative flex-shrink-0">
+                                            <div className="w-8 h-8 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30">
+                                                <img src={alien} alt="alien" className="w-5 h-5 opacity-80" />
+                                            </div>
+                                            {/* Disconnected status indicator */}
+                                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-sm border border-background animate-pulse"></div>
                                         </div>
-                                        {/* Disconnected status indicator */}
-                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-sm border border-background animate-pulse"></div>
-                                    </div>
 
-                                    {/* Login Text */}
-                                    <div className="flex flex-col text-left">
-                                        <span className="text-sm font-medium text-primary">
-                                            Sign In
-                                        </span>
-                                        <span className="text-xs text-primary/60">
-                                            Join the conversation
-                                        </span>
+                                        {/* Login Text */}
+                                        <div className="flex flex-col text-left">
+                                            <span className="text-sm font-medium text-primary">
+                                                Sign In
+                                            </span>
+                                            <span className="text-xs text-primary/60">
+                                                Join the conversation
+                                            </span>
+                                        </div>
                                     </div>
                                 </Button>
                             </LoginDialog>

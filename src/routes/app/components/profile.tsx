@@ -378,25 +378,28 @@ export default function Profile({ className }: { className?: string }) {
                 {/* Login Button */}
                 <LoginDialog>
                     <Button
+                        asChild
                         variant="ghost"
                         className="flex items-center gap-2 p-2 h-auto hover:bg-primary/10 transition-colors grow font-ocr text-primary border border-transparent hover:border-primary/30"
                     >
-                        {/* Alien Avatar Placeholder */}
-                        <div className="relative flex-shrink-0">
-                            <div className="w-8 h-8 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30">
-                                <img src={alien} alt="alien" className="w-5 h-5 opacity-60" />
+                        <div className="flex items-center gap-2 w-full">
+                            {/* Alien Avatar Placeholder */}
+                            <div className="relative flex-shrink-0">
+                                <div className="w-8 h-8 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center border border-primary/30">
+                                    <img src={alien} alt="alien" className="w-5 h-5 opacity-60" />
+                                </div>
+                                {/* Disconnected status indicator */}
+                                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-sm border border-background animate-pulse"></div>
                             </div>
-                            {/* Disconnected status indicator */}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-sm border border-background animate-pulse"></div>
-                        </div>
 
-                        {/* Login Info */}
-                        <div className="flex-1 min-w-0 text-left">
-                            <div className="text-sm font-medium text-primary truncate">
-                                Sign In
-                            </div>
-                            <div className="text-xs text-primary/60 flex items-center gap-1">
-                                <span className="truncate">Join the conversation</span>
+                            {/* Login Info */}
+                            <div className="flex-1 min-w-0 text-left">
+                                <div className="text-sm font-medium text-primary truncate">
+                                    Sign In
+                                </div>
+                                <div className="text-xs text-primary/60 flex items-center gap-1">
+                                    <span className="truncate">Join the conversation</span>
+                                </div>
                             </div>
                         </div>
                     </Button>

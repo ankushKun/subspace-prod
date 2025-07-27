@@ -40,8 +40,8 @@ export default function SubspaceLanding() {
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">
             <ThemeToggleButton className="rounded-xs left-4.5 !z-20 absolute -top-0.5 !text-black !bg-transparent" />
             {!connected ? <LoginDialog>
-                <Button className="absolute top-0 right-1 font-ocr !z-20 rounded-none !bg-transparent p-0 px-2 h-8">
-                    login
+                <Button asChild className="absolute top-0 right-1 font-ocr !z-20 rounded-none !bg-transparent p-0 px-2 h-8">
+                    <span>login</span>
                 </Button>
             </LoginDialog> :
                 <Link to="/app">
@@ -146,8 +146,8 @@ export default function SubspaceLanding() {
                     {/* CTA area */}
                     <div className="flex flex-col items-center space-y-8 sm:space-y-10 mt-20">
                         {!connected ? <LoginDialog>
-                            <Button variant="ghost" className="text-lg sm:text-xl md:text-2xl font-ka tracking-wider bg-primary text-black h-14 sm:h-16 md:h-18 px-10 sm:px-12 md:px-14 rounded-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl drop-shadow-2xl">
-                                Start Talking
+                            <Button asChild variant="ghost" className="text-lg sm:text-xl md:text-2xl font-ka tracking-wider bg-primary text-black h-14 sm:h-16 md:h-18 px-10 sm:px-12 md:px-14 rounded-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl drop-shadow-2xl">
+                                <span>Start Talking</span>
                             </Button>
                         </LoginDialog> : <>
                             <Button variant="ghost" className="text-lg sm:text-xl md:text-2xl font-ka tracking-wider bg-primary text-black h-14 sm:h-16 md:h-18 px-10 sm:px-12 md:px-14 rounded-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl drop-shadow-2xl">
