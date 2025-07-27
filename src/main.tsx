@@ -262,6 +262,11 @@ function Main() {
         if (!connectionStrategy) return
 
         try {
+            // For WAuth strategy, wait for initialization to complete first
+            if (connectionStrategy === ConnectionStrategies.WAuth) {
+                await walletActions.waitForWAuthInit();
+            }
+
             if (connectionStrategy === ConnectionStrategies.ScannedJWK) {
                 await walletActions.connect({ strategy: connectionStrategy, jwk })
             } else if (connectionStrategy === ConnectionStrategies.WAuth) {

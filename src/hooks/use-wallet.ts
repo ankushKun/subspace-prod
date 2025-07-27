@@ -35,13 +35,37 @@ interface WalletActions {
     connect: ({ strategy, jwk, provider }: { strategy: ConnectionStrategies, jwk?: JWKInterface, provider?: WAuthProviders }) => Promise<void>
     disconnect: () => void
     getSigner: () => AoSigner | null
+    waitForWAuthInit: () => Promise<void>
 }
 
 function triggerAuthenticatedEvent(address: string) {
     window.dispatchEvent(new CustomEvent("subspace-authenticated", { detail: { address } }))
 }
 
+// Helper function to wait for WAuth initialization
+async function waitForWAuthInitialization(wauthInstance: WAuth): Promise<void> {
+    // If already initialized (has sessionPassword or not logged in), return immediately
+    if ((wauthInstance as any).sessionPassword !== null || !wauthInstance.isLoggedIn()) {
+        return;
+    }
 
+    // Wait up to 3 seconds for initialization to complete
+    const maxWaitTime = 3000;
+    const checkInterval = 100;
+    let elapsed = 0;
+
+    while (elapsed < maxWaitTime) {
+        // Check if initialization is complete
+        if ((wauthInstance as any).sessionPassword !== null || !wauthInstance.isLoggedIn()) {
+            return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        elapsed += checkInterval;
+    }
+
+    console.warn("WAuth initialization timeout - proceeding anyway");
+}
 
 export const useWallet = create<WalletState>()(persist((set, get) => ({
     // state
@@ -51,12 +75,20 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
     connectionStrategy: null,
     provider: null,
     wanderInstance: null,
-    wauthInstance: new WAuth({ dev: false }),
+    wauthInstance: new WAuth({ dev: process.env.NODE_ENV === "development" }),
     jwk: undefined,
 
     actions: {
         setWanderInstance: (instance: WanderConnect | null) => set({ wanderInstance: instance }),
         updateAddress: (address: string) => set((state) => ({ address, originalAddress: state.address })),
+
+        waitForWAuthInit: async () => {
+            const state = get();
+            if (state.wauthInstance) {
+                await waitForWAuthInitialization(state.wauthInstance);
+            }
+        },
+
         getSigner: () => {
             const connectionStrategy = get().connectionStrategy;
             if (!connectionStrategy) return null
@@ -124,26 +156,33 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     if (state.connected && state.connectionStrategy !== ConnectionStrategies.WAuth) state.actions.disconnect();
 
                     if (state.wauthInstance && state.wauthInstance.isLoggedIn()) {
-                        const wallet = await state.wauthInstance.getWallet()
-                        if (!wallet) return state.actions.disconnect();
+                        // Wait for WAuth initialization to complete before trying to get wallet
+                        await waitForWAuthInitialization(state.wauthInstance);
 
-                        set((state) => {
-                            return {
-                                address: wallet.address,
-                                connected: true,
-                                connectionStrategy: ConnectionStrategies.WAuth,
-                                wanderInstance: null,
-                                wauthInstance: state.wauthInstance,
-                                jwk: null,
-                                provider: provider
-                            }
-                        })
-                        return
+                        const wallet = await state.wauthInstance.getWallet()
+                        if (!wallet) {
+                            console.warn("No wallet found after WAuth initialization, attempting fresh login");
+                            // Don't disconnect immediately, try to connect fresh
+                        } else {
+                            set((state) => {
+                                return {
+                                    address: wallet.address,
+                                    connected: true,
+                                    connectionStrategy: ConnectionStrategies.WAuth,
+                                    wanderInstance: null,
+                                    wauthInstance: state.wauthInstance,
+                                    jwk: null,
+                                    provider: provider
+                                }
+                            })
+                            triggerAuthenticatedEvent(wallet.address)
+                            return
+                        }
                     }
 
                     if (state.wauthInstance) state.wauthInstance.logout();
                     else {
-                        state.wauthInstance = new WAuth({ dev: false })
+                        state.wauthInstance = new WAuth({ dev: process.env.NODE_ENV === "development" })
                     }
 
 
@@ -287,8 +326,8 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
     name: "subspace-wallet-connection",
     storage: createJSONStorage(() => localStorage),
     partialize: (state: WalletState) => ({
-        // address: state.address,
-        // connected: state.connected,
+        address: state.connected ? state.address : "", // Only persist address if connected
+        connected: state.connected, // Persist connected state
         connectionStrategy: state.connectionStrategy,
         provider: state.provider,
         jwk: state.jwk,
