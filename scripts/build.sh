@@ -81,10 +81,7 @@ build_component "WAuth SDK" "wauth/sdk" "npm run build"
 # 3. Build wauth/strategy (depends on wauth/sdk)
 build_component "WAuth Strategy" "wauth/strategy" "npm run build"
 
-# 4. Build wauth/demo (optional but included for completeness)
-build_component "WAuth Demo" "wauth/demo" "bun run build"
-
-# 5. Finally build the main webapp
+# 4. Finally build the main webapp
 print_status "Building main webapp..."
 cd "$PROJECT_ROOT"
 
