@@ -320,6 +320,83 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         set({
                             servers: { ...get().servers, [serverId]: mergedServer },
                         })
+
+                        // Auto-load members when forceRefresh is true (indicating server activation)
+                        if (forceRefresh) {
+                            const hasMembers = (mergedServer as any)?.members?.length > 0
+                            const membersLoaded = (mergedServer as any)?.membersLoaded
+                            const membersLoading = (mergedServer as any)?.membersLoading
+
+                            console.log(`🚀 Server activation - serverId: ${serverId}, hasMembers: ${hasMembers}, membersLoaded: ${membersLoaded}, membersLoading: ${membersLoading}`)
+
+                            if (!hasMembers && !membersLoaded && !membersLoading) {
+                                // Set loading state immediately
+                                (mergedServer as any).membersLoading = true;
+                                console.log(`⏳ Setting membersLoading=true for server ${serverId}`)
+                                set({
+                                    servers: { ...get().servers, [serverId]: mergedServer }
+                                })
+
+                                // Load members in background without blocking server return
+                                setTimeout(async () => {
+                                    try {
+                                        console.log(`🔍 Starting member fetch for server ${serverId}`)
+                                        const membersData = await subspace.server.getAllMembers(serverId)
+
+                                        // Check if the result is an object (members by userId) or an array
+                                        let members: any[] = []
+                                        if (Array.isArray(membersData)) {
+                                            members = membersData
+                                        } else if (typeof membersData === 'object' && membersData !== null) {
+                                            // Convert object to array of member objects
+                                            members = Object.entries(membersData).map(([userId, memberData]) => ({
+                                                userId,
+                                                ...(memberData as any)
+                                            }))
+                                        }
+
+                                        console.log(`✅ Members loaded for server ${serverId}:`, members.length, 'members')
+
+                                        // Update server with members
+                                        const currentServer = get().servers[serverId]
+                                        if (currentServer) {
+                                            (currentServer as any).members = members;
+                                            (currentServer as any).membersLoaded = true;
+                                            (currentServer as any).membersLoading = false;
+
+                                            set({
+                                                servers: { ...get().servers, [serverId]: currentServer }
+                                            })
+
+                                            // Load profiles for all members
+                                            const userIds = members.map(m => m.userId)
+                                            if (userIds.length > 0) {
+                                                get().actions.profile.getBulk(userIds).catch(console.error)
+                                            }
+                                        }
+                                    } catch (error) {
+                                        console.error("❌ Failed to load members:", error)
+                                        // Clear loading state on error
+                                        const currentServer = get().servers[serverId]
+                                        if (currentServer) {
+                                            (currentServer as any).membersLoading = false
+                                            set({
+                                                servers: { ...get().servers, [serverId]: currentServer }
+                                            })
+                                        }
+                                    }
+                                }, 0)
+                            } else if (hasMembers) {
+                                console.log(`👥 Server ${serverId} already has ${(mergedServer as any)?.members?.length} members, loading profiles`)
+                                // Load profiles for existing members
+                                const existingMembers = (mergedServer as any)?.members || []
+                                if (existingMembers.length > 0) {
+                                    const userIds = existingMembers.map(m => m.userId)
+                                    get().actions.profile.getBulk(userIds).catch(console.error)
+                                }
+                            }
+                        }
+
                         return mergedServer
                     }
                     return server
@@ -485,8 +562,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return []
 
-                // Get the proper server instance
-                const server = await get().actions.servers.get(serverId)
+                // Get the server instance from current state, don't call servers.get to avoid recursion
+                const server = get().servers[serverId]
                 if (!server) {
                     console.error("Server not found for getMembers")
                     return []

@@ -264,7 +264,6 @@ function Main() {
         try {
             // For WAuth strategy, wait for initialization to complete first
             if (connectionStrategy === ConnectionStrategies.WAuth) {
-                console.log("[Main] Connecting to WAuth")
                 await walletActions.connect({ strategy: connectionStrategy, provider })
 
                 // await walletActions.waitForWAuthInit();

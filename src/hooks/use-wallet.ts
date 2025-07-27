@@ -275,15 +275,12 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
 
                     // Check if we have a WAuth instance that's already logged in
                     if (state.wauthInstance && state.wauthInstance.isLoggedIn()) {
-                        console.log("[WAuth Connect] Existing WAuth session found, attempting restoration...");
 
                         // Quick check: if no session data, skip waiting and show password modal immediately
                         if (!state.wauthInstance.hasSessionStorageData()) {
-                            console.log("[WAuth Connect] No session data found, prompting for password immediately...");
                             try {
                                 const wallet = await state.wauthInstance.getWallet(true);
                                 if (wallet) {
-                                    console.log("[WAuth Connect] Password entered successfully for:", wallet.address);
                                     set((state) => {
                                         return {
                                             address: wallet.address,
@@ -302,7 +299,6 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                 if (error.message.includes("cancelled") || error.message.includes("Password required")) {
                                     throw error; // User cancelled
                                 }
-                                console.log("[WAuth Connect] Password prompt failed, proceeding with fresh login");
                             }
                         } else {
                             // Session data exists, try to restore it
@@ -315,13 +311,11 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
 
                                 if (!wallet) {
                                     // Session incomplete but PocketBase auth is valid
-                                    console.log("[WAuth Connect] Session incomplete, prompting for password...");
                                     // Now try with modal to get the password
                                     wallet = await state.wauthInstance.getWallet(true);
                                 }
 
                                 if (wallet) {
-                                    console.log("[WAuth Connect] Session restored successfully for:", wallet.address);
                                     set((state) => {
                                         return {
                                             address: wallet.address,
@@ -337,8 +331,6 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                     return
                                 }
                             } catch (error) {
-                                console.warn("[WAuth Connect] Failed to restore existing session:", error.message);
-
                                 // Check if it's a session-related error vs auth error
                                 if (error.message.includes("Password required") ||
                                     error.message.includes("cancelled") ||
@@ -346,9 +338,6 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                     // User cancelled or session issues - don't proceed with fresh login
                                     throw error;
                                 }
-
-                                // For other errors, continue to fresh login
-                                console.log("[WAuth Connect] Proceeding with fresh login...");
                             }
                         }
                     }
@@ -359,14 +348,12 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     }
                     state.wauthInstance = new WAuth({ dev: process.env.NODE_ENV === "development" })
 
-                    console.log("[WAuth Connect] Starting fresh OAuth login...");
                     const data = await state.wauthInstance.connect({ provider })
                     if (!data) return
 
                     const wallet = await state.wauthInstance.getWallet()
                     if (!wallet) return
 
-                    console.log("[WAuth Connect] Fresh login successful for:", wallet.address);
                     set((state) => {
                         return {
                             address: wallet.address,

@@ -46,31 +46,9 @@ export default function App() {
 
         // update server and members
         if (serverId) {
-            // Force refresh server data when serverId changes, but preserve members
-            subspaceActions.servers.get(serverId, true).then(server => {
-                if (server) {
-                    // Only refresh members if they haven't been loaded yet
-                    const hasMembers = (server as any)?.members?.length > 0
-                    const membersLoaded = (server as any)?.membersLoaded
-                    const membersLoading = (server as any)?.membersLoading
-
-                    if (!hasMembers && !membersLoaded && !membersLoading) {
-                        subspaceActions.servers.refreshMembers(serverId).then(members => {
-                            const userIds = members.map(m => m.userId)
-                            if (userIds.length > 0) {
-                                subspaceActions.profile.getBulk(userIds).then(console.log)
-                            }
-                        }).catch(console.error)
-                    } else {
-                        // Still load profiles for existing members if we have them
-                        const existingMembers = (server as any)?.members || []
-                        if (existingMembers.length > 0) {
-                            const userIds = existingMembers.map(m => m.userId)
-                            subspaceActions.profile.getBulk(userIds).catch(console.error)
-                        }
-                    }
-                }
-            }).catch(console.error)
+            // Force refresh server data when serverId changes
+            // Members are automatically loaded when forceRefresh is true
+            subspaceActions.servers.get(serverId, true).catch(console.error)
         }
     }, [serverId, channelId, subspace])
 

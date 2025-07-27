@@ -6,6 +6,7 @@ import metamask from "@/assets/logos/metamask.svg"
 import discord from "@/assets/logos/discord.svg"
 import github from "@/assets/logos/github.svg"
 import google from "@/assets/logos/google.svg"
+import x from "@/assets/logos/x.svg"
 
 import { Button } from "@/components/ui/button"
 import { Mail, QrCode, User2 } from "lucide-react"
@@ -169,14 +170,19 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             >
                                 <img src={google} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
                             </Button>
-                            <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 p-0 justify-between"
+                            <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
+                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.X)}
+                            >
+                                <img src={x} className="w-8 h-8 p-1 ml-auto rounded aspect-square object-contain" />
+                            </Button>
+                            {/* <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 p-0 justify-between"
 
                             >
                                 <User2 className="w-8 h-8 ml-auto aspect-square object-contain" />
                                 <span className="text-muted-foreground/50 text-xs">guest user</span>
-                            </Button>
+                            </Button> */}
                         </div>
-                        <div className="flex gap-1 justify-evenly items-center">
+                        <div className="flex gap-1 justify-evenly items-center flex-col md:flex-row w-full">
                             {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" &&
                                 <Button variant="ghost" className="text-start justify-start border border-border/50 h-12 grow"
                                     onClick={() => handleLoginOptionClicked(ConnectionStrategies.ArWallet)}
@@ -196,12 +202,12 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                 <img src={wander} className="w-8 h-8 ml-auto aspect-square object-contain" />
                             </Button>
                         </div>
-                        {isMobileDevice && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
+                        {/* {isMobileDevice && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
                             onClick={() => setScanning(true)}
                         >
                             <div>Scan QR Code</div>
                             <QrCode className="!h-8 !w-8 p-0.5" />
-                        </Button>}
+                        </Button>} */}
                         {/* <Button disabled variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between">
                             <div>Metamask</div>
                             <span className="text-muted-foreground/50 text-xs">(coming soon)</span>
