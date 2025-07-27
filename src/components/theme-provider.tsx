@@ -24,45 +24,36 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
 export function ThemeProvider({
     children,
-    defaultTheme = "system",
+    defaultTheme = "dark", // Force dark as default
     storageKey = "vite-ui-theme",
     ...props
 }: ThemeProviderProps) {
-    const [theme, setTheme] = useState<Theme>(
-        () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-    )
+    // Force dark theme - ignore localStorage and system preferences
+    const [theme] = useState<Theme>("dark")
 
     useEffect(() => {
         const root = window.document.documentElement
 
-        root.classList.remove("light", "dark")
+        // Always apply dark theme
+        root.classList.remove("light", "dark", "system")
+        root.classList.add("dark")
 
-        if (theme === "system") {
-            const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-                .matches
-                ? "dark"
-                : "light"
+        // Also set the data attribute for better theme detection
+        root.setAttribute("data-theme", "dark")
+    }, [])
 
-            root.classList.add(systemTheme)
-            return
-        }
-
-        root.classList.add(theme)
-    }, [theme])
-
-    // Memoize the context value to prevent unnecessary re-renders
+    // Memoize the context value - but disable theme changing
     const value = useMemo(() => ({
-        theme,
-        setTheme: (newTheme: Theme) => {
-            localStorage.setItem(storageKey, newTheme)
-            setTheme(newTheme)
+        theme: "dark" as Theme, // Always return dark
+        setTheme: () => {
+            // No-op: prevent theme changes
+            console.log("Theme switching is disabled - app is forced to dark mode")
         },
         toggleTheme: () => {
-            const newTheme = theme === "dark" ? "light" : "dark"
-            localStorage.setItem(storageKey, newTheme)
-            setTheme(newTheme)
+            // No-op: prevent theme changes
+            console.log("Theme switching is disabled - app is forced to dark mode")
         }
-    }), [theme, storageKey])
+    }), [])
 
     return (
         <ThemeProviderContext.Provider {...props} value={value}>

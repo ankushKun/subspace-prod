@@ -474,7 +474,7 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
 }
 
 // Enhanced Message Content Component
-const MessageContent = ({ content, attachments }: { content: string; attachments?: string | string[] }) => {
+const MessageContent = memo(({ content, attachments }: { content: string; attachments?: string | string[] }) => {
     // Parse attachments if they exist
     const parsedAttachments = useMemo(() => {
         if (!attachments) return []
@@ -630,7 +630,9 @@ const MessageContent = ({ content, attachments }: { content: string; attachments
             )}
         </div>
     )
-}
+})
+
+MessageContent.displayName = "MessageContent"
 
 // Date Divider Component
 const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
@@ -738,7 +740,7 @@ const EmptyChannelState = memo(({ channelName }: { channelName?: string }) => {
 
 EmptyChannelState.displayName = "EmptyChannelState"
 
-function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage, channel, showAvatar = true, isGrouped = false, onJumpToMessage }: MessageItemProps) {
+const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMessage, channel, showAvatar = true, isGrouped = false, onJumpToMessage }: MessageItemProps) => {
     const [isHovered, setIsHovered] = useState(false);
     const { profiles, servers } = useSubspace()
     const { activeServerId } = useGlobalState()
@@ -823,7 +825,9 @@ function MessageItem({ message, profile, onReply, onEdit, onDelete, isOwnMessage
             )}
         </div>
     );
-}
+})
+
+MessageItem.displayName = "MessageItem"
 
 // Enhanced Message Input with Mentions
 interface MessageInputRef {

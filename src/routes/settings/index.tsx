@@ -89,8 +89,7 @@ export default function Settings() {
 
                 <div className="relative z-10 max-w-2xl mx-auto space-y-6">
                     {/* Theme Section */}
-                    <Card className="p-6 bg-card border-primary/30 shadow-lg backdrop-blur-sm relative">
-                        {/* Card glow effect */}
+                    {/* <Card className="p-6 bg-card border-primary/30 shadow-lg backdrop-blur-sm relative">
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
 
                         <div className="relative z-10 space-y-4">
@@ -108,7 +107,6 @@ export default function Settings() {
                                 </div>
                             </div>
 
-                            {/* Theme Toggle */}
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between p-4 bg-primary/10 rounded-sm border border-primary/30">
                                     <div className="flex flex-col">
@@ -131,7 +129,7 @@ export default function Settings() {
                                 </div>
                             </div>
                         </div>
-                    </Card>
+                    </Card> */}
 
                     {/* CU URL Section */}
                     <Card className="p-6 bg-card border-primary/30 shadow-lg backdrop-blur-sm relative">

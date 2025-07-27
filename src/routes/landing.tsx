@@ -38,7 +38,8 @@ export default function SubspaceLanding() {
 
     return (
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">
-            <ThemeToggleButton className="rounded-xs left-4.5 !z-20 absolute -top-0.5 !text-black !bg-transparent" />
+            {/* <ThemeToggleButton className="rounded-xs left-4.5 !z-20 absolute -top-0.5 !text-black !bg-transparent" /> */}
+            <img src={alien} alt="logo" className="absolute top-0.5 left-5 w-6 h-6 z-20" />
             {!connected ? <LoginDialog>
                 <Button asChild className="absolute top-0 right-1 font-ocr !z-20 rounded-none !bg-transparent p-0 px-2 h-8">
                     <span>login</span>
@@ -51,7 +52,7 @@ export default function SubspaceLanding() {
             <div className="!bg-primary border-b text-background !w-screen mx-auto !h-2 transform-gpu absolute top-0 z-10 overflow-x-clip">
                 <Trapezoid className="left-1/2 -translate-x-1/2 top-1.5 w-60 absolute" />
                 <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-2 text-xl font-ocr text-black flex items-center justify-center gap-2">
-                    <img src={alien} alt="logo" className="object-cover w-5 mb-1.5" />
+                    {/* <img src={alien} alt="logo" className="object-cover w-5 mb-1.5" /> */}
                     SUBSPACE
                 </div>
                 <Trapezoid className="left-0 -translate-x-2/3 w-72 top-0 z-0" />

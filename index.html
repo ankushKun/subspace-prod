@@ -14,6 +14,17 @@
   <!-- PWA meta tags for iOS -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Subspace">
+
+  <!-- Force dark mode immediately to prevent flash of light theme -->
+  <script>
+    // Apply dark mode immediately before React loads
+    document.documentElement.classList.add('dark');
+    document.documentElement.setAttribute('data-theme', 'dark');
+    // Remove any light mode classes if they exist
+    document.documentElement.classList.remove('light', 'system');
+    // Set a flag to indicate forced dark mode
+    window.__SUBSPACE_FORCE_DARK__ = true;
+  </script>
 </head>
 
 <body>
