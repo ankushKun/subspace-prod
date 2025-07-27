@@ -1,6 +1,6 @@
 [submodule "sdk"]
-	path = sdk
+	path = submodules/sdk
 	url = git@github.com:subspace-dev/sdk.git
 [submodule "wauth"]
-	path = wauth
+	path = submodules/wauth
 	url = git@github.com:subspace-dev/wauth.git
