@@ -44,7 +44,8 @@ import {
     UserX,
     Clock,
     Edit,
-    FileIcon, FileQuestion, LinkIcon, Eye
+    FileIcon, FileQuestion, LinkIcon, Eye,
+    ArrowBigDownDash
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -1646,7 +1647,11 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             setLoading(false);
 
             // Scroll to bottom for initial load
-            setTimeout(() => scrollToBottom(), 100);
+            setTimeout(() => {
+                scrollToBottom();
+                // Set isAtBottom after scrolling for initial loads
+                setTimeout(() => setIsAtBottom(true), 100);
+            }, 100);
 
             // Load fresh messages in the background (no loading state)
             loadMessages(false);
@@ -1666,7 +1671,10 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             if (cachedMessages && cachedMessages.length > 0) {
                 setMessages(populateReplyToMessages(cachedMessages));
                 // Scroll to bottom for initial load
-                setTimeout(() => scrollToBottom(), 100);
+                setTimeout(() => {
+                    scrollToBottom();
+                    setTimeout(() => setIsAtBottom(true), 100);
+                }, 100);
                 loadMessages(false); // Background refresh
             } else {
                 loadMessages(true); // Show loading state
@@ -1698,13 +1706,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         };
     }, [subspace, server, activeChannelId, channel]);
 
-    // Auto-scroll to bottom when new messages arrive (only if already at bottom)
-    useEffect(() => {
-        if (isAtBottom) {
-            scrollToBottom();
-        }
-    }, [messages, isAtBottom]);
-
     // Scroll event listener to track if user is at bottom
     useEffect(() => {
         const container = messagesContainerRef.current;
@@ -1726,6 +1727,28 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             container.removeEventListener('scroll', handleScroll);
         };
     }, []);
+
+    // Auto-scroll to bottom when new messages arrive (only if already at bottom)
+    useEffect(() => {
+        if (isAtBottom && messages.length > 0) {
+            // Use a small delay to ensure the DOM has updated with new messages
+            const timeoutId = setTimeout(() => {
+                const container = messagesContainerRef.current;
+                if (container && isAtBottom) {
+                    // Double-check that we're still at bottom before scrolling
+                    const { scrollTop, scrollHeight, clientHeight } = container;
+                    const threshold = 100;
+                    const stillAtBottom = scrollHeight - scrollTop - clientHeight <= threshold;
+
+                    if (stillAtBottom) {
+                        scrollToBottom();
+                    }
+                }
+            }, 50);
+
+            return () => clearTimeout(timeoutId);
+        }
+    }, [messages]);
 
     // Focus input when replying or editing
     useEffect(() => {
@@ -1754,7 +1777,10 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
                 // Scroll to bottom on initial load
                 if (showLoadingState) {
-                    setTimeout(() => scrollToBottom(), 100);
+                    setTimeout(() => {
+                        scrollToBottom();
+                        setTimeout(() => setIsAtBottom(true), 100);
+                    }, 100);
                 }
 
                 // ✅ REMOVED: Profile loading is now centralized in member-list component
@@ -1777,7 +1803,8 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        setIsAtBottom(true);
+        // Don't immediately set isAtBottom to true - let the scroll event handler detect it
+        // This prevents race conditions with the auto-scroll logic
     };
 
     const sendMessage = async (content: string, attachments: string[] = []) => {
@@ -1800,7 +1827,11 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             if (success) {
                 setReplyingTo(null);
                 // Always scroll to bottom when user sends a message
-                setTimeout(() => scrollToBottom(), 100);
+                setTimeout(() => {
+                    scrollToBottom();
+                    // Force set isAtBottom to true since user just sent a message
+                    setTimeout(() => setIsAtBottom(true), 100);
+                }, 100);
                 toast.success("Message sent!");
             } else {
                 toast.error("Failed to send message");
@@ -2055,20 +2086,24 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
                 {/* Scroll to bottom button */}
                 {!isAtBottom && messages.length > 0 && (
-                    <div className="absolute bottom-4 right-4 z-10">
+                    <div className="fixed bottom-20 mx-auto w-12 z-10">
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button
-                                        onClick={scrollToBottom}
+                                        onClick={() => {
+                                            scrollToBottom();
+                                            // Set isAtBottom to true after user clicks scroll button
+                                            setTimeout(() => setIsAtBottom(true), 100);
+                                        }}
                                         size="sm"
                                         className="h-9 w-9 rounded-full shadow-lg bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-background/90 transition-all duration-200"
                                         variant="outline"
                                     >
-                                        <CornerDownRight className="w-4 h-4" />
+                                        <ArrowBigDownDash className="w-4 h-4" />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>
+                                <TooltipContent side="right" align="center">
                                     <p>Scroll to bottom</p>
                                 </TooltipContent>
                             </Tooltip>
