@@ -189,6 +189,7 @@ export default function MemberList({ className }: { className?: string }) {
     const { activeServerId } = useGlobalState()
     const { servers, actions, profiles } = useSubspace()
     const [searchQuery, setSearchQuery] = useState("")
+    const [loadingProfiles, setLoadingProfiles] = useState(false)
 
     // For display, we can use the server from the servers record
     const server = servers[activeServerId]
@@ -202,14 +203,48 @@ export default function MemberList({ className }: { className?: string }) {
     const isLoadingMembers = (servers[activeServerId] as any)?.membersLoading || false
     const membersLoaded = (server as any)?.membersLoaded || false
 
-
+    // ✅ CENTRALIZED: Load member profiles when members list changes
+    useEffect(() => {
+        if (members.length > 0 && !loadingProfiles) {
+            const memberIds = members.map(m => m.userId)
+            const missingProfiles = memberIds.filter(id => !profiles[id])
+            
+            if (missingProfiles.length > 0) {
+                setLoadingProfiles(true)
+                console.log(`Loading ${missingProfiles.length} missing member profiles for member list`)
+                
+                // ✅ OPTIMIZED: Load profiles in smaller batches for better performance
+                const batchSize = 10
+                const batches = []
+                for (let i = 0; i < missingProfiles.length; i += batchSize) {
+                    batches.push(missingProfiles.slice(i, i + batchSize))
+                }
+                
+                // Load batches sequentially with small delays
+                const loadBatch = async (batchIndex: number = 0) => {
+                    if (batchIndex >= batches.length) {
+                        setLoadingProfiles(false)
+                        return
+                    }
+                    
+                    try {
+                        await actions.profile.getBulk(batches[batchIndex])
+                        // Small delay between batches to prevent overwhelming the system
+                        setTimeout(() => loadBatch(batchIndex + 1), 200)
+                    } catch (error) {
+                        console.error(`Failed to load profile batch ${batchIndex}:`, error)
+                        setTimeout(() => loadBatch(batchIndex + 1), 500) // Longer delay on error
+                    }
+                }
+                
+                loadBatch()
+            }
+        }
+    }, [members, profiles, loadingProfiles, actions.profile])
 
     // Only show loading state if we have no members AND we're loading
     // Don't show loading when refreshing existing members (better UX)
     const shouldShowLoading = isLoadingMembers && members.length === 0
-
-    // Members are now automatically loaded when servers.get is called with forceRefresh=true
-    // No need for separate member loading logic here
 
     // Filter members based on search query
     const filteredMembers = useMemo(() => {

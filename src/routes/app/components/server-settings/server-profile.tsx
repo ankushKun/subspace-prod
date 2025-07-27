@@ -123,8 +123,7 @@ export default function ServerProfile() {
                 </Card>
 
                 {/* Server Banner */}
-                <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
-                    {/* Card glow effect */}
+                {/* <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
 
                     <CardHeader className="relative z-10 pb-3">
@@ -135,7 +134,6 @@ export default function ServerProfile() {
                             className="w-full h-32 rounded-lg border-2 border-primary/30 relative overflow-hidden"
                             style={{ backgroundColor: selectedBannerColor }}
                         >
-                            {/* Shimmer effect */}
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
                         </div>
                         <div className="grid grid-cols-5 gap-2">
@@ -154,7 +152,7 @@ export default function ServerProfile() {
                             ))}
                         </div>
                     </CardContent>
-                </Card>
+                </Card> */}
 
                 {/* Server Description */}
                 <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">

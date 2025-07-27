@@ -79,80 +79,13 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 import alien from "@/assets/subspace/alien-green.svg"
 import ProfilePopover from "./profile-popover"
 
 
-// Global store for mentions data (temporary solution)
-let currentMentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
 
-export const setCurrentMentions = (mentions: { type: 'user' | 'channel'; display: string; id: string; }[]) => {
-    currentMentions = mentions;
-};
-
-// Markdown components for enhanced rendering
-const mdComponents = {
-    a: ({ node, ...props }: any) => {
-        const href = props.href;
-        const children = props.children;
-        const { actions } = useGlobalState();
-        const navigate = useNavigate();
-
-        // Handle user mention placeholders
-        if (href?.startsWith('#__user_mention_')) {
-            const index = parseInt(href.replace('#__user_mention_', '').replace('__', ''));
-            const mention = currentMentions[index];
-            if (!mention) return <>{children}</>;
-
-            return (
-                <ProfilePopover userId={mention.id} side="bottom" align="center">
-                    <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
-                        @{mention.display}
-                    </span>
-                </ProfilePopover>
-            );
-        }
-
-        // Handle channel mention placeholders
-        if (href?.startsWith('#__channel_mention_')) {
-            const index = parseInt(href.replace('#__channel_mention_', '').replace('__', ''));
-            const mention = currentMentions[index];
-            if (!mention) return <>{children}</>;
-
-            const handleChannelClick = (e: React.MouseEvent) => {
-                e.preventDefault();
-                // Get current server from global state
-                const { activeServerId } = useGlobalState.getState();
-                if (activeServerId) {
-                    // Navigate to the channel
-                    navigate(`/app/${activeServerId}/${mention.id}`);
-                }
-            };
-
-            return (
-                <span
-                    className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-150 rounded-sm cursor-pointer"
-                    onClick={handleChannelClick}
-                >
-                    #{mention.display}
-                </span>
-            );
-        }
-
-        // Handle regular links
-        return (
-            <a
-                {...props}
-                className="text-blue-500 hover:underline cursor-pointer"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                {children}
-            </a>
-        );
-    },
-};
 
 interface Message {
     messageId: string;
@@ -475,6 +408,9 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
 
 // Enhanced Message Content Component
 const MessageContent = memo(({ content, attachments }: { content: string; attachments?: string | string[] }) => {
+    const { actions } = useGlobalState();
+    const navigate = useNavigate();
+
     // Parse attachments if they exist
     const parsedAttachments = useMemo(() => {
         if (!attachments) return []
@@ -485,24 +421,24 @@ const MessageContent = memo(({ content, attachments }: { content: string; attach
         }
     }, [attachments])
 
-    function preProcessContent(content: string) {
-        // Process mentions similar to legacy implementation
-        const mentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
+    // Process content and extract mentions locally for this message
+    const { processedContent, mentions } = useMemo(() => {
+        const localMentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
         let processedContent = content;
 
         // Extract and store user mentions: @[Display Name](userId)
         const userMentionRegex = /@\[([^\]]+)\]\(([A-Za-z0-9_-]+)\)/g;
         processedContent = processedContent.replace(userMentionRegex, (match, display, id) => {
-            const index = mentions.length;
-            mentions.push({ type: 'user', display, id });
+            const index = localMentions.length;
+            localMentions.push({ type: 'user', display, id });
             return `[${display}](#__user_mention_${index}__)`;
         });
 
         // Extract and store channel mentions: #[Display Name](channelId)
         const channelMentionRegex = /#\[([^\]]+)\]\(([0-9]+)\)/g;
         processedContent = processedContent.replace(channelMentionRegex, (match, display, id) => {
-            const index = mentions.length;
-            mentions.push({ type: 'channel', display, id });
+            const index = localMentions.length;
+            localMentions.push({ type: 'channel', display, id });
             return `[${display}](#__channel_mention_${index}__)`;
         });
 
@@ -511,22 +447,178 @@ const MessageContent = memo(({ content, attachments }: { content: string; attach
         const expectedChannelRegex = /<#([0-9]+)>/g;
 
         processedContent = processedContent.replace(expectedMentionRegex, (match, id) => {
-            const index = mentions.length;
-            mentions.push({ type: 'user', display: id, id });
+            const index = localMentions.length;
+            localMentions.push({ type: 'user', display: id, id });
             return `[${id}](#__user_mention_${index}__)`;
         });
 
         processedContent = processedContent.replace(expectedChannelRegex, (match, id) => {
-            const index = mentions.length;
-            mentions.push({ type: 'channel', display: id, id });
+            const index = localMentions.length;
+            localMentions.push({ type: 'channel', display: id, id });
             return `[${id}](#__channel_mention_${index}__)`;
         });
 
-        // Set mentions data for the markdown components to access
-        setCurrentMentions(mentions);
+        return { processedContent, mentions: localMentions };
+    }, [content]);
 
-        return processedContent;
-    }
+    // Markdown components for enhanced rendering
+    const mdComponents = useMemo(() => ({
+        // Links and mentions
+        a: ({ node, ...props }: any) => {
+            const href = props.href;
+            const children = props.children;
+
+            // Handle user mention placeholders
+            if (href?.startsWith('#__user_mention_')) {
+                const index = parseInt(href.replace('#__user_mention_', '').replace('__', ''));
+                const mention = mentions[index];
+                if (!mention) return <>{children}</>;
+
+                return (
+                    <ProfilePopover userId={mention.id} side="bottom" align="center">
+                        <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
+                            @{mention.display}
+                        </span>
+                    </ProfilePopover>
+                );
+            }
+
+            // Handle channel mention placeholders
+            if (href?.startsWith('#__channel_mention_')) {
+                const index = parseInt(href.replace('#__channel_mention_', '').replace('__', ''));
+                const mention = mentions[index];
+                if (!mention) return <>{children}</>;
+
+                const handleChannelClick = (e: React.MouseEvent) => {
+                    e.preventDefault();
+                    // Get current server from global state
+                    const { activeServerId } = useGlobalState.getState();
+                    if (activeServerId) {
+                        // Navigate to the channel
+                        navigate(`/app/${activeServerId}/${mention.id}`);
+                    }
+                };
+
+                return (
+                    <span
+                        className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-150 rounded-sm cursor-pointer"
+                        onClick={handleChannelClick}
+                    >
+                        #{mention.display}
+                    </span>
+                );
+            }
+
+            // Handle regular links
+            return (
+                <a
+                    {...props}
+                    className="text-blue-500 hover:underline cursor-pointer transition-colors"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {children}
+                </a>
+            );
+        },
+
+        // Text formatting
+        strong: ({ node, ...props }: any) => (
+            <strong className="font-bold text-foreground" {...props} />
+        ),
+        em: ({ node, ...props }: any) => (
+            <em className="italic text-foreground" {...props} />
+        ),
+        del: ({ node, ...props }: any) => (
+            <del className="line-through text-muted-foreground" {...props} />
+        ),
+
+        // Code blocks and inline code
+        code: ({ node, inline, ...props }: any) => (
+            inline ? (
+                <code
+                    className="bg-muted/50 border border-border/50 text-foreground px-1.5 py-0.5 rounded text-sm font-mono"
+                    {...props}
+                />
+            ) : (
+                <code
+                    className="block bg-muted/50 border border-border/50 text-foreground p-3 rounded-md text-sm font-mono whitespace-pre-wrap overflow-x-auto"
+                    {...props}
+                />
+            )
+        ),
+        pre: ({ node, ...props }: any) => (
+            <pre className="bg-muted/50 border border-border/50 text-foreground p-3 rounded-md text-sm font-mono whitespace-pre-wrap overflow-x-auto my-2" {...props} />
+        ),
+
+        // Headers
+        h1: ({ node, ...props }: any) => (
+            <h1 className="text-2xl font-bold text-foreground mb-2 mt-4 first:mt-0" {...props} />
+        ),
+        h2: ({ node, ...props }: any) => (
+            <h2 className="text-xl font-bold text-foreground mb-2 mt-3 first:mt-0" {...props} />
+        ),
+        h3: ({ node, ...props }: any) => (
+            <h3 className="text-lg font-semibold text-foreground mb-1 mt-2 first:mt-0" {...props} />
+        ),
+        h4: ({ node, ...props }: any) => (
+            <h4 className="text-base font-semibold text-foreground mb-1 mt-2 first:mt-0" {...props} />
+        ),
+        h5: ({ node, ...props }: any) => (
+            <h5 className="text-sm font-semibold text-foreground mb-1 mt-1 first:mt-0" {...props} />
+        ),
+        h6: ({ node, ...props }: any) => (
+            <h6 className="text-sm font-medium text-muted-foreground mb-1 mt-1 first:mt-0" {...props} />
+        ),
+
+        // Lists
+        ul: ({ node, ...props }: any) => (
+            <ul className="list-disc list-inside space-y-1 my-2 text-foreground ml-4" {...props} />
+        ),
+        ol: ({ node, ...props }: any) => (
+            <ol className="list-decimal list-inside space-y-1 my-2 text-foreground ml-4" {...props} />
+        ),
+        li: ({ node, ...props }: any) => (
+            <li className="text-foreground" {...props} />
+        ),
+
+        // Blockquotes
+        blockquote: ({ node, ...props }: any) => (
+            <blockquote className="border-l-4 border-muted-foreground/30 pl-4 py-2 my-2 bg-muted/30 text-muted-foreground italic rounded-r" {...props} />
+        ),
+
+        // Tables
+        table: ({ node, ...props }: any) => (
+            <div className="overflow-x-auto my-2">
+                <table className="min-w-full border border-border rounded-md" {...props} />
+            </div>
+        ),
+        thead: ({ node, ...props }: any) => (
+            <thead className="bg-muted/50" {...props} />
+        ),
+        tbody: ({ node, ...props }: any) => (
+            <tbody {...props} />
+        ),
+        tr: ({ node, ...props }: any) => (
+            <tr className="border-b border-border" {...props} />
+        ),
+        th: ({ node, ...props }: any) => (
+            <th className="px-3 py-2 text-left font-semibold text-foreground border-r border-border last:border-r-0" {...props} />
+        ),
+        td: ({ node, ...props }: any) => (
+            <td className="px-3 py-2 text-foreground border-r border-border last:border-r-0" {...props} />
+        ),
+
+        // Horizontal rule
+        hr: ({ node, ...props }: any) => (
+            <hr className="border-t border-border my-4" {...props} />
+        ),
+
+        // Paragraphs
+        p: ({ node, ...props }: any) => (
+            <p className="text-foreground leading-relaxed mb-2 last:mb-0" {...props} />
+        ),
+    }), [mentions, navigate]);
 
     // emoji only or multiple emojis up to 10
     const isEmojiOnly = /^\p{Emoji}{1,10}$/u.test(content)
@@ -546,7 +638,7 @@ const MessageContent = memo(({ content, attachments }: { content: string; attach
                         rehypePlugins={[rehypeKatex]}
                         disallowedElements={["img"]}
                     >
-                        {preProcessContent(content)}
+                        {processedContent}
                     </Markdown>
                 </div>
             )}
@@ -1481,6 +1573,9 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     const inputRef = useRef<MessageInputRef>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+    // State for scroll position tracking
+    const [isAtBottom, setIsAtBottom] = useState(true);
+
     // Get current server and channel
     const server = servers[activeServerId];
 
@@ -1537,14 +1632,21 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     useEffect(() => {
         if (!server || !activeChannelId || !channel) {
             setMessages([]);
+            setIsAtBottom(true);
             return;
         }
+
+        // Reset scroll position when switching channels
+        setIsAtBottom(true);
 
         // Check if we have cached messages for this channel
         const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
         if (cachedMessages && cachedMessages.length > 0) {
             setMessages(populateReplyToMessages(cachedMessages));
             setLoading(false);
+
+            // Scroll to bottom for initial load
+            setTimeout(() => scrollToBottom(), 100);
 
             // Load fresh messages in the background (no loading state)
             loadMessages(false);
@@ -1563,6 +1665,8 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
             if (cachedMessages && cachedMessages.length > 0) {
                 setMessages(populateReplyToMessages(cachedMessages));
+                // Scroll to bottom for initial load
+                setTimeout(() => scrollToBottom(), 100);
                 loadMessages(false); // Background refresh
             } else {
                 loadMessages(true); // Show loading state
@@ -1594,10 +1698,34 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         };
     }, [subspace, server, activeChannelId, channel]);
 
-    // Auto-scroll to bottom when new messages arrive
+    // Auto-scroll to bottom when new messages arrive (only if already at bottom)
     useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+        if (isAtBottom) {
+            scrollToBottom();
+        }
+    }, [messages, isAtBottom]);
+
+    // Scroll event listener to track if user is at bottom
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const threshold = 100; // pixels from bottom
+            const atBottom = scrollHeight - scrollTop - clientHeight <= threshold;
+            setIsAtBottom(atBottom);
+        };
+
+        container.addEventListener('scroll', handleScroll);
+
+        // Initial check
+        handleScroll();
+
+        return () => {
+            container.removeEventListener('scroll', handleScroll);
+        };
+    }, []);
 
     // Focus input when replying or editing
     useEffect(() => {
@@ -1624,11 +1752,13 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             if (messages && messages.length > 0) {
                 setMessages(populateReplyToMessages(messages));
 
-                // Load profiles for message authors
-                const authorIds = [...new Set(messages.map((m: Message) => m.authorId))] as string[];
-                if (authorIds.length > 0) {
-                    actions.profile.getBulk(authorIds).catch(console.error);
+                // Scroll to bottom on initial load
+                if (showLoadingState) {
+                    setTimeout(() => scrollToBottom(), 100);
                 }
+
+                // ✅ REMOVED: Profile loading is now centralized in member-list component
+                // Author profiles will be loaded when viewing the member list
             } else {
                 setMessages([]);
             }
@@ -1647,6 +1777,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        setIsAtBottom(true);
     };
 
     const sendMessage = async (content: string, attachments: string[] = []) => {
@@ -1668,6 +1799,8 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
             if (success) {
                 setReplyingTo(null);
+                // Always scroll to bottom when user sends a message
+                setTimeout(() => scrollToBottom(), 100);
                 toast.success("Message sent!");
             } else {
                 toast.error("Failed to send message");
@@ -1856,7 +1989,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             {/* Messages container */}
             <div
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40"
+                className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40 relative"
             >
                 {loading && messages.length === 0 ? (
                     <div className="pt-6 mb-0.5">
@@ -1917,6 +2050,29 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                             )
                         })}
                         <div ref={messagesEndRef} />
+                    </div>
+                )}
+
+                {/* Scroll to bottom button */}
+                {!isAtBottom && messages.length > 0 && (
+                    <div className="absolute bottom-4 right-4 z-10">
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={scrollToBottom}
+                                        size="sm"
+                                        className="h-9 w-9 rounded-full shadow-lg bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-background/90 transition-all duration-200"
+                                        variant="outline"
+                                    >
+                                        <CornerDownRight className="w-4 h-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Scroll to bottom</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
                 )}
             </div>

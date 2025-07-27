@@ -42,6 +42,9 @@ interface SubspaceState {
     messages: Record<string, Record<string, Record<string, any>>>  // serverId -> channelId -> messageId -> message
     isCreatingProfile: boolean
     isLoadingProfile: boolean
+    // ✅ ADDED: Loading guards to prevent duplicate calls
+    loadingProfiles: Set<string>  // userIds currently being loaded
+    loadingServers: Set<string>   // serverIds currently being loaded
     actions: {
         init: () => void
         profile: {
@@ -82,6 +85,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     messages: {},
     isCreatingProfile: false,
     isLoadingProfile: false,
+    loadingProfiles: new Set<string>(),
+    loadingServers: new Set<string>(),
     actions: {
         init: async () => {
             try {
@@ -113,16 +118,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     // Rehydrate servers from persisted data
                     get().actions.internal.rehydrateServers()
 
-                    // Preload servers if we have persisted data
-                    const servers = get().servers
-                    if (Object.keys(servers).length > 0) {
-                        // Start loading servers in the background
-                        setTimeout(() => {
-                            for (const serverId of Object.keys(servers)) {
-                                get().actions.servers.get(serverId).catch(console.error)
-                            }
-                        }, 100)
-                    }
+                    // ✅ FIXED: Removed automatic server loading on init to prevent loops
+                    // Servers will be loaded on-demand when user navigates to them
                 }, 50)
             } catch (error) {
                 console.error("Failed to initialize Subspace:", error)
@@ -142,12 +139,32 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return null
                 }
 
+                const targetUserId = userId || walletAddress
+
+                // ✅ ADDED: Check if this profile is already being loaded
+                if (get().loadingProfiles.has(targetUserId)) {
+                    console.log(`Profile ${targetUserId} is already being loaded, skipping duplicate call`)
+                    return get().profiles[targetUserId] || null
+                }
+
+                // ✅ ADDED: Check if we already have this profile cached (for other users)
+                if (userId && get().profiles[userId]) {
+                    return get().profiles[userId]
+                }
+
                 try {
                     let profile: Profile | null = null
-                    set({ isLoadingProfile: true })
+
+                    // ✅ ADDED: Mark this profile as being loaded
+                    const currentLoadingProfiles = new Set(get().loadingProfiles)
+                    currentLoadingProfiles.add(targetUserId)
+                    set({
+                        isLoadingProfile: true,
+                        loadingProfiles: currentLoadingProfiles
+                    })
 
                     try {
-                        profile = await subspace.user.getProfile(userId || walletAddress)
+                        profile = await subspace.user.getProfile(targetUserId)
                     } catch (e) {
                         // Only show creating profile dialog if this is our own profile
                         // and we don't already have a profile in the store
@@ -201,16 +218,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             profile: { ...profile, primaryName, primaryLogo } as ExtendedProfile,
                             profiles: { ...get().profiles, [profile.userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile }
                         })
-                        // fetch users servers and save them to the profile
-                        const servers = profile.serversJoined || []
-                        for (const server of servers) {
-                            // This will use persisted data if available for fast loading
-                            const serverId = typeof server === 'string' ? server : (server as any).serverId
-                            if (serverId) {
-                                const serverObj = await get().actions.servers.get(serverId)
-                                // The server will be added to state within the get() method
-                            }
-                        }
+
+                        // ✅ FIXED: Removed automatic server loading to break the loop
+                        // Servers will be loaded separately when needed (e.g., in server-list component)
+
                         return profile as ExtendedProfile
                     } else {
                         console.error("Failed to get profile")
@@ -220,7 +231,13 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     console.error("Error in profile.get:", error)
                     throw error
                 } finally {
-                    set({ isLoadingProfile: false })
+                    // ✅ ADDED: Clear loading state for this profile
+                    const currentLoadingProfiles = new Set(get().loadingProfiles)
+                    currentLoadingProfiles.delete(targetUserId)
+                    set({
+                        isLoadingProfile: false,
+                        loadingProfiles: currentLoadingProfiles
+                    })
                 }
             },
             getBulk: async (userIds: string[]) => {
@@ -237,12 +254,19 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 // })
 
                 // get everyones primary name one by one with a small delay between each request
-                for (const profile of profiles) {
-                    const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
-                    profile.primaryName = primaryName
-                    profile.primaryLogo = primaryLogo
-                    set({ profiles: { ...get().profiles, [profile.userId]: profile } })
-                    await new Promise(resolve => setTimeout(resolve, 100))
+                for (const userId of userIds) {
+                    // run profile.get for each user id
+                    const profile = await get().actions.profile.get(userId)
+                    if (profile) {
+                        set({ profiles: { ...get().profiles, [userId]: profile } })
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 333))
+
+                    // const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
+                    // profile.primaryName = primaryName
+                    // profile.primaryLogo = primaryLogo
+                    // set({ profiles: { ...get().profiles, [profile.userId]: profile } })
+                    // await new Promise(resolve => setTimeout(resolve, 220))
                 }
 
                 return profiles
@@ -289,6 +313,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return null
 
+                // ✅ ADDED: Check if this server is already being loaded
+                if (get().loadingServers.has(serverId)) {
+                    console.log(`Server ${serverId} is already being loaded, returning existing data`)
+                    return get().servers[serverId] || null
+                }
+
                 // Check if we already have a proper server instance
                 const existingServer = get().servers[serverId]
                 if (existingServer && !forceRefresh) {
@@ -296,6 +326,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 try {
+                    // ✅ ADDED: Mark this server as being loaded
+                    const currentLoadingServers = new Set(get().loadingServers)
+                    currentLoadingServers.add(serverId)
+                    set({ loadingServers: currentLoadingServers })
+
                     const server = await subspace.server.getServer(serverId)
                     if (server) {
                         // Preserve existing members data if it exists
@@ -361,11 +396,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                             servers: { ...get().servers, [serverId]: currentServer }
                                         })
 
-                                        // Load profiles for all members
-                                        const userIds = members.map(m => m.userId)
-                                        if (userIds.length > 0) {
-                                            get().actions.profile.getBulk(userIds).catch(console.error)
-                                        }
+                                        // ✅ FIXED: Removed automatic profile.getBulk() to break the loop
+                                        // Profiles will be loaded centrally in member-list component when needed
                                     }
                                 } catch (error) {
                                     console.error("❌ Failed to load members:", error)
@@ -388,6 +420,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 } catch (e) {
                     console.error("Failed to get server:", e)
                     return null
+                } finally {
+                    // ✅ ADDED: Clear loading state for this server
+                    const currentLoadingServers = new Set(get().loadingServers)
+                    currentLoadingServers.delete(serverId)
+                    set({ loadingServers: currentLoadingServers })
                 }
             },
             create: async (data: CreateServerParams) => {
@@ -864,6 +901,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         messages: state.messages,
         profile: state.profile,
         profiles: state.profiles,
+        // ✅ EXCLUDED: Loading states don't need to be persisted
+        // loadingProfiles and loadingServers are excluded from persistence
     })
 }))
 
