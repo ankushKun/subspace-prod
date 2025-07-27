@@ -104,6 +104,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
         } else if (strategy === ConnectionStrategies.ArWallet) {
             walletActions.connect({ strategy: ConnectionStrategies.ArWallet })
         } else if (strategy === ConnectionStrategies.WanderConnect) {
+            walletActions.connect({ strategy: ConnectionStrategies.WanderConnect })
         }
     }
 
@@ -193,8 +194,11 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                             }
                             <Button variant="ghost" className="text-start grow justify-start border border-border/50 h-12"
                                 onClick={() => {
-                                    if (wanderInstance) wanderInstance.open()
-                                    else handleLoginOptionClicked(ConnectionStrategies.WanderConnect)
+                                    if (wanderInstance) {
+                                        wanderInstance.open()
+                                    } else {
+                                        handleLoginOptionClicked(ConnectionStrategies.WanderConnect)
+                                    }
                                     clickClose()
                                 }}
                             >

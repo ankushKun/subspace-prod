@@ -421,8 +421,6 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                             },
                             onAuth: (auth) => {
                                 if (!!auth) {
-                                    console.log("Wander Connect auth", auth)
-                                    console.log("window.arweaveWallet", window.arweaveWallet)
                                     if (window.arweaveWallet) {
                                         window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION", "ACCESS_PUBLIC_KEY", "ACCESS_ALL_ADDRESSES"]).then(() => {
                                             window.arweaveWallet.getActiveAddress().then((address) => {
@@ -444,7 +442,6 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                 }
                             }
                         })
-                        console.log("Wander Connect open")
                         wander.open();
                         return { wanderInstance: wander }
 

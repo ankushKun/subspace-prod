@@ -699,7 +699,7 @@ const InstallPWAButton = () => {
 };
 
 // Wallet Button Component
-const WalletButton = () => {
+const WalletButton = ({ onClick }: { onClick: () => void }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     return (
@@ -724,6 +724,7 @@ const WalletButton = () => {
                     )}
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
+                    onClick={onClick}
                 >
                     <WalletCards className={cn(
                         "w-5 h-5 transition-all duration-300",
@@ -1213,7 +1214,7 @@ export default function ServerList({ className, onServerJoined }: {
     const { profile, servers, actions } = useSubspace()
     const { activeServerId } = useGlobalState()
     const navigate = useNavigate()
-    const { connected, address } = useWallet()
+    const { connected, address, wanderInstance } = useWallet()
 
     // Get servers from profile's joined list
     const displayServers = connected && address && profile?.serversJoined
@@ -1319,6 +1320,8 @@ export default function ServerList({ className, onServerJoined }: {
 
             {/* Wallet Button */}
             {/* {showWalletButton && <WalletButton />} */}
+
+            {wanderInstance && <WalletButton onClick={() => wanderInstance?.open()} />}
 
             {/* Install PWA Button */}
             <InstallPWAButton />
