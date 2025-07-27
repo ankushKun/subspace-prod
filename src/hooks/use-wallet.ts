@@ -107,7 +107,17 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     }
                 case ConnectionStrategies.WAuth:
                     {
-                        return get().wauthInstance?.getAoSigner() as any;
+                        try {
+                            return get().wauthInstance?.getAoSigner() as any;
+                        } catch (error) {
+                            // If wallet isn't loaded yet (e.g., waiting for password), return null
+                            // This allows Subspace to initialize without a signer initially
+                            if (`${error}`.includes("No wallet found") || `${error}`.includes("Not logged in")) {
+                                console.log("[getSigner] WAuth wallet not ready yet, returning null");
+                                return null;
+                            }
+                            throw error; // Re-throw other errors
+                        }
                     }
                 case ConnectionStrategies.GuestUser:
                     {

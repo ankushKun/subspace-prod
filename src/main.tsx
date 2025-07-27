@@ -322,7 +322,7 @@ function Main() {
 }
 
 createRoot(document.getElementById('root')!).render(
-    <PostHogProvider
+    <>{import.meta.env.MODE === "development" ? <Main /> : <PostHogProvider
         apiKey="phc_SqWBgq3YjrOdX1UmcMh3OtYlxoSfjA5cqJbq0IGrCz1"
         options={{
             api_host: "https://eu.i.posthog.com",
@@ -332,5 +332,5 @@ createRoot(document.getElementById('root')!).render(
         }}
     >
         <Main />
-    </PostHogProvider>
+    </PostHogProvider>}</>
 )

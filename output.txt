@@ -1,0 +1,116 @@
+[wauth] $ bash ./scripts/dev.sh
+[subspace-sdk] 
+[subspace-sdk] > @subspace-protocol/sdk@0.0.4 dev
+[subspace-sdk] > tsc --watch
+[subspace-sdk] 
+[wauth] [backend] $ bash ./scripts/dev.sh
+[wauth] [demo] $ vite
+[webapp] 
+[webapp]   VITE v6.3.5  ready in 423 ms
+[webapp] 
+[webapp]   ➜  Local:   http://localhost:5173/
+[webapp]   ➜  Network: use --host to expose
+[wauth] [strategy] 
+[wauth] [strategy] > @wauth/strategy@0.0.12 dev
+[wauth] [strategy] > tsc --watch
+[wauth] [strategy] 
+[wauth] [sdk] 
+[wauth] [sdk] > @wauth/sdk@0.0.12 dev
+[wauth] [sdk] > tsc --watch
+[wauth] [sdk] 
+[subspace-sdk] [2J[3J[H12:31:18 PM - Starting compilation in watch mode...
+[subspace-sdk] 
+[wauth] [backend] [backend] $ bun run index.ts --watch
+[wauth] [backend] [pocketbase] $ bin/pocketbase serve --dir ./pb_data --dev
+[wauth] [sdk] [2J[3J[H
+[wauth] [demo] 
+[wauth] [demo]   VITE v7.0.0  ready in 625 ms
+[wauth] [demo] 
+[wauth] [demo]   ➜  Local:   http://localhost:5174/
+[wauth] [demo]   ➜  Network: use --host to expose
+[wauth] [sdk] 12:31:19 PM - Starting compilation in watch mode...
+[wauth] [sdk] 
+[wauth] [backend] [pocketbase] 2025/07/27 12:31:19 PocketBase hooks initialized
+[wauth] [backend] [pocketbase] [4.00ms] CREATE TABLE IF NOT EXISTS `_migrations` (file VARCHAR(255) PRIMARY KEY NOT NULL, applied INTEGER NOT NULL)
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1640988000_aux_init.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1640988000_init.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233556_v0.23_migrate.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233557_v0.23_migrate2.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233558_v0.23_migrate3.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233559_v0.23_migrate4.go' LIMIT 1
+[wauth] [backend] [pocketbase] [1.00ms] SELECT `_collections`.* FROM `_collections` ORDER BY `rowid` ASC
+[wauth] [backend] [pocketbase] [0.00ms] SELECT `_params`.* FROM `_params` WHERE `id`='settings'
+[wauth] [backend] [pocketbase] [0.00ms] SELECT `_collections`.* FROM `_collections` ORDER BY `rowid` ASC
+[wauth] [backend] [pocketbase] [0.00ms] CREATE TABLE IF NOT EXISTS `_migrations` (file VARCHAR(255) PRIMARY KEY NOT NULL, applied INTEGER NOT NULL)
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1640988000_aux_init.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1640988000_init.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233556_v0.23_migrate.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233557_v0.23_migrate2.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233558_v0.23_migrate3.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1717233559_v0.23_migrate4.go' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751099448_updated_users.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751099706_created_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751099740_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751100326_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751101068_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751101779_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751102000_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751102575_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751103049_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751103279_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751103940_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751103980_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751108208_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1751108763_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1752038070_created_connected_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1752038125_updated_connected_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1752038141_updated_connected_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1752050224_updated_connected_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1752050733_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1752050771_updated_connected_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1753173370_updated_users.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1753360325_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1753362085_updated_wallets.js' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_migrations` WHERE `file`='1753598530_updated_users.js' LIMIT 1
+[wauth] [backend] [pocketbase] 2025/07/27 12:31:19 Server started at http://127.0.0.1:8090
+[wauth] [backend] [pocketbase] ├─ REST API:  http://127.0.0.1:8090/api/
+[wauth] [backend] [pocketbase] └─ Dashboard: http://127.0.0.1:8090/_/
+[wauth] [backend] [pocketbase] [0.00ms] SELECT count(*) FROM `_superusers` WHERE NOT (`email`='__pbinstaller@example.com')
+[wauth] [strategy] [2J[3J[H12:31:19 PM - Starting compilation in watch mode...
+[wauth] [strategy] 
+[wauth] [backend] [backend] [dotenv@17.1.0] injecting env (0) from .env (tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] })
+[wauth] [backend] [backend] Generating server RSA key pair for password encryption...
+[wauth] [backend] [backend] Server RSA key pair generated successfully
+[subspace-sdk] 
+[subspace-sdk] 12:31:20 PM - Found 0 errors. Watching for file changes.
+[wauth] [strategy] 
+[wauth] [strategy] 12:31:21 PM - Found 0 errors. Watching for file changes.
+[wauth] [sdk] 
+[wauth] [sdk] 12:31:21 PM - Found 0 errors. Watching for file changes.
+[wauth] [backend] [pocketbase] [0.00ms] SELECT `_superusers`.* FROM `_superusers` WHERE `email`='wauth@arnode.asia' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] SELECT `_authOrigins`.* FROM `_authOrigins` WHERE `collectionRef`='pbc_3142635823' AND `recordRef`='yvldtwdpcotzkct' ORDER BY `created` DESC
+[wauth] [backend] [pocketbase] [0.00ms] SELECT `_collections`.* FROM `_collections` WHERE `id`='pbc_3142635823'
+[wauth] [backend] [pocketbase] [0.00ms] SELECT (1) FROM `_superusers` WHERE `id`='yvldtwdpcotzkct' LIMIT 1
+[wauth] [backend] [pocketbase] [0.00ms] UPDATE `_authOrigins` SET `collectionRef`='pbc_3142635823', `created`='2025-07-22 10:41:39.036Z', `fingerprint`='a18869370dbb1eb34c0c336bb1828f70', `id`='yud77kn5w1azes4', `recordRef`='yvldtwdpcotzkct', `updated`='2025-07-27 07:01:21.947Z' WHERE `id`='yud77kn5w1azes4'
+[wauth] [backend] [pocketbase] INFO POST /api/collections/_superusers/auth-with-password?noNotify=true
+[wauth] [backend] [backend] Backend started
+[wauth] [backend] [backend] Started development server: http://localhost:8091
+[webapp] 12:31:23 PM [vite] (client) page reload dev-dist/registerSW.js
+[webapp] 
+[webapp] PWA v1.0.1
+[webapp] mode      generateSW
+[webapp] precache  2 entries (0.12 KiB)
+[webapp] files generated
+[webapp]   dev-dist/sw.js
+[webapp]   dev-dist/workbox-54d0af47.js
+[webapp] 12:31:27 PM [vite] (client) page reload dev-dist/sw.js
+[webapp] 12:31:27 PM [vite] (client) page reload dev-dist/workbox-54d0af47.js
+[subspace-sdk] cd subspace-sdk && npm run dev exited with code SIGINT
+[webapp] vite exited with code SIGINT
+[wauth] [backend] [backend] bun run dev:backend exited with code SIGINT
+[wauth] [backend] [pocketbase] bun run start:pocketbase exited with code 0
+[wauth] [sdk] cd sdk && npm run dev exited with code SIGINT
+[wauth] [strategy] cd strategy && npm run dev exited with code SIGINT
+[wauth] [demo] cd demo && bun run dev exited with code SIGINT
+[wauth] [backend] cd backend && bun run dev exited with code 0
+[wauth] cd wauth && bun run dev exited with code 0

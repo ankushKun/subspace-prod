@@ -147,6 +147,22 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Only show creating profile dialog if this is our own profile
                         // and we don't already have a profile in the store
                         if (!userId && !get().profile) {
+                            // For WAuth connections, make sure the wallet is properly loaded before creating profile
+                            const walletState = useWallet.getState()
+                            if (walletState.connectionStrategy === 'wauth') {
+                                try {
+                                    // Check if WAuth wallet is loaded by trying to get it
+                                    const wallet = await walletState.wauthInstance?.getWallet()
+                                    if (!wallet) {
+                                        console.log("WAuth wallet not loaded yet, skipping profile creation")
+                                        return null
+                                    }
+                                } catch (walletError) {
+                                    console.log("WAuth wallet not ready yet, skipping profile creation:", walletError)
+                                    return null
+                                }
+                            }
+                            
                             set({ isCreatingProfile: true })
 
                             try {
