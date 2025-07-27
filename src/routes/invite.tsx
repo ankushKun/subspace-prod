@@ -127,7 +127,7 @@ export default function Invite() {
         setError(null)
 
         try {
-            const subspace = getSubspaceInstance()
+            const subspace = await getSubspaceInstance()
             const details = await subspace.server.getServer(invite)
             if (details) {
                 setServerInfo(details)

@@ -264,7 +264,42 @@ function Main() {
         try {
             // For WAuth strategy, wait for initialization to complete first
             if (connectionStrategy === ConnectionStrategies.WAuth) {
-                await walletActions.waitForWAuthInit();
+                console.log("[Main] Connecting to WAuth")
+                await walletActions.connect({ strategy: connectionStrategy, provider })
+
+                // await walletActions.waitForWAuthInit();
+
+                // // Additional check: ensure WAuth session is fully restored
+                // const { wauthInstance } = useWallet.getState();
+                // if (wauthInstance && wauthInstance.isLoggedIn()) {
+                //     // Quick check: if no session data exists, skip the waiting
+                //     if (!wauthInstance.hasSessionStorageData()) {
+                //         console.log("[Main] No session data found, will prompt for password immediately");
+                //         return; // Skip additional validation, go straight to connection
+                //     }
+
+                //     // Wait for session password loading to complete (but not too long)
+                //     let waitTime = 0;
+                //     const maxWait = 1000; // Max 1 second wait
+                //     while (wauthInstance.isSessionPasswordLoading() && waitTime < maxWait) {
+                //         await new Promise(resolve => setTimeout(resolve, 50));
+                //         waitTime += 50;
+                //     }
+
+                //     // Quick verification if session loading completed
+                //     if (!wauthInstance.isSessionPasswordLoading()) {
+                //         try {
+                //             const wallet = await wauthInstance.getWallet(false); // Don't show modal
+                //             if (!wallet) {
+                //                 console.log("[Main] Session restoration incomplete, will need password");
+                //             }
+                //         } catch (error) {
+                //             console.log("[Main] Session validation failed:", error.message);
+                //         }
+                //     } else {
+                //         console.log("[Main] Session loading taking too long, proceeding with connection");
+                //     }
+                // }
             }
 
             if (connectionStrategy === ConnectionStrategies.ScannedJWK) {
@@ -281,16 +316,31 @@ function Main() {
     }
 
     useEffect(() => {
-        // Initialize authentication state first (especially for WAuth)
+        // Initialize authentication state first
         walletActions.initializeAuthState();
-        
-        // Add a small delay to ensure WAuth has time to restore its state
+
+        // For WAuth, check if we can reduce the delay based on session availability
+        let initDelay = 100;
+        if (connectionStrategy === ConnectionStrategies.WAuth) {
+            const { wauthInstance } = useWallet.getState();
+            if (wauthInstance && wauthInstance.isLoggedIn()) {
+                // If no session data exists, we can start immediately
+                if (!(wauthInstance as any).hasSessionStorageData()) {
+                    initDelay = 50; // Minimal delay for immediate password prompt
+                } else {
+                    initDelay = 300; // Reduced delay when session data exists
+                }
+            } else {
+                initDelay = 100; // Standard delay for fresh login
+            }
+        }
+
         setTimeout(() => {
             handleConnection().catch((error) => {
                 console.error("Connection effect failed:", error);
                 handleAsyncError(error);
             });
-        }, 100);
+        }, initDelay);
     }, [])
 
     useEffect(() => {

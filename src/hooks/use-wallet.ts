@@ -106,23 +106,45 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                         provider: null,
                     });
                 } else {
-                    console.log("[useWallet] WAuth authentication state restored successfully");
-                    // Try to get the wallet to ensure everything is working
-                    state.wauthInstance.getWallet().then(wallet => {
-                        if (wallet && wallet.address !== state.address) {
-                            console.log("[useWallet] Updating address from restored wallet:", wallet.address);
-                            set({ address: wallet.address });
+                    console.log("[useWallet] WAuth PocketBase authentication valid, checking session...");
+
+                    // Don't try to get wallet immediately - let the connection flow handle it
+                    // This prevents race conditions with session password loading
+
+                    // Only validate if session loading is not in progress
+                    if (!state.wauthInstance.isSessionPasswordLoading()) {
+                        // Check if we have session data available
+                        if (!(state.wauthInstance as any).hasSessionStorageData()) {
+                            console.log("[useWallet] No session storage data found, will need fresh login");
+                            // Don't clear state yet - let the connection attempt handle this
+                            return;
                         }
-                    }).catch(error => {
-                        console.error("[useWallet] Failed to get wallet after auth restore:", error);
-                        // If we can't get the wallet, the authentication might be invalid
-                        set({
-                            address: "",
-                            connected: false,
-                            connectionStrategy: null,
-                            provider: null,
+
+                        // Try to get the wallet without showing modal to test session validity
+                        state.wauthInstance.getWallet(false).then(wallet => {
+                            if (wallet && wallet.address !== state.address) {
+                                console.log("[useWallet] Updating address from restored wallet:", wallet.address);
+                                set({ address: wallet.address });
+                            } else if (!wallet) {
+                                console.log("[useWallet] Session incomplete but PocketBase auth valid, will reconnect");
+                            }
+                        }).catch(error => {
+                            console.log("[useWallet] Session validation failed:", error.message);
+                            // Don't clear state for session-related errors - let connection flow handle it
+                            if (error.message.includes("User record not available") ||
+                                error.message.includes("not logged in")) {
+                                // Only clear for serious auth failures
+                                set({
+                                    address: "",
+                                    connected: false,
+                                    connectionStrategy: null,
+                                    provider: null,
+                                });
+                            }
                         });
-                    });
+                    } else {
+                        console.log("[useWallet] Session password still loading, will validate after connection");
+                    }
                 }
             }
         },
@@ -166,21 +188,43 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                             throw new Error("Not logged in to WAuth");
                         }
 
-                        // Try to get the signer, but if wallet isn't loaded, try to refresh it first
+                        // Wait for session password loading to complete
+                        while (wauthInstance.isSessionPasswordLoading()) {
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        }
+
+                        // Try to get the signer, but handle wallet loading gracefully
                         try {
                             return wauthInstance.getAoSigner() as any;
                         } catch (error) {
-                            if (`${error}`.includes("No wallet found")) {
-                                // Try to refresh the wallet first
+                            const errorMessage = `${error}`;
+
+                            if (errorMessage.includes("No wallet found") ||
+                                errorMessage.includes("session password not available")) {
+                                // Try to get wallet first (this might prompt for password)
                                 try {
-                                    await wauthInstance.refreshWallet();
-                                    return wauthInstance.getAoSigner() as any;
-                                } catch (refreshError) {
-                                    console.error("[getSigner] Failed to refresh WAuth wallet:", refreshError);
-                                    throw new Error("WAuth wallet not available. Please try logging in again.");
+                                    console.log("[getSigner] Wallet not available, attempting to load...");
+                                    const wallet = await wauthInstance.getWallet(true);
+                                    if (wallet) {
+                                        return wauthInstance.getAoSigner() as any;
+                                    } else {
+                                        throw new Error("Could not load wallet after authentication");
+                                    }
+                                } catch (walletError) {
+                                    const walletErrorMessage = `${walletError}`;
+                                    if (walletErrorMessage.includes("cancelled") ||
+                                        walletErrorMessage.includes("Password required")) {
+                                        // User cancelled - this is not a permanent error
+                                        throw new Error("Authentication cancelled by user");
+                                    } else {
+                                        console.error("[getSigner] Failed to load WAuth wallet:", walletError);
+                                        throw new Error("WAuth wallet not available. Please try logging in again.");
+                                    }
                                 }
                             }
-                            throw error; // Re-throw other errors
+
+                            // Re-throw other errors as they might be temporary
+                            throw error;
                         }
                     }
                 case ConnectionStrategies.GuestUser:
@@ -231,29 +275,81 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
 
                     // Check if we have a WAuth instance that's already logged in
                     if (state.wauthInstance && state.wauthInstance.isLoggedIn()) {
-                        // Wait for WAuth initialization to complete before trying to get wallet
-                        await waitForWAuthInitialization(state.wauthInstance);
+                        console.log("[WAuth Connect] Existing WAuth session found, attempting restoration...");
 
-                        try {
-                            const wallet = await state.wauthInstance.getWallet()
-                            if (wallet) {
-                                set((state) => {
-                                    return {
-                                        address: wallet.address,
-                                        connected: true,
-                                        connectionStrategy: ConnectionStrategies.WAuth,
-                                        wanderInstance: null,
-                                        wauthInstance: state.wauthInstance,
-                                        jwk: null,
-                                        provider: provider
-                                    }
-                                })
-                                triggerAuthenticatedEvent(wallet.address)
-                                return
+                        // Quick check: if no session data, skip waiting and show password modal immediately
+                        if (!state.wauthInstance.hasSessionStorageData()) {
+                            console.log("[WAuth Connect] No session data found, prompting for password immediately...");
+                            try {
+                                const wallet = await state.wauthInstance.getWallet(true);
+                                if (wallet) {
+                                    console.log("[WAuth Connect] Password entered successfully for:", wallet.address);
+                                    set((state) => {
+                                        return {
+                                            address: wallet.address,
+                                            connected: true,
+                                            connectionStrategy: ConnectionStrategies.WAuth,
+                                            wanderInstance: null,
+                                            wauthInstance: state.wauthInstance,
+                                            jwk: null,
+                                            provider: provider
+                                        }
+                                    })
+                                    triggerAuthenticatedEvent(wallet.address)
+                                    return
+                                }
+                            } catch (error) {
+                                if (error.message.includes("cancelled") || error.message.includes("Password required")) {
+                                    throw error; // User cancelled
+                                }
+                                console.log("[WAuth Connect] Password prompt failed, proceeding with fresh login");
                             }
-                        } catch (error) {
-                            console.warn("Failed to get wallet from existing WAuth session:", error);
-                            // Continue to fresh login
+                        } else {
+                            // Session data exists, try to restore it
+                            // Wait for WAuth initialization to complete before trying to get wallet
+                            await waitForWAuthInitialization(state.wauthInstance);
+
+                            try {
+                                // First try without showing modal to see if session is complete
+                                let wallet = await state.wauthInstance.getWallet(false);
+
+                                if (!wallet) {
+                                    // Session incomplete but PocketBase auth is valid
+                                    console.log("[WAuth Connect] Session incomplete, prompting for password...");
+                                    // Now try with modal to get the password
+                                    wallet = await state.wauthInstance.getWallet(true);
+                                }
+
+                                if (wallet) {
+                                    console.log("[WAuth Connect] Session restored successfully for:", wallet.address);
+                                    set((state) => {
+                                        return {
+                                            address: wallet.address,
+                                            connected: true,
+                                            connectionStrategy: ConnectionStrategies.WAuth,
+                                            wanderInstance: null,
+                                            wauthInstance: state.wauthInstance,
+                                            jwk: null,
+                                            provider: provider
+                                        }
+                                    })
+                                    triggerAuthenticatedEvent(wallet.address)
+                                    return
+                                }
+                            } catch (error) {
+                                console.warn("[WAuth Connect] Failed to restore existing session:", error.message);
+
+                                // Check if it's a session-related error vs auth error
+                                if (error.message.includes("Password required") ||
+                                    error.message.includes("cancelled") ||
+                                    error.message.includes("Session expired")) {
+                                    // User cancelled or session issues - don't proceed with fresh login
+                                    throw error;
+                                }
+
+                                // For other errors, continue to fresh login
+                                console.log("[WAuth Connect] Proceeding with fresh login...");
+                            }
                         }
                     }
 
@@ -263,12 +359,14 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     }
                     state.wauthInstance = new WAuth({ dev: process.env.NODE_ENV === "development" })
 
+                    console.log("[WAuth Connect] Starting fresh OAuth login...");
                     const data = await state.wauthInstance.connect({ provider })
                     if (!data) return
 
                     const wallet = await state.wauthInstance.getWallet()
                     if (!wallet) return
 
+                    console.log("[WAuth Connect] Fresh login successful for:", wallet.address);
                     set((state) => {
                         return {
                             address: wallet.address,
@@ -403,8 +501,8 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
     name: "subspace-wallet-connection",
     storage: createJSONStorage(() => localStorage),
     partialize: (state: WalletState) => ({
-        address: state.connected ? state.address : "", // Only persist address if connected
-        connected: state.connected, // Persist connected state
+        // address: state.connected ? state.address : "", // Only persist address if connected
+        // connected: state.connected, // Persist connected state
         connectionStrategy: state.connectionStrategy,
         provider: state.provider,
         jwk: state.jwk,
