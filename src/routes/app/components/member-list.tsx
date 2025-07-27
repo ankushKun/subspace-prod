@@ -116,16 +116,14 @@ const MemberItem = ({
 
                         {/* Actions on hover */}
                         {isHovered && (
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/20"
+                            <div
+                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-primary/20 rounded-md cursor-pointer flex items-center justify-center"
                                 onClick={(e) => {
                                     e.stopPropagation()
                                 }}
                             >
                                 <MoreHorizontal className="w-3 h-3" />
-                            </Button>
+                            </div>
                         )}
                     </div>
                 </Button>

@@ -329,7 +329,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                             console.log(`🚀 Server activation - serverId: ${serverId}, hasMembers: ${hasMembers}, membersLoaded: ${membersLoaded}, membersLoading: ${membersLoading}`)
 
-                            if (!hasMembers && !membersLoaded && !membersLoading) {
+                            if (!hasMembers && !membersLoaded) {
                                 // Set loading state immediately
                                 (mergedServer as any).membersLoading = true;
                                 console.log(`⏳ Setting membersLoading=true for server ${serverId}`)

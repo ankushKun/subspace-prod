@@ -55,8 +55,9 @@ export const usePWA = (): UsePWAReturn => {
 
         const handleBeforeInstallPrompt = (e: Event) => {
 
-            // Prevent the mini-infobar from appearing on mobile
-            e.preventDefault();
+            // Store the event to enable custom install prompt
+            // Remove e.preventDefault() to allow browser's default banner
+            // e.preventDefault();
 
             const beforeInstallPromptEvent = e as BeforeInstallPromptEvent;
 
