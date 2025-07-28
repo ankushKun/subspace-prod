@@ -137,8 +137,8 @@ const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Rec
 
     const serverRoles = Object.values(server?.roles || {})
     const memberRoles = serverRoles
-        .filter((role: any) => member.roles.includes(role.roleId))
-        .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+        .filter((role: any) => member.roles.includes(parseInt(role.roleId)))
+        .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Higher orderId = higher priority
 
     const highestRole = memberRoles[0] as any
     return highestRole?.color || undefined
@@ -408,7 +408,12 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
 }
 
 // Enhanced Message Content Component
-const MessageContent = memo(({ content, attachments }: { content: string; attachments?: string | string[] }) => {
+const MessageContent = memo(({ content, attachments, activeServerId, servers }: {
+    content: string;
+    attachments?: string | string[];
+    activeServerId?: string;
+    servers?: Record<string, any>;
+}) => {
     const { actions } = useGlobalState();
     const navigate = useNavigate();
 
@@ -475,9 +480,18 @@ const MessageContent = memo(({ content, attachments }: { content: string; attach
                 const mention = mentions[index];
                 if (!mention) return <>{children}</>;
 
+                // Get role color for the mentioned user
+                const roleColor = getUserRoleColor(mention.id, activeServerId, servers);
+
                 return (
                     <ProfilePopover userId={mention.id} side="bottom" align="center">
-                        <span className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-primary bg-primary/20 hover:bg-primary/30 transition-colors duration-150 rounded-sm cursor-pointer">
+                        <span
+                            className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium hover:opacity-80 transition-all duration-150 rounded-sm cursor-pointer"
+                            style={{
+                                color: roleColor || 'hsl(var(--primary))',
+                                backgroundColor: roleColor ? `${roleColor}33` : 'hsl(var(--primary) / 0.2)'
+                            }}
+                        >
                             @{mention.display}
                         </span>
                     </ProfilePopover>
@@ -903,6 +917,8 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
                     <MessageContent
                         content={message.content}
                         attachments={message.attachments}
+                        activeServerId={activeServerId}
+                        servers={servers}
                     />
                 </div>
             </div>
