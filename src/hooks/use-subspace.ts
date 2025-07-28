@@ -56,14 +56,24 @@ interface SubspaceState {
         servers: {
             get: (serverId: string, forceRefresh?: boolean) => Promise<Server | null>
             create: (data: CreateServerParams) => Promise<Server>
+            update: (serverId: string, params: { name?: string; logo?: string; description?: string }) => Promise<boolean>
             createCategory: (serverId: string, params: { name: string; orderId?: number }) => Promise<boolean>
             createChannel: (serverId: string, params: { name: string; categoryId?: string; orderId?: number; type?: 'text' | 'voice' }) => Promise<boolean>
+            updateChannel: (serverId: string, params: { channelId: string; name?: string; categoryId?: string | null; orderId?: number; allowMessaging?: 0 | 1; allowAttachments?: 0 | 1 }) => Promise<boolean>
+            deleteChannel: (serverId: string, channelId: string) => Promise<boolean>
+            updateCategory: (serverId: string, params: { categoryId: string; name?: string; orderId?: number }) => Promise<boolean>
+            deleteCategory: (serverId: string, categoryId: string) => Promise<boolean>
             join: (serverId: string) => Promise<boolean>
             leave: (serverId: string) => Promise<boolean>
             getMembers: (serverId: string, forceRefresh?: boolean) => Promise<any[]>
             refreshMembers: (serverId: string) => Promise<Member[]>
             getMember: (serverId: string, userId: string) => Promise<Member | null>
             updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
+            createRole: (serverId: string, params: { name: string; color?: string; permissions?: number | string; position?: number }) => Promise<boolean>
+            updateRole: (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number }) => Promise<boolean>
+            deleteRole: (serverId: string, roleId: string) => Promise<boolean>
+            assignRole: (serverId: string, params: { userId: string; roleId: string }) => Promise<boolean>
+            unassignRole: (serverId: string, params: { userId: string; roleId: string }) => Promise<boolean>
             getMessages: (serverId: string, channelId: string, limit?: number) => Promise<any[]>
             getMessage: (serverId: string, channelId: string, messageId: string) => Promise<any | null>
             sendMessage: (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => Promise<boolean>
@@ -454,6 +464,35 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 return server
             },
+            update: async (serverId: string, params: { name?: string; logo?: string; description?: string }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.updateServer(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated data while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after profile update")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after profile update")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after profile update:", refreshError)
+                            // Don't fail the operation just because refresh failed
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to update server:", error)
+                    return false
+                }
+            },
             createCategory: async (serverId: string, params: { name: string; orderId?: number }) => {
                 const subspace = get().subspace
                 if (!subspace) return false
@@ -509,6 +548,118 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return success
                 } catch (error) {
                     console.error("Failed to create channel:", error)
+                    return false
+                }
+            },
+            updateChannel: async (serverId: string, params: { channelId: string; name?: string; categoryId?: string | null; orderId?: number; allowMessaging?: 0 | 1; allowAttachments?: 0 | 1 }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.updateChannel(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated channels while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after channel update")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after channel update")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after channel update:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to update channel:", error)
+                    return false
+                }
+            },
+            deleteChannel: async (serverId: string, channelId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.deleteChannel(serverId, channelId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated channels while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after channel deletion")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after channel deletion")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after channel deletion:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to delete channel:", error)
+                    return false
+                }
+            },
+            updateCategory: async (serverId: string, params: { categoryId: string; name?: string; orderId?: number }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.updateCategory(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated categories while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after category update")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after category update")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after category update:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to update category:", error)
+                    return false
+                }
+            },
+            deleteCategory: async (serverId: string, categoryId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.deleteCategory(serverId, categoryId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated categories while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after category deletion")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after category deletion")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after category deletion:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to delete category:", error)
                     return false
                 }
             },
@@ -667,6 +818,132 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return success
                 } catch (error) {
                     console.error("Failed to update member:", error)
+                    return false
+                }
+            },
+            createRole: async (serverId: string, params: { name: string; color?: string; permissions?: number | string; position?: number }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.createRole(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated roles
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after role creation")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after role creation")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after role creation:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to create role:", error)
+                    return false
+                }
+            },
+            updateRole: async (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.updateRole(serverId, params)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated roles
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after role update")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after role update")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after role update:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to update role:", error)
+                    return false
+                }
+            },
+            deleteRole: async (serverId: string, roleId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.deleteRole(serverId, roleId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated roles
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after role deletion")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after role deletion")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after role deletion:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to delete role:", error)
+                    return false
+                }
+            },
+            assignRole: async (serverId: string, params: { userId: string; roleId: string }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.assignRole(serverId, params)
+                    if (success) {
+                        // Refresh members to update role assignments
+                        try {
+                            await get().actions.servers.refreshMembers(serverId)
+                            console.log("✅ Members refreshed successfully after role assignment")
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh members after role assignment:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to assign role:", error)
+                    return false
+                }
+            },
+            unassignRole: async (serverId: string, params: { userId: string; roleId: string }) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.unassignRole(serverId, params)
+                    if (success) {
+                        // Refresh members to update role assignments
+                        try {
+                            await get().actions.servers.refreshMembers(serverId)
+                            console.log("✅ Members refreshed successfully after role unassignment")
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh members after role unassignment:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to unassign role:", error)
                     return false
                 }
             },
