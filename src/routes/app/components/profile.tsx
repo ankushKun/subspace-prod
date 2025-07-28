@@ -349,14 +349,16 @@ export default function Profile({ className }: { className?: string }) {
             if (hasNicknameChanged() && selectedServerId && profile?.userId) {
                 const server = servers[selectedServerId]
                 if (server) {
+                    const trimmedNickname = editedNickname.trim()
                     const success = await actions.servers.updateMember(selectedServerId, {
                         userId: profile.userId,
-                        nickname: editedNickname.trim() || undefined
+                        nickname: trimmedNickname  // Allow empty strings to reset nickname
                     })
                     if (success) {
-                        toast.success("Nickname updated successfully")
+                        const message = trimmedNickname === "" ? "Nickname cleared successfully" : "Nickname updated successfully"
+                        toast.success(message)
                         // Update the original nickname to reflect the new saved value
-                        setOriginalNickname(editedNickname.trim())
+                        setOriginalNickname(trimmedNickname)
                     } else {
                         toast.error("Failed to update nickname")
                     }

@@ -61,7 +61,6 @@ const roleColors = [
     "#F1C40F", // Yellow
     "#E67E22", // Orange
     "#E74C3C", // Red
-    "#95A5A6", // Light Grey
 ]
 
 // Extended Role interface for UI purposes
@@ -662,32 +661,88 @@ export default function ServerRoles() {
                                 </div>
                                 <div className="space-y-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
                                     <div>
-                                        <Label className="text-xs text-primary/80">Preset Colors</Label>
-                                        <div className="grid grid-cols-5 gap-2 mt-2">
-                                            {roleColors.map((color) => (
+                                        <Label className="text-xs text-primary/80">Role Color</Label>
+                                        <div className="flex items-center gap-3 mt-2">
+                                            {/* Default Color */}
+                                            <div className="flex flex-col items-center gap-1">
                                                 <button
-                                                    key={color}
                                                     className={cn(
-                                                        "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                        newRoleColor === color && !newRoleHexColor
+                                                        "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
+                                                        newRoleColor === roleColors[0] && !newRoleHexColor
                                                             ? "border-primary ring-2 ring-primary/50 scale-105"
                                                             : "border-primary/30 hover:border-primary/60"
                                                     )}
-                                                    style={{ backgroundColor: color }}
+                                                    style={{ backgroundColor: roleColors[0] }}
                                                     onClick={() => {
-                                                        setNewRoleColor(color)
+                                                        setNewRoleColor(roleColors[0])
                                                         setNewRoleHexColor("") // Clear hex when preset is selected
                                                     }}
                                                     disabled={isCreating}
                                                 />
-                                            ))}
+                                                <span className="text-xs text-primary/60">Default</span>
+                                            </div>
+
+                                            {/* Custom Color */}
+                                            <div className="flex flex-col items-center gap-1">
+                                                <div className="relative">
+                                                    <button
+                                                        className={cn(
+                                                            "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
+                                                            newRoleHexColor && isValidHexColor(newRoleHexColor)
+                                                                ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                : "border-primary/30 hover:border-primary/60 border-dashed"
+                                                        )}
+                                                        style={{
+                                                            backgroundColor: newRoleHexColor && isValidHexColor(newRoleHexColor)
+                                                                ? formatHexColor(newRoleHexColor)
+                                                                : "transparent"
+                                                        }}
+                                                        onClick={() => {
+                                                            // Focus the hex input when clicked
+                                                            const hexInput = document.getElementById('new-role-hex-input') as HTMLInputElement
+                                                            if (hexInput) hexInput.focus()
+                                                        }}
+                                                        disabled={isCreating}
+                                                    >
+                                                        {!newRoleHexColor || !isValidHexColor(newRoleHexColor) ? (
+                                                            <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
+                                                        ) : null}
+                                                    </button>
+                                                </div>
+                                                <span className="text-xs text-primary/60">Custom</span>
+                                            </div>
+
+                                            {/* Color Patches Grid */}
+                                            <div className="flex-1">
+                                                <div className="grid grid-cols-4 gap-2">
+                                                    {roleColors.slice(1).map((color) => (
+                                                        <button
+                                                            key={color}
+                                                            className={cn(
+                                                                "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
+                                                                newRoleColor === color && !newRoleHexColor
+                                                                    ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                    : "border-primary/30 hover:border-primary/60"
+                                                            )}
+                                                            style={{ backgroundColor: color }}
+                                                            onClick={() => {
+                                                                setNewRoleColor(color)
+                                                                setNewRoleHexColor("") // Clear hex when preset is selected
+                                                            }}
+                                                            disabled={isCreating}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
+                                    {/* Custom Hex Input */}
                                     <div>
                                         <Label className="text-xs text-primary/80">Custom Hex Color</Label>
                                         <div className="flex gap-2 mt-2">
                                             <Input
+                                                id="new-role-hex-input"
                                                 value={newRoleHexColor}
                                                 onChange={(e) => {
                                                     setNewRoleHexColor(e.target.value)
@@ -879,22 +934,73 @@ export default function ServerRoles() {
 
                                                     <div className="space-y-4">
                                                         <div>
-                                                            <Label className="text-primary">Preset Colors</Label>
-                                                            <div className="grid grid-cols-5 gap-2 mt-2">
-                                                                {roleColors.map((color) => (
+                                                            <Label className="text-primary">Role Color</Label>
+                                                            <div className="flex items-center gap-3 mt-2">
+                                                                {/* Default Color */}
+                                                                <div className="flex flex-col items-center gap-1">
                                                                     <button
-                                                                        key={color}
                                                                         className={cn(
-                                                                            "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110",
-                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
+                                                                            "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
+                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === roleColors[0]
                                                                                 ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                 : "border-primary/30 hover:border-primary/60"
                                                                         )}
-                                                                        style={{ backgroundColor: color }}
-                                                                        onClick={() => updateLocalRoleProperty('color', color)}
+                                                                        style={{ backgroundColor: roleColors[0] }}
+                                                                        onClick={() => updateLocalRoleProperty('color', roleColors[0])}
                                                                         disabled={isUpdating}
                                                                     />
-                                                                ))}
+                                                                    <span className="text-xs text-primary/60">Default</span>
+                                                                </div>
+
+                                                                {/* Custom Color */}
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <div className="relative">
+                                                                        <button
+                                                                            className={cn(
+                                                                                "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
+                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                    ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                                    : "border-primary/30 hover:border-primary/60 border-dashed"
+                                                                            )}
+                                                                            style={{
+                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                    ? formatHexColor(selectedRoleHexColor)
+                                                                                    : "transparent"
+                                                                            }}
+                                                                            onClick={() => {
+                                                                                // Focus the hex input when clicked
+                                                                                const hexInput = document.getElementById('everyone-role-hex-input') as HTMLInputElement
+                                                                                if (hexInput) hexInput.focus()
+                                                                            }}
+                                                                            disabled={isUpdating}
+                                                                        >
+                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5") ? (
+                                                                                <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
+                                                                            ) : null}
+                                                                        </button>
+                                                                    </div>
+                                                                    <span className="text-xs text-primary/60">Custom</span>
+                                                                </div>
+
+                                                                {/* Color Patches Grid */}
+                                                                <div className="flex-1">
+                                                                    <div className="grid grid-cols-4 gap-2">
+                                                                        {roleColors.slice(1).map((color) => (
+                                                                            <button
+                                                                                key={color}
+                                                                                className={cn(
+                                                                                    "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110",
+                                                                                    (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
+                                                                                        ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                                        : "border-primary/30 hover:border-primary/60"
+                                                                                )}
+                                                                                style={{ backgroundColor: color }}
+                                                                                onClick={() => updateLocalRoleProperty('color', color)}
+                                                                                disabled={isUpdating}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
 
@@ -903,6 +1009,7 @@ export default function ServerRoles() {
                                                             <div className="flex gap-2 mt-2">
                                                                 <div className="flex-1 flex gap-2">
                                                                     <Input
+                                                                        id="everyone-role-hex-input"
                                                                         value={selectedRoleHexColor}
                                                                         onChange={(e) => setSelectedRoleHexColor(e.target.value)}
                                                                         onKeyDown={(e) => {
@@ -987,22 +1094,73 @@ export default function ServerRoles() {
 
                                                     <div className="space-y-4">
                                                         <div>
-                                                            <Label className="font-ocr text-primary text-sm">Preset Colors</Label>
-                                                            <div className="grid grid-cols-5 gap-2 mt-2">
-                                                                {roleColors.map((color) => (
+                                                            <Label className="font-ocr text-primary text-sm">Role Color</Label>
+                                                            <div className="flex items-center gap-3 mt-2">
+                                                                {/* Default Color */}
+                                                                <div className="flex flex-col items-center gap-1">
                                                                     <button
-                                                                        key={color}
                                                                         className={cn(
-                                                                            "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110",
-                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
+                                                                            "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
+                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === roleColors[0]
                                                                                 ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                 : "border-primary/30 hover:border-primary/60"
                                                                         )}
-                                                                        style={{ backgroundColor: color }}
-                                                                        onClick={() => updateLocalRoleProperty('color', color)}
+                                                                        style={{ backgroundColor: roleColors[0] }}
+                                                                        onClick={() => updateLocalRoleProperty('color', roleColors[0])}
                                                                         disabled={isUpdating}
                                                                     />
-                                                                ))}
+                                                                    <span className="text-xs text-primary/60">Default</span>
+                                                                </div>
+
+                                                                {/* Custom Color */}
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <div className="relative">
+                                                                        <button
+                                                                            className={cn(
+                                                                                "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
+                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                    ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                                    : "border-primary/30 hover:border-primary/60 border-dashed"
+                                                                            )}
+                                                                            style={{
+                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                    ? formatHexColor(selectedRoleHexColor)
+                                                                                    : "transparent"
+                                                                            }}
+                                                                            onClick={() => {
+                                                                                // Focus the hex input when clicked
+                                                                                const hexInput = document.getElementById('regular-role-hex-input') as HTMLInputElement
+                                                                                if (hexInput) hexInput.focus()
+                                                                            }}
+                                                                            disabled={isUpdating}
+                                                                        >
+                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5") ? (
+                                                                                <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
+                                                                            ) : null}
+                                                                        </button>
+                                                                    </div>
+                                                                    <span className="text-xs text-primary/60">Custom</span>
+                                                                </div>
+
+                                                                {/* Color Patches Grid */}
+                                                                <div className="flex-1">
+                                                                    <div className="grid grid-cols-4 gap-2">
+                                                                        {roleColors.slice(1).map((color) => (
+                                                                            <button
+                                                                                key={color}
+                                                                                className={cn(
+                                                                                    "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
+                                                                                    (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
+                                                                                        ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                                        : "border-primary/30 hover:border-primary/60"
+                                                                                )}
+                                                                                style={{ backgroundColor: color }}
+                                                                                onClick={() => updateLocalRoleProperty('color', color)}
+                                                                                disabled={isUpdating}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
 
@@ -1011,6 +1169,7 @@ export default function ServerRoles() {
                                                             <div className="flex gap-2 mt-2">
                                                                 <div className="flex-1 flex gap-2">
                                                                     <Input
+                                                                        id="regular-role-hex-input"
                                                                         value={selectedRoleHexColor}
                                                                         onChange={(e) => setSelectedRoleHexColor(e.target.value)}
                                                                         onKeyDown={(e) => {

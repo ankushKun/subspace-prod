@@ -84,6 +84,7 @@ import "katex/dist/katex.min.css";
 
 import alien from "@/assets/subspace/alien-green.svg"
 import ProfilePopover from "./profile-popover"
+import type { Server } from "@subspace-protocol/sdk";
 
 
 
@@ -125,7 +126,7 @@ const getDisplayName = (userId: string, profiles: Record<string, any>, activeSer
 };
 
 // Helper function to get user's highest priority role color
-const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Record<string, any>) => {
+const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Record<string, Server>) => {
     if (!activeServerId || !servers?.[activeServerId]) return undefined
 
     const server = servers[activeServerId]
@@ -137,11 +138,14 @@ const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Rec
 
     const serverRoles = Object.values(server?.roles || {})
     const memberRoles = serverRoles
-        .filter((role: any) => member.roles.includes(parseInt(role.roleId)))
+        .filter((role: any) => member.roles.includes(role.roleId))
         .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Higher orderId = higher priority
 
-    const highestRole = memberRoles[0] as any
-    return highestRole?.color || undefined
+    // Find the highest priority role that has a non-default color
+    const defaultColor = "#99AAB5"
+    const roleWithColor = memberRoles.find((role: any) => role.color && role.color !== defaultColor)
+
+    return roleWithColor?.color || undefined
 };
 
 // Enhanced Channel Header Component

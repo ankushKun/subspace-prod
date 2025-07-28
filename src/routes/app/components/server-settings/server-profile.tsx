@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
-import { Upload, X, Loader2, Save, RotateCcw } from "lucide-react"
+import { cn, uploadFileTurbo } from "@/lib/utils"
+import { Upload, X, Loader2, Save, RotateCcw, Camera } from "lucide-react"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
@@ -13,7 +13,7 @@ import { toast } from "sonner"
 export default function ServerProfile() {
     const { activeServerId } = useGlobalState()
     const { servers, actions: subspaceActions } = useSubspace()
-    const { address: walletAddress } = useWallet()
+    const { address: walletAddress, jwk, wauthInstance } = useWallet()
 
     // Get the current server
     const server = servers[activeServerId]
@@ -22,74 +22,102 @@ export default function ServerProfile() {
     const [serverName, setServerName] = useState("")
     const [serverDescription, setServerDescription] = useState("")
     const [serverIcon, setServerIcon] = useState<string | null>(null)
+    const [serverIconFile, setServerIconFile] = useState<File | null>(null)
+    const [serverIconPreview, setServerIconPreview] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+
+    // Original values for change detection
+    const [originalServerName, setOriginalServerName] = useState("")
+    const [originalServerDescription, setOriginalServerDescription] = useState("")
+    const [originalServerIcon, setOriginalServerIcon] = useState<string | null>(null)
 
     // Initialize form with server data
     useEffect(() => {
         if (server) {
-            setServerName(server.name || "")
-            setServerDescription(server.description || "")
-            setServerIcon(server.logo ? `https://arweave.net/${server.logo}` : null)
+            const name = server.name || ""
+            const description = server.description || ""
+            const icon = server.logo ? `https://arweave.net/${server.logo}` : null
+
+            setServerName(name)
+            setServerDescription(description)
+            setServerIcon(icon)
+
+            // Store original values
+            setOriginalServerName(name)
+            setOriginalServerDescription(description)
+            setOriginalServerIcon(icon)
+
+            // Reset file-related state when server changes
+            setServerIconFile(null)
+            setServerIconPreview(null)
         }
     }, [server])
 
     // Check if user is server owner
     const isOwner = server?.ownerId === walletAddress
 
-    // Check if form has changes
-    const hasChanges = server && (
-        serverName !== (server.name || "") ||
-        serverDescription !== (server.description || "") ||
-        (serverIcon && !serverIcon.startsWith('https://arweave.net/')) // New uploaded image
-    )
+    // Enhanced change detection functions
+    const hasNameChanged = () => serverName.trim() !== originalServerName.trim()
+    const hasDescriptionChanged = () => serverDescription.trim() !== originalServerDescription.trim()
+    const hasIconFileChanged = () => !!serverIconFile
+    const hasIconBeenRemoved = () => originalServerIcon && !serverIcon && !serverIconFile
+    const hasIconChanged = () => hasIconFileChanged() || hasIconBeenRemoved()
+
+    // Check if form has any changes
+    const hasChanges = hasNameChanged() || hasDescriptionChanged() || hasIconChanged()
 
     const handleIconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]
         if (!file) return
 
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            toast.error("Image must be smaller than 5MB")
+        // Validate file size (max 100KB for server icons)
+        if (file.size > 100 * 1024) {
+            toast.error("Server icon must be smaller than 100KB")
             return
         }
 
         // Validate file type
-        if (!file.type.startsWith('image/')) {
-            toast.error("Please select a valid image file")
+        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+            toast.error("Please select a PNG or JPEG image file")
             return
         }
 
-        setIsUploading(true)
-        try {
-            // Create FormData for upload
-            const formData = new FormData()
-            formData.append('file', file)
+        setServerIconFile(file)
 
-            // Upload to Arweave (you'll need to implement this endpoint)
-            // For now, we'll use a data URL as placeholder
-            const reader = new FileReader()
-            reader.onload = (e) => {
-                setServerIcon(e.target?.result as string)
-                setIsUploading(false)
-            }
-            reader.readAsDataURL(file)
-        } catch (error) {
-            console.error("Failed to upload image:", error)
-            toast.error("Failed to upload image")
-            setIsUploading(false)
+        // Create preview
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            setServerIconPreview(e.target?.result as string)
         }
+        reader.readAsDataURL(file)
     }
 
     const removeIcon = () => {
         setServerIcon(null)
+        setServerIconFile(null)
+        setServerIconPreview(null)
+
+        // Clear file input
+        const fileInput = document.getElementById('icon-upload') as HTMLInputElement
+        if (fileInput) {
+            fileInput.value = ""
+        }
     }
 
     const resetForm = () => {
         if (server) {
-            setServerName(server.name || "")
-            setServerDescription(server.description || "")
-            setServerIcon(server.logo ? `https://arweave.net/${server.logo}` : null)
+            setServerName(originalServerName)
+            setServerDescription(originalServerDescription)
+            setServerIcon(originalServerIcon)
+            setServerIconFile(null)
+            setServerIconPreview(null)
+
+            // Clear file input
+            const fileInput = document.getElementById('icon-upload') as HTMLInputElement
+            if (fileInput) {
+                fileInput.value = ""
+            }
         }
     }
 
@@ -109,30 +137,93 @@ export default function ServerProfile() {
             // Prepare update parameters
             const updateParams: { name?: string; logo?: string; description?: string } = {}
 
-            if (serverName !== server.name) {
+            // Handle name update
+            if (hasNameChanged()) {
                 updateParams.name = serverName.trim()
             }
 
-            if (serverDescription !== (server.description || "")) {
+            // Handle description update
+            if (hasDescriptionChanged()) {
                 updateParams.description = serverDescription.trim()
             }
 
-            // Handle logo update (this would need proper Arweave upload implementation)
-            if (serverIcon && !serverIcon.startsWith('https://arweave.net/')) {
-                // For now, we'll skip logo updates since it requires Arweave upload
-                // updateParams.logo = "uploaded-logo-hash"
-                toast.warning("Logo upload coming soon. Name and description will be updated.")
+            // Handle logo update
+            if (hasIconChanged()) {
+                if (serverIconFile) {
+                    // Upload new icon to Arweave
+                    try {
+                        setIsUploading(true)
+                        toast.loading("Uploading server icon to Arweave...")
+
+                        const signer = wauthInstance?.getWauthSigner()
+                        const logoId = await uploadFileTurbo(serverIconFile, jwk, signer)
+
+                        if (logoId) {
+                            updateParams.logo = logoId
+                            toast.dismiss()
+                        } else {
+                            toast.dismiss()
+                            toast.error("Failed to upload server icon")
+                            return
+                        }
+                    } catch (error) {
+                        console.error("Error uploading server icon:", error)
+                        toast.dismiss()
+                        toast.error("Failed to upload server icon")
+                        return
+                    } finally {
+                        setIsUploading(false)
+                    }
+                } else if (hasIconBeenRemoved()) {
+                    // Remove icon by setting empty logo
+                    updateParams.logo = ""
+                }
             }
 
-            const success = await subspaceActions.servers.update(activeServerId, updateParams)
+            // Only proceed if there are changes to save
+            if (Object.keys(updateParams).length > 0) {
+                toast.loading("Updating server profile...")
 
-            if (success) {
-                toast.success("Server profile updated successfully!")
+                const success = await subspaceActions.servers.update(activeServerId, updateParams)
+
+                toast.dismiss()
+
+                if (success) {
+                    toast.success("Server profile updated successfully!")
+
+                    // Update original values to reflect saved state
+                    setOriginalServerName(serverName.trim())
+                    setOriginalServerDescription(serverDescription.trim())
+
+                    if (updateParams.logo !== undefined) {
+                        if (updateParams.logo) {
+                            const newIconUrl = `https://arweave.net/${updateParams.logo}`
+                            setOriginalServerIcon(newIconUrl)
+                            setServerIcon(newIconUrl)
+                        } else {
+                            setOriginalServerIcon(null)
+                            setServerIcon(null)
+                        }
+                    }
+
+                    // Clear file state after successful save
+                    setServerIconFile(null)
+                    setServerIconPreview(null)
+
+                    // Clear file input
+                    const fileInput = document.getElementById('icon-upload') as HTMLInputElement
+                    if (fileInput) {
+                        fileInput.value = ""
+                    }
+                } else {
+                    toast.error("Failed to update server profile")
+                }
             } else {
-                toast.error("Failed to update server profile")
+                toast.info("No changes to save")
             }
         } catch (error) {
             console.error("Failed to save server profile:", error)
+            toast.dismiss()
             toast.error("Failed to update server profile")
         } finally {
             setIsSaving(false)
@@ -183,6 +274,13 @@ export default function ServerProfile() {
         )
     }
 
+    // Get current icon to display (priority: preview > file > current > none)
+    const getCurrentIcon = () => {
+        if (serverIconPreview) return serverIconPreview
+        if (serverIcon) return serverIcon
+        return null
+    }
+
     return (
         <div className="p-6 space-y-6 relative">
             {/* Background decoration */}
@@ -220,70 +318,121 @@ export default function ServerProfile() {
                     <CardHeader className="relative z-10 pb-3">
                         <CardTitle className="font-freecam text-primary/80 tracking-wide text-sm uppercase">SERVER ICON</CardTitle>
                         <CardDescription className="font-ocr text-primary/60 text-xs">
-                            We recommend an image of at least 512x512. (Logo upload coming soon)
+                            We recommend an image of at least 512x512. Max size: 100KB
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="relative z-10 space-y-4">
                         <div className="flex items-center gap-4">
-                            {serverIcon ? (
-                                <div className="relative">
-                                    <img
-                                        src={serverIcon}
-                                        alt="Server icon"
-                                        className="w-20 h-20 rounded-full object-cover border-2 border-primary/30"
-                                    />
+                            <div className="relative group">
+                                <div
+                                    className={cn(
+                                        "w-20 h-20 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center transition-all duration-200 border-2",
+                                        getCurrentIcon()
+                                            ? "border-primary/30"
+                                            : "border-dashed border-primary/30 group-hover:border-primary cursor-pointer",
+                                        isUploading && "opacity-50 cursor-not-allowed"
+                                    )}
+                                    onClick={!getCurrentIcon() && !isUploading ? () => document.getElementById('icon-upload')?.click() : undefined}
+                                >
+                                    {getCurrentIcon() ? (
+                                        <img
+                                            src={getCurrentIcon()}
+                                            alt="Server icon"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : isUploading ? (
+                                        <Loader2 className="w-6 h-6 text-primary/60 animate-spin" />
+                                    ) : (
+                                        <Upload className="w-6 h-6 text-primary/60 group-hover:text-primary transition-colors" />
+                                    )}
+
+                                    {/* Upload overlay for existing icons */}
+                                    {getCurrentIcon() && !isUploading && (
+                                        <div
+                                            className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                                            onClick={() => document.getElementById('icon-upload')?.click()}
+                                        >
+                                            <Camera className="w-6 h-6 text-white" />
+                                        </div>
+                                    )}
+
+                                    {/* Upload progress overlay */}
+                                    {isUploading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
+                                            <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Remove button */}
+                                {getCurrentIcon() && !isUploading && (
                                     <Button
                                         size="icon"
                                         variant="destructive"
                                         className="absolute -top-2 -right-2 w-6 h-6 rounded-full"
                                         onClick={removeIcon}
-                                        disabled={isUploading}
                                     >
                                         <X className="w-3 h-3" />
                                     </Button>
-                                </div>
-                            ) : (
-                                <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-dashed border-primary/30 flex items-center justify-center">
-                                    {isUploading ? (
-                                        <Loader2 className="w-6 h-6 text-primary/60 animate-spin" />
-                                    ) : (
-                                        <Upload className="w-6 h-6 text-primary/60" />
-                                    )}
-                                </div>
-                            )}
-                            <div className="space-y-2">
-                                <Label htmlFor="icon-upload" className="font-ocr">
-                                    <Button
-                                        variant="outline"
-                                        asChild
-                                        className="cursor-pointer font-ocr border-primary/20 hover:border-primary/40 text-primary/80 hover:bg-primary/5"
-                                        disabled={isUploading}
-                                    >
-                                        <span>
-                                            {isUploading ? "Uploading..." : "Change Server Icon"}
-                                        </span>
-                                    </Button>
-                                </Label>
-                                <input
-                                    id="icon-upload"
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleIconUpload}
-                                    disabled={isUploading}
-                                />
-                                {serverIcon && (
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={removeIcon}
-                                        className="font-ocr"
-                                        disabled={isUploading}
-                                    >
-                                        Remove Icon
-                                    </Button>
                                 )}
                             </div>
+
+                            <div className="space-y-3 flex-1">
+                                <div>
+                                    <div className="text-sm font-medium text-foreground">
+                                        {serverIconFile ? serverIconFile.name : getCurrentIcon() ? "Server Icon" : "No icon set"}
+                                    </div>
+                                    <div className="text-xs text-primary/60 mt-1">
+                                        {isUploading ? "Uploading to Arweave..." :
+                                            serverIconFile ? `${(serverIconFile.size / 1024).toFixed(1)} KB selected` :
+                                                getCurrentIcon() ? "Click to change server icon" :
+                                                    "Click above or browse to upload"
+                                        }
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <Label htmlFor="icon-upload">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            asChild
+                                            className="cursor-pointer font-ocr border-primary/20 hover:border-primary/40 text-primary/80 hover:bg-primary/5"
+                                            disabled={isUploading}
+                                        >
+                                            <span>
+                                                {isUploading ? "Uploading..." : getCurrentIcon() ? "Change Icon" : "Upload Icon"}
+                                            </span>
+                                        </Button>
+                                    </Label>
+
+                                    {getCurrentIcon() && (
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={removeIcon}
+                                            className="font-ocr"
+                                            disabled={isUploading}
+                                        >
+                                            Remove
+                                        </Button>
+                                    )}
+                                </div>
+
+                                <div className="text-xs text-primary/40">
+                                    PNG, JPEG supported • Max 100KB
+                                </div>
+                            </div>
+
+                            {/* Hidden file input */}
+                            <input
+                                id="icon-upload"
+                                type="file"
+                                accept="image/png,image/jpeg,image/jpg"
+                                className="hidden"
+                                onChange={handleIconUpload}
+                                disabled={isUploading}
+                            />
                         </div>
                     </CardContent>
                 </Card>
@@ -316,14 +465,24 @@ export default function ServerProfile() {
                 {/* Save Changes */}
                 <div className="flex justify-between items-center gap-3 pt-4">
                     <div className="text-xs text-primary/60 font-ocr">
-                        {hasChanges ? "You have unsaved changes" : "No changes to save"}
+                        {hasChanges ? (
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                                <span>You have unsaved changes</span>
+                                {hasNameChanged() && <span className="text-orange-500">• Name</span>}
+                                {hasDescriptionChanged() && <span className="text-orange-500">• Description</span>}
+                                {hasIconChanged() && <span className="text-orange-500">• Icon</span>}
+                            </div>
+                        ) : (
+                            "No changes to save"
+                        )}
                     </div>
                     <div className="flex gap-3">
                         <Button
                             variant="outline"
                             className="font-ocr border-primary/20 hover:border-primary/40 text-primary/80 hover:bg-primary/5"
                             onClick={resetForm}
-                            disabled={!hasChanges || isSaving}
+                            disabled={!hasChanges || isSaving || isUploading}
                         >
                             <RotateCcw className="w-4 h-4 mr-2" />
                             Reset
@@ -331,12 +490,12 @@ export default function ServerProfile() {
                         <Button
                             className="font-freecam tracking-wide bg-primary hover:bg-primary/90 text-primary-foreground"
                             onClick={handleSave}
-                            disabled={!hasChanges || isSaving || !serverName.trim()}
+                            disabled={!hasChanges || isSaving || isUploading || !serverName.trim()}
                         >
-                            {isSaving ? (
+                            {isSaving || isUploading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    SAVING...
+                                    {isUploading ? "UPLOADING..." : "SAVING..."}
                                 </>
                             ) : (
                                 <>

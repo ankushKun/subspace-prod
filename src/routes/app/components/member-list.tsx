@@ -198,10 +198,13 @@ const MemberSection = ({
                                 const roleIdNum = parseInt(role.roleId)
                                 return member.roles.includes(roleIdStr) || member.roles.includes(roleIdNum) || member.roles.includes(role.roleId)
                             })
-                            .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))[0]
-                        : null
+                            .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))
+                        : []
 
-                    const memberRoleColor = memberHighestRole?.color || roleColor
+                    // Find the highest priority role that has a non-default color
+                    const defaultColor = "#99AAB5"
+                    const roleWithColor = (memberHighestRole as any[]).find((role: any) => role.color && role.color !== defaultColor)
+                    const memberRoleColor = roleWithColor?.color || roleColor
 
                     return (
                         <MemberItem
@@ -313,7 +316,7 @@ export default function MemberList({ className }: { className?: string }) {
 
         // Initialize role groups for ALL roles (including @everyone)
         serverRoles.forEach((role: any) => {
-            roleGroups[`role-${role.roleId}`] = { role, members: [] }
+            roleGroups[`role-${role.roleId.toString()}`] = { role, members: [] }
         })
 
         // Add "No Role" section for members without any roles at all
@@ -329,8 +332,9 @@ export default function MemberList({ className }: { className?: string }) {
             // Find which roles this member actually has
             const memberActualRoles = serverRoles.filter((role: any) => {
                 const roleIdStr = role.roleId.toString()
-                const roleIdNum = parseInt(role.roleId)
-                return member.roles.includes(roleIdStr) || member.roles.includes(roleIdNum) || member.roles.includes(role.roleId)
+                const roleIdNum = parseInt(role.roleId.toString())
+                const memberRolesList = member.roles as (string | number)[]
+                return memberRolesList.includes(roleIdStr) || memberRolesList.includes(roleIdNum)
             })
 
             if (memberActualRoles.length === 0) {
@@ -339,8 +343,11 @@ export default function MemberList({ className }: { className?: string }) {
             }
 
             // Get the highest priority role (highest orderId) to determine primary categorization
-            const highestRole = memberActualRoles.sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))[0]
-            const primaryKey = `role-${highestRole.roleId}`
+            const sortedMemberRoles = memberActualRoles.sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))
+
+            // Categorization: Always use the highest priority role (regardless of color)
+            const primaryRole = sortedMemberRoles[0]
+            const primaryKey = `role-${primaryRole.roleId.toString()}`
 
             if (roleGroups[primaryKey]) {
                 roleGroups[primaryKey].members.push(member)

@@ -6,7 +6,8 @@ import { PermissionHelpers, Permissions } from "@/lib/permissions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock, Save } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useState, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,11 @@ export default function ProfilePopover({
     const [assigningRole, setAssigningRole] = useState(false)
     const [removingRoles, setRemovingRoles] = useState<string[]>([])
 
+    // Nickname editing state
+    const [isEditingNickname, setIsEditingNickname] = useState(false)
+    const [editedNickname, setEditedNickname] = useState("")
+    const [isSavingNickname, setIsSavingNickname] = useState(false)
+
     const server = activeServerId ? servers[activeServerId] : null
     const profile = profiles[userId]
     const isCurrentUser = address === userId
@@ -46,6 +52,57 @@ export default function ProfilePopover({
 
     // Get display name following priority order
     const displayName = nickname || profile?.primaryName || shortenAddress(userId)
+
+    // Initialize nickname editing when starting to edit
+    const handleStartEditingNickname = () => {
+        setEditedNickname(nickname || "")
+        setIsEditingNickname(true)
+    }
+
+    // Save nickname changes
+    const handleSaveNickname = async () => {
+        if (!activeServerId || !address) return
+
+        setIsSavingNickname(true)
+        try {
+            const trimmedNickname = editedNickname.trim()
+            const success = await actions.servers.updateMember(activeServerId, {
+                userId: address,
+                nickname: trimmedNickname
+            })
+
+            if (success) {
+                const message = trimmedNickname === "" ? "Nickname cleared successfully" : "Nickname updated successfully"
+                toast.success(message)
+                setIsEditingNickname(false)
+
+                // Refresh member data to show the updated nickname
+                await actions.servers.refreshMembers(activeServerId)
+            } else {
+                toast.error("Failed to update nickname")
+            }
+        } catch (error) {
+            console.error("Error updating nickname:", error)
+            toast.error("Failed to update nickname")
+        } finally {
+            setIsSavingNickname(false)
+        }
+    }
+
+    // Cancel nickname editing
+    const handleCancelNicknameEdit = () => {
+        setEditedNickname("")
+        setIsEditingNickname(false)
+    }
+
+    // Handle Enter key to save, Escape key to cancel
+    const handleNicknameKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !isSavingNickname) {
+            handleSaveNickname()
+        } else if (e.key === "Escape") {
+            handleCancelNicknameEdit()
+        }
+    }
 
     // Check if current user can manage roles
     const canManageRoles = useMemo(() => {
@@ -249,6 +306,12 @@ export default function ProfilePopover({
                 setIsRefreshing(false)
             }
         }
+
+        // Reset nickname editing state when popover closes
+        if (!open) {
+            setIsEditingNickname(false)
+            setEditedNickname("")
+        }
     }, [userId, activeServerId, actions, isRefreshing])
 
     return (
@@ -301,10 +364,82 @@ export default function ProfilePopover({
                             {/* User info */}
                             <div className="space-y-2">
                                 <div>
-                                    <h3 className="text-lg font-bold text-primary leading-tight font-freecam">
-                                        {nickname || displayName}
-                                    </h3>
-                                    {nickname && (
+                                    {/* Nickname with edit functionality for current user in server context */}
+                                    {server && isCurrentUser ? (
+                                        <div className="space-y-2">
+                                            {isEditingNickname ? (
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            value={editedNickname}
+                                                            onChange={(e) => setEditedNickname(e.target.value)}
+                                                            onKeyDown={handleNicknameKeyDown}
+                                                            placeholder="Enter nickname..."
+                                                            className="font-freecam text-lg font-bold border-primary/30 focus:border-primary"
+                                                            maxLength={32}
+                                                            disabled={isSavingNickname}
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={handleSaveNickname}
+                                                            disabled={isSavingNickname}
+                                                            className="font-ocr bg-primary hover:bg-primary/90 text-black"
+                                                        >
+                                                            {isSavingNickname ? (
+                                                                <>
+                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    {/* {editedNickname.trim() === "" ? "Clearing..." : "Saving..."} */}
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Save className="w-3 h-3" />
+                                                                    {/* {editedNickname.trim() === "" ? "Clear" : "Save"} */}
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={handleCancelNicknameEdit}
+                                                            disabled={isSavingNickname}
+                                                            className="font-ocr border-primary/30"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                            {/* Cancel */}
+                                                        </Button>
+                                                    </div>
+                                                    <p className="text-xs text-primary/60 font-ocr">
+                                                        {editedNickname.trim() === "" ? "Leave empty to clear your nickname" : "This will be your display name in this server"}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-lg font-bold text-primary leading-tight font-freecam flex-1">
+                                                        {nickname || displayName}
+                                                    </h3>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        onClick={handleStartEditingNickname}
+                                                        className="w-6 h-6 hover:bg-primary/10"
+                                                        title="Edit nickname"
+                                                    >
+                                                        <Pencil className="w-3 h-3 text-primary/60" />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <h3 className="text-lg font-bold text-primary leading-tight font-freecam">
+                                            {nickname || displayName}
+                                        </h3>
+                                    )}
+
+                                    {/* Show secondary info only when not editing nickname */}
+                                    {(!isEditingNickname && nickname) && (
                                         <p className="text-sm text-primary/70 font-medium font-ocr mt-1">
                                             {profile?.primaryName || shortenAddress(userId)}
                                         </p>
