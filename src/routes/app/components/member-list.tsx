@@ -159,27 +159,61 @@ const MemberSection = ({
             )}>
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2">
-                        <div className="w-1 h-1 bg-primary rounded-full animate-pulse" />
-                        <span className="truncate">{title}</span>
+                        <div
+                            className="w-1 h-1 rounded-full animate-pulse"
+                            style={{
+                                backgroundColor: roleColor || 'rgba(var(--primary), 1)'
+                            }}
+                        />
+                        <span
+                            className="truncate"
+                            style={{
+                                color: roleColor ? `${roleColor}` : undefined
+                            }}
+                        >
+                            {title}
+                        </span>
                     </div>
                     <span className="text-[8px] text-primary/60 font-ocr">{memberCount}</span>
                 </div>
                 {/* Subtle line under section */}
-                <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+                <div
+                    className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent"
+                    style={{
+                        background: roleColor
+                            ? `linear-gradient(to right, transparent, ${roleColor}40, transparent)`
+                            : undefined
+                    }}
+                />
             </div>
 
             {/* Members list */}
             <div className="mt-2 space-y-1">
-                {members.map((member) => (
-                    <MemberItem
-                        key={member.userId}
-                        member={member}
-                        profile={profiles[member.userId]}
-                        isOwner={isOwnerSection || member.userId === server?.ownerId}
-                        roleColor={roleColor}
-                        server={server}
-                    />
-                ))}
+                {members.map((member) => {
+                    // Get individual member's highest role color
+                    const memberHighestRole = server?.roles && member.roles ?
+                        Object.values(server.roles)
+                            .filter((role: any) => {
+                                const roleIdStr = role.roleId.toString()
+                                const roleIdNum = parseInt(role.roleId)
+                                return member.roles.includes(roleIdStr) || member.roles.includes(roleIdNum) || member.roles.includes(role.roleId)
+                            })
+                            .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))[0]
+                        : null
+
+                    const memberRoleColor = memberHighestRole?.color || roleColor
+
+                    return (
+                        <MemberItem
+                            key={member.userId}
+                            member={member}
+                            profile={profiles[member.userId]}
+                            isOwner={member.userId === server?.ownerId}
+                            roleColor={memberRoleColor}
+                            server={server}
+                        />
+                    )
+                })}
             </div>
         </div>
     )
@@ -200,33 +234,41 @@ export default function MemberList({ className }: { className?: string }) {
         : server?.members && typeof server.members === 'object'
             ? Object.values(server.members)
             : []
+
+
     const isLoadingMembers = (servers[activeServerId] as any)?.membersLoading || false
     const membersLoaded = (server as any)?.membersLoaded || false
+
+    // Load members with their roles if not already loaded
+    useEffect(() => {
+        if (activeServerId && server && !membersLoaded && !isLoadingMembers) {
+            actions.servers.getMembers(activeServerId, true)
+        }
+    }, [activeServerId, server, membersLoaded, isLoadingMembers, actions.servers])
 
     // ✅ CENTRALIZED: Load member profiles when members list changes
     useEffect(() => {
         if (members.length > 0 && !loadingProfiles) {
             const memberIds = members.map(m => m.userId)
             const missingProfiles = memberIds.filter(id => !profiles[id])
-            
+
             if (missingProfiles.length > 0) {
                 setLoadingProfiles(true)
-                console.log(`Loading ${missingProfiles.length} missing member profiles for member list`)
-                
+
                 // ✅ OPTIMIZED: Load profiles in smaller batches for better performance
                 const batchSize = 10
                 const batches = []
                 for (let i = 0; i < missingProfiles.length; i += batchSize) {
                     batches.push(missingProfiles.slice(i, i + batchSize))
                 }
-                
+
                 // Load batches sequentially with small delays
                 const loadBatch = async (batchIndex: number = 0) => {
                     if (batchIndex >= batches.length) {
                         setLoadingProfiles(false)
                         return
                     }
-                    
+
                     try {
                         await actions.profile.getBulk(batches[batchIndex])
                         // Small delay between batches to prevent overwhelming the system
@@ -236,7 +278,7 @@ export default function MemberList({ className }: { className?: string }) {
                         setTimeout(() => loadBatch(batchIndex + 1), 500) // Longer delay on error
                     }
                 }
-                
+
                 loadBatch()
             }
         }
@@ -260,79 +302,88 @@ export default function MemberList({ className }: { className?: string }) {
         })
     }, [members, searchQuery, profiles])
 
-    // Get member's highest priority role
-    const getMemberHighestRole = (member: any): any | null => {
-        if (!member.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
-            return null
-        }
 
-        const serverRoles = Object.values(server?.roles || {})
-        const memberRoles = serverRoles
-            .filter((role: any) => member.roles.includes(role.roleId))
-            .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
 
-        return memberRoles[0] || null
-    }
-
-    // Organize members by roles
+    // Organize members by their ACTUAL roles - create sections for each role they have
     const organizedMembersByRole = useMemo(() => {
         const roleGroups: Record<string, { role: any | null; members: any[] }> = {}
 
-        // Initialize with all roles
+        // Get ALL roles in the server
         const serverRoles = Object.values(server?.roles || {})
+
+        // Initialize role groups for ALL roles (including @everyone)
         serverRoles.forEach((role: any) => {
             roleGroups[`role-${role.roleId}`] = { role, members: [] }
         })
 
-        // Add "No Role" section for members without roles
+        // Add "No Role" section for members without any roles at all
         roleGroups['no-role'] = { role: null, members: [] }
 
-        // Organize members by their highest priority role
+        // Categorize each member by their highest priority role
         filteredMembers.forEach(member => {
-            const highestRole = getMemberHighestRole(member)
+            if (!member.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
+                roleGroups['no-role'].members.push(member)
+                return
+            }
 
-            if (highestRole) {
-                const key = `role-${highestRole.roleId}`
-                if (roleGroups[key]) {
-                    roleGroups[key].members.push(member)
-                }
+            // Find which roles this member actually has
+            const memberActualRoles = serverRoles.filter((role: any) => {
+                const roleIdStr = role.roleId.toString()
+                const roleIdNum = parseInt(role.roleId)
+                return member.roles.includes(roleIdStr) || member.roles.includes(roleIdNum) || member.roles.includes(role.roleId)
+            })
+
+            if (memberActualRoles.length === 0) {
+                roleGroups['no-role'].members.push(member)
+                return
+            }
+
+            // Get the highest priority role (highest orderId) to determine primary categorization
+            const highestRole = memberActualRoles.sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))[0]
+            const primaryKey = `role-${highestRole.roleId}`
+
+            if (roleGroups[primaryKey]) {
+                roleGroups[primaryKey].members.push(member)
             } else {
                 roleGroups['no-role'].members.push(member)
             }
         })
 
-        // Sort members within each role group
+        // Sort members within each role group alphabetically
         Object.values(roleGroups).forEach(group => {
             group.members.sort((a, b) => {
                 const profileA = profiles[a.userId]
                 const profileB = profiles[b.userId]
-
                 const displayNameA = a.nickname || profileA?.primaryName || shortenAddress(a.userId)
                 const displayNameB = b.nickname || profileB?.primaryName || shortenAddress(b.userId)
-
                 return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
             })
         })
 
+
+
         return roleGroups
     }, [filteredMembers, server?.roles, profiles])
 
-    // Sort role groups by role position
+    // Sort role groups by their actual role hierarchy (lower orderId = higher priority)
     const sortedRoleGroups = useMemo(() => {
         const groups = Object.entries(organizedMembersByRole)
-            .filter(([key, group]) => group.members.length > 0)
+            .filter(([key, group]) => group.members.length > 0) // Only show groups with members
             .sort(([keyA, groupA], [keyB, groupB]) => {
-                // No role section always last
+                // No role section always goes last
                 if (keyA === 'no-role') return 1
                 if (keyB === 'no-role') return -1
 
-                // Sort by role position
+                // Sort by actual role orderId (higher orderId = higher hierarchy = appears first) - matches server-roles.tsx
                 const roleA = groupA.role
                 const roleB = groupB.role
 
                 if (!roleA || !roleB) return 0
-                return (roleA.position || 0) - (roleB.position || 0)
+
+                return (roleB.orderId || roleB.position || 0) - (roleA.orderId || roleA.position || 0)
             })
+
+
 
         return groups
     }, [organizedMembersByRole])
@@ -434,8 +485,7 @@ export default function MemberList({ className }: { className?: string }) {
                 ) : (
                     <>
                         {sortedRoleGroups.map(([key, group]) => {
-                            const sectionTitle = group.role ? group.role.name : "UNCLASSIFIED"
-                            const isOwnerSection = key === 'owner'
+                            const sectionTitle = group.role ? group.role.name.toUpperCase() : "UNCLASSIFIED"
 
                             return (
                                 <MemberSection
@@ -443,7 +493,7 @@ export default function MemberList({ className }: { className?: string }) {
                                     title={sectionTitle}
                                     members={group.members}
                                     profiles={profiles}
-                                    isOwnerSection={isOwnerSection}
+                                    isOwnerSection={false}
                                     roleColor={group.role?.color}
                                     server={server}
                                 />

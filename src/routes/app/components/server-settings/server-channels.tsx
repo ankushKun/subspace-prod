@@ -771,8 +771,8 @@ export default function ServerChannels() {
         return (
             <div className="flex items-center justify-center min-h-[600px] relative">
                 {/* Background decoration */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.03)_0%,transparent_50%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.03)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
 
                 <div className="text-center space-y-4 relative z-10">
                     <div className="w-12 h-12 mx-auto bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
@@ -780,7 +780,7 @@ export default function ServerChannels() {
                     </div>
                     <div>
                         <h3 className="font-freecam text-sm uppercase tracking-wide text-primary">Loading Server</h3>
-                        <p className="text-xs text-muted-foreground font-ocr mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                             Fetching channel data...
                         </p>
                     </div>
@@ -793,8 +793,8 @@ export default function ServerChannels() {
         return (
             <div className="flex items-center justify-center min-h-[600px] relative">
                 {/* Background decoration */}
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(red/0.02)_0%,transparent_50%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(red/0.02)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(red/0.01)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(red/0.01)_0%,transparent_50%)] pointer-events-none" />
 
                 <div className="text-center space-y-4 relative z-10">
                     <div className="w-12 h-12 mx-auto bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20">
@@ -802,7 +802,7 @@ export default function ServerChannels() {
                     </div>
                     <div>
                         <h3 className="font-freecam text-sm uppercase tracking-wide text-red-500">Access Denied</h3>
-                        <p className="text-xs text-red-500/80 font-ocr mt-1">
+                        <p className="text-xs text-red-500/80 mt-1">
                             You don't have permission to manage channels
                         </p>
                     </div>
@@ -814,11 +814,8 @@ export default function ServerChannels() {
     return (
         <div className="p-6 space-y-6 relative h-full">
             {/* Background decoration */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-
-            {/* Ambient glow */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-8 bg-primary/5 rounded-full blur-xl" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
 
             <DndContext
                 sensors={sensors}
@@ -846,7 +843,7 @@ export default function ServerChannels() {
                                                         {category ? category.name : 'Unknown Category'}
                                                     </span>
                                                     {category && (
-                                                        <Badge variant="secondary" className="text-xs font-ocr bg-primary/20 text-primary/80 border-primary/30">
+                                                        <Badge variant="secondary" className="text-xs bg-primary/20 text-primary/80 border-primary/30">
                                                             {channelCount} channels
                                                         </Badge>
                                                     )}
@@ -886,18 +883,18 @@ export default function ServerChannels() {
                 </DragOverlay>
 
                 {/* Main Channel List */}
-                <Card className="border-primary/20 shadow-lg backdrop-blur-sm bg-card/50 relative z-10">
+                <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative z-10">
                     {/* Card glow effect */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded-lg pointer-events-none" />
+                    <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
 
                     <CardHeader className="pb-4 relative z-10">
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary flex items-center gap-2">
-                                    <Hash className="w-4 h-4 text-primary/60" />
+                                <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
+                                    <Hash className="w-4 h-4 text-primary/40" />
                                     Channel Management
                                 </CardTitle>
-                                <p className="text-xs text-primary/60 font-ocr mt-1">
+                                <p className="text-xs text-primary/50 mt-1">
                                     {channels.length} channels • {categories.length} categories
                                 </p>
                             </div>
@@ -905,7 +902,7 @@ export default function ServerChannels() {
                                 size="sm"
                                 onClick={openCategoryDialog}
                                 variant="outline"
-                                className="font-ocr text-xs border-primary/30 hover:border-primary/50 hover:bg-primary/10 transition-all duration-200"
+                                className="text-xs border-primary/20 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200"
                             >
                                 <Plus className="w-3 h-3 mr-1" />
                                 New Category
@@ -918,14 +915,14 @@ export default function ServerChannels() {
                                 {/* Uncategorized Channels */}
                                 <div className="space-y-3">
                                     <UncategorizedDropZone dragOverId={dragOverId}>
-                                        <div className="flex items-center justify-between group p-3 rounded-lg transition-all duration-200 border bg-primary/5 border-primary/20 hover:border-primary/30 hover:bg-primary/10">
+                                        <div className="flex items-center justify-between group p-3 rounded-lg transition-all duration-200 border bg-primary/3 border-primary/15 hover:border-primary/20 hover:bg-primary/5">
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center gap-2">
-                                                    <Hash className="w-4 h-4 text-primary/60" />
-                                                    <h3 className="font-freecam text-xs uppercase tracking-wide text-primary">
+                                                    <Hash className="w-4 h-4 text-primary/40" />
+                                                    <h3 className="font-freecam text-xs uppercase tracking-wide text-primary/70">
                                                         Uncategorized
                                                     </h3>
-                                                    <Badge variant="secondary" className="text-xs font-ocr bg-primary/20 text-primary/80 border-primary/30">
+                                                    <Badge variant="secondary" className="text-xs bg-primary/10 text-primary/60 border-primary/20">
                                                         {uncategorizedChannels.length}
                                                     </Badge>
                                                 </div>
@@ -935,7 +932,7 @@ export default function ServerChannels() {
                                                     size="sm"
                                                     onClick={() => openChannelDialog()}
                                                     variant="ghost"
-                                                    className="h-6 w-6 p-0 hover:bg-primary/10 text-primary/60 hover:text-primary transition-all duration-200"
+                                                    className="h-6 w-6 p-0 hover:bg-primary/5 text-primary/40 hover:text-primary/60 transition-all duration-200"
                                                 >
                                                     <Plus className="w-3 h-3" />
                                                 </Button>
@@ -946,7 +943,7 @@ export default function ServerChannels() {
                                     <div className="relative">
                                         {/* Connector line - only show if there are channels */}
                                         {uncategorizedChannels.length > 0 && (
-                                            <div className="absolute left-6 top-0 bottom-0 w-px bg-primary/20" />
+                                            <div className="absolute left-6 top-0 bottom-0 w-px bg-primary/15" />
                                         )}
                                         <div className="pl-2">
                                             {uncategorizedChannels.length > 0 && (
@@ -972,10 +969,10 @@ export default function ServerChannels() {
                                                 </SortableContext>
                                             )}
                                             {uncategorizedChannels.length === 0 && (
-                                                <div className="text-center py-4 text-xs text-primary/40 font-ocr ml-4 border border-dashed border-primary/20 rounded-lg bg-primary/5">
-                                                    <Hash className="w-4 h-4 mx-auto mb-2 text-primary/30" />
+                                                <div className="text-center py-4 text-xs text-primary/30 font-ocr ml-4 border border-dashed border-primary/15 rounded-lg bg-primary/3">
+                                                    <Hash className="w-4 h-4 mx-auto mb-2 text-primary/25" />
                                                     No uncategorized channels
-                                                    <p className="text-xs text-primary/30 mt-1">
+                                                    <p className="text-xs text-primary/25 mt-1">
                                                         Click + to create your first channel
                                                     </p>
                                                 </div>
@@ -986,7 +983,7 @@ export default function ServerChannels() {
 
                                 {/* Separator */}
                                 {categories.length > 0 && (
-                                    <Separator className="bg-primary/20" />
+                                    <Separator className="bg-primary/15" />
                                 )}
 
                                 {/* Categories with Channels */}
@@ -1029,10 +1026,10 @@ export default function ServerChannels() {
                                                         </div>
                                                     </SortableContext>
                                                 ) : (
-                                                    <div className="text-center py-3 text-xs text-primary/40 font-ocr ml-4 border border-dashed border-primary/20 rounded-lg bg-primary/5">
-                                                        <Hash className="w-4 h-4 mx-auto mb-2 text-primary/30" />
+                                                    <div className="text-center py-3 text-xs text-primary/30 font-ocr ml-4 border border-dashed border-primary/15 rounded-lg bg-primary/3">
+                                                        <Hash className="w-4 h-4 mx-auto mb-2 text-primary/25" />
                                                         No channels in this category
-                                                        <p className="text-xs text-primary/30 mt-1">
+                                                        <p className="text-xs text-primary/25 mt-1">
                                                             Click + to add channels
                                                         </p>
                                                     </div>
@@ -1048,7 +1045,7 @@ export default function ServerChannels() {
 
                 {/* Channel Delete Confirmation Dialog */}
                 <AlertDialog open={!!channelToDelete} onOpenChange={() => setChannelToDelete(null)}>
-                    <AlertDialogContent className="border-red-500/30 bg-card/95 backdrop-blur-sm">
+                    <AlertDialogContent className="border-red-500/20 bg-card/95 backdrop-blur-sm">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="font-freecam text-sm uppercase tracking-wide text-red-500">
                                 Delete Channel
@@ -1061,7 +1058,7 @@ export default function ServerChannels() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel
-                                className="font-ocr text-xs border-primary/30 hover:border-primary/50"
+                                className="font-ocr text-xs border-primary/20 hover:border-primary/30"
                                 disabled={!!isDeletingChannel}
                             >
                                 Cancel
@@ -1086,7 +1083,7 @@ export default function ServerChannels() {
 
                 {/* Edit Channel Dialog */}
                 <Dialog open={isChannelEditDialogOpen} onOpenChange={setIsChannelEditDialogOpen}>
-                    <DialogContent className="border-primary/30 bg-card/95 backdrop-blur-sm">
+                    <DialogContent className="border-primary/20 bg-card/95 backdrop-blur-sm">
                         <DialogHeader>
                             <DialogTitle className="font-freecam text-sm uppercase tracking-wide text-primary">
                                 Edit Channel
@@ -1102,7 +1099,7 @@ export default function ServerChannels() {
                                     value={editChannelName}
                                     onChange={(e) => setEditChannelName(e.target.value)}
                                     placeholder="Enter channel name"
-                                    className="font-ocr text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50"
+                                    className="font-ocr text-sm mt-1 border-primary/20 focus:border-primary/30 bg-background/50"
                                     maxLength={50}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && editChannelName.trim()) {
@@ -1116,7 +1113,7 @@ export default function ServerChannels() {
                                 </p>
                             </div>
 
-                            <div className="space-y-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                            <div className="space-y-3 p-3 bg-primary/3 rounded-lg border border-primary/15">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <Label className="font-ocr text-xs text-foreground">Allow Messaging</Label>
@@ -1156,7 +1153,7 @@ export default function ServerChannels() {
                                         setEditAllowMessaging(true)
                                         setEditAllowAttachments(true)
                                     }}
-                                    className="font-ocr text-xs border-primary/30 hover:border-primary/50"
+                                    className="font-ocr text-xs border-primary/20 hover:border-primary/30"
                                     disabled={isUpdatingChannel}
                                 >
                                     Cancel
@@ -1182,7 +1179,7 @@ export default function ServerChannels() {
 
                 {/* Create Category Dialog */}
                 <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-                    <DialogContent className="border-primary/30 bg-card/95 backdrop-blur-sm">
+                    <DialogContent className="border-primary/20 bg-card/95 backdrop-blur-sm">
                         <DialogHeader>
                             <DialogTitle className="font-freecam text-sm uppercase tracking-wide text-primary">
                                 Create Category
@@ -1198,7 +1195,7 @@ export default function ServerChannels() {
                                     value={newCategoryName}
                                     onChange={(e) => setNewCategoryName(e.target.value)}
                                     placeholder="Enter category name"
-                                    className="font-ocr text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50"
+                                    className="font-ocr text-sm mt-1 border-primary/20 focus:border-primary/30 bg-background/50"
                                     maxLength={50}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && newCategoryName.trim()) {
@@ -1218,7 +1215,7 @@ export default function ServerChannels() {
                                         setIsCategoryDialogOpen(false)
                                         setNewCategoryName("")
                                     }}
-                                    className="font-ocr text-xs border-primary/30 hover:border-primary/50"
+                                    className="font-ocr text-xs border-primary/20 hover:border-primary/30"
                                     disabled={isCreatingCategory}
                                 >
                                     Cancel
@@ -1244,7 +1241,7 @@ export default function ServerChannels() {
 
                 {/* Create Channel Dialog */}
                 <Dialog open={isChannelDialogOpen} onOpenChange={setIsChannelDialogOpen}>
-                    <DialogContent className="border-primary/30 bg-card/95 backdrop-blur-sm">
+                    <DialogContent className="border-primary/20 bg-card/95 backdrop-blur-sm">
                         <DialogHeader>
                             <DialogTitle className="font-freecam text-sm uppercase tracking-wide text-primary">
                                 Create Channel
@@ -1260,7 +1257,7 @@ export default function ServerChannels() {
                                     value={newChannelName}
                                     onChange={(e) => setNewChannelName(e.target.value)}
                                     placeholder="Enter channel name"
-                                    className="font-ocr text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50"
+                                    className="font-ocr text-sm mt-1 border-primary/20 focus:border-primary/30 bg-background/50"
                                     maxLength={50}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && newChannelName.trim()) {
@@ -1282,7 +1279,7 @@ export default function ServerChannels() {
                                         setNewChannelName("")
                                         setChannelCreationCategory(undefined)
                                     }}
-                                    className="font-ocr text-xs border-primary/30 hover:border-primary/50"
+                                    className="font-ocr text-xs border-primary/20 hover:border-primary/30"
                                     disabled={isCreatingChannel}
                                 >
                                     Cancel
@@ -1308,7 +1305,7 @@ export default function ServerChannels() {
 
                 {/* Category Delete Confirmation Dialog */}
                 <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
-                    <AlertDialogContent className="border-red-500/30 bg-card/95 backdrop-blur-sm">
+                    <AlertDialogContent className="border-red-500/20 bg-card/95 backdrop-blur-sm">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="font-freecam text-sm uppercase tracking-wide text-red-500">
                                 Delete Category
@@ -1332,7 +1329,7 @@ export default function ServerChannels() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel
-                                className="font-ocr text-xs border-primary/30 hover:border-primary/50"
+                                className="font-ocr text-xs border-primary/20 hover:border-primary/30"
                                 disabled={!!isDeletingCategory}
                             >
                                 Cancel
@@ -1425,12 +1422,12 @@ function UncategorizedDropZone({ children, dragOverId }: { children: React.React
 
     return (
         <div ref={setNodeRef} className="relative">
-            <div className={`${(isOver || isDraggedOver) ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""}`}>
+            <div className={`${(isOver || isDraggedOver) ? "ring-2 ring-primary/25 ring-offset-2 ring-offset-background" : ""}`}>
                 {children}
             </div>
             {(isOver || isDraggedOver) && (
                 <div className="absolute -bottom-2 left-0 right-0 text-center">
-                    <div className="inline-block text-primary text-xs font-ocr py-1 px-3 bg-primary/10 rounded-full border border-primary/30 shadow-lg animate-pulse">
+                    <div className="inline-block text-primary/80 text-xs font-ocr py-1 px-3 bg-primary/5 rounded-full border border-primary/20 shadow-lg animate-pulse">
                         Drop here to move to uncategorized
                     </div>
                 </div>
@@ -1490,9 +1487,9 @@ function SortableCategory({
 
     return (
         <div ref={setNodeRef} style={style} className="space-y-3">
-            <div className={`flex items-center justify-between group p-3 rounded-lg transition-all duration-200 border bg-primary/5 ${isOver || isDraggedOver
-                ? "border-primary/40 shadow-lg bg-primary/10 ring-2 ring-primary/20"
-                : "border-primary/20 hover:border-primary/30 hover:bg-primary/10"
+            <div className={`flex items-center justify-between group p-3 rounded-lg transition-all duration-200 border bg-primary/3 ${isOver || isDraggedOver
+                ? "border-primary/25 shadow-md bg-primary/5 ring-2 ring-primary/15"
+                : "border-primary/15 hover:border-primary/20 hover:bg-primary/5"
                 }`}>
                 <div className="flex items-center gap-3">
                     <div
@@ -1503,11 +1500,11 @@ function SortableCategory({
                         <GripVertical className="w-4 h-4" />
                     </div>
                     <div className="flex items-center gap-2">
-                        <Hash className="w-4 h-4 text-primary/60" />
-                        <h3 className="font-freecam text-xs uppercase tracking-wide text-primary">
+                        <Hash className="w-4 h-4 text-primary/40" />
+                        <h3 className="font-freecam text-xs uppercase tracking-wide text-primary/70">
                             {category.name}
                         </h3>
-                        <Badge variant="secondary" className="text-xs font-ocr bg-primary/20 text-primary/80 border-primary/30">
+                        <Badge variant="secondary" className="text-xs font-ocr bg-primary/10 text-primary/60 border-primary/20">
                             {channelCount}
                         </Badge>
                         {(isOver || isDraggedOver) && (
@@ -1522,7 +1519,7 @@ function SortableCategory({
                         size="sm"
                         onClick={() => onCreateChannel(category.categoryId.toString())}
                         variant="ghost"
-                        className="h-6 w-6 p-0 hover:bg-primary/10 text-primary/60 hover:text-primary transition-all duration-200"
+                        className="h-6 w-6 p-0 hover:bg-primary/5 text-primary/40 hover:text-primary/60 transition-all duration-200"
                     >
                         <Plus className="w-3 h-3" />
                     </Button>
@@ -1530,7 +1527,7 @@ function SortableCategory({
                         size="sm"
                         variant="ghost"
                         onClick={() => onDeleteCategory(category)}
-                        className="h-6 w-6 p-0 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all duration-200"
+                        className="h-6 w-6 p-0 text-red-500/40 hover:text-red-500/60 hover:bg-red-500/5 transition-all duration-200"
                         disabled={isDeletingCategory}
                     >
                         {isDeletingCategory ? (
@@ -1544,7 +1541,7 @@ function SortableCategory({
             <div className="relative">
                 {/* Connector line - only show if there are channels */}
                 {channelCount > 0 && (
-                    <div className="absolute left-6 top-0 bottom-0 w-px bg-primary/20" />
+                    <div className="absolute left-6 top-0 bottom-0 w-px bg-primary/15" />
                 )}
                 <div className="pl-2">
                     {children}
@@ -1560,7 +1557,7 @@ function InsertionLine({ show, position = 'before' }: { show: boolean; position?
 
     return (
         <div className={`${position === 'before' ? '-mb-1' : '-mt-1'} ${position === 'before' ? 'order-first' : 'order-last'}`}>
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent rounded-full animate-pulse shadow-lg">
+            <div className="h-0.5 from-transparent via-primary to-transparent rounded-full animate-pulse shadow-lg">
                 <div className="h-full bg-primary/50 rounded-full"></div>
             </div>
             <div className="flex justify-center -mt-1">
@@ -1619,22 +1616,22 @@ function SortableChannel({
             />
 
             <div ref={setNodeRef} style={style} className={`flex items-center justify-between group p-3 rounded-lg transition-all duration-200 border ${isMoving
-                ? "bg-blue-500/10 border-blue-500/30 shadow-lg"
+                ? "bg-blue-500/5 border-blue-500/20 shadow-md"
                 : isDeleting
-                    ? "bg-red-500/10 border-red-500/30 shadow-lg"
+                    ? "bg-red-500/5 border-red-500/20 shadow-md"
                     : isDraggedOver
-                        ? "bg-primary/15 border-primary/40 shadow-lg ring-2 ring-primary/20"
-                        : "border-transparent hover:border-primary/20 hover:bg-primary/5"
+                        ? "bg-primary/8 border-primary/25 shadow-md ring-2 ring-primary/15"
+                        : "border-transparent hover:border-primary/15 hover:bg-primary/3"
                 }`}>
                 <div className="flex items-center gap-3">
                     <div
                         {...attributes}
                         {...listeners}
-                        className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity text-primary/40 hover:text-primary/60"
+                        className="cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity text-primary/30 hover:text-primary/40"
                     >
                         <GripVertical className="w-3 h-3" />
                     </div>
-                    <Hash className="w-3 h-3 text-primary/60" />
+                    <Hash className="w-3 h-3 text-primary/40" />
                     <span className="font-ocr text-sm text-foreground flex items-center gap-2">
                         {channel.name}
                         {isMoving && (
@@ -1645,8 +1642,8 @@ function SortableChannel({
                     </span>
                     {channel.private && (
                         <div className="flex items-center gap-1">
-                            <Lock className="w-3 h-3 text-primary/60" />
-                            <Badge variant="secondary" className="text-xs font-ocr bg-primary/20 text-primary border-primary/30">
+                            <Lock className="w-3 h-3 text-primary/40" />
+                            <Badge variant="secondary" className="text-xs font-ocr bg-primary/10 text-primary/60 border-primary/20">
                                 Private
                             </Badge>
                         </div>
@@ -1657,7 +1654,7 @@ function SortableChannel({
                         size="sm"
                         variant="ghost"
                         onClick={() => onEdit(channel)}
-                        className="h-6 w-6 p-0 hover:bg-primary/10 text-primary/60 hover:text-primary transition-all duration-200"
+                        className="h-6 w-6 p-0 hover:bg-primary/5 text-primary/40 hover:text-primary/60 transition-all duration-200"
                         disabled={isLoading}
                     >
                         <Edit className="w-3 h-3" />
@@ -1666,7 +1663,7 @@ function SortableChannel({
                         size="sm"
                         variant="ghost"
                         onClick={() => onDelete(channel)}
-                        className="h-6 w-6 p-0 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all duration-200"
+                        className="h-6 w-6 p-0 text-red-500/40 hover:text-red-500/60 hover:bg-red-500/5 transition-all duration-200"
                         disabled={isLoading}
                     >
                         {isDeleting ? (

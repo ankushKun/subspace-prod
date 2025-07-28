@@ -141,21 +141,20 @@ export default function ServerProfile() {
 
     if (!server) {
         return (
-            <div className="p-6 space-y-6">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
+            <div className="flex items-center justify-center min-h-[600px] relative">
+                {/* Background decoration */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
 
-                <div className="relative z-10 max-w-2xl mx-auto">
-                    <div className="text-center space-y-6">
-                        <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center border border-primary/30">
-                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold font-freecam text-primary tracking-wide">LOADING SERVER</h1>
-                            <p className="text-primary/80 font-ocr mt-2">
-                                Please wait while we load the server data...
-                            </p>
-                        </div>
+                <div className="text-center space-y-4 relative z-10">
+                    <div className="w-12 h-12 mx-auto bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
+                        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    </div>
+                    <div>
+                        <h3 className="font-freecam text-sm uppercase tracking-wide text-primary">Loading Server</h3>
+                        <p className="text-xs text-primary/60 mt-1 font-ocr">
+                            Fetching server data...
+                        </p>
                     </div>
                 </div>
             </div>
@@ -164,21 +163,20 @@ export default function ServerProfile() {
 
     if (!isOwner) {
         return (
-            <div className="p-6 space-y-6">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
+            <div className="flex items-center justify-center min-h-[600px] relative">
+                {/* Background decoration */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(red/0.01)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(red/0.01)_0%,transparent_50%)] pointer-events-none" />
 
-                <div className="relative z-10 max-w-2xl mx-auto">
-                    <div className="text-center space-y-6">
-                        <div className="w-16 h-16 mx-auto bg-orange-500/10 rounded-full flex items-center justify-center border border-orange-500/30">
-                            <X className="w-8 h-8 text-orange-500" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold font-freecam text-orange-500 tracking-wide">ACCESS DENIED</h1>
-                            <p className="text-orange-500/80 font-ocr mt-2">
-                                Only the server owner can edit server settings.
-                            </p>
-                        </div>
+                <div className="text-center space-y-4 relative z-10">
+                    <div className="w-12 h-12 mx-auto bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20">
+                        <X className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div>
+                        <h3 className="font-freecam text-sm uppercase tracking-wide text-red-500">Access Denied</h3>
+                        <p className="text-xs text-red-500/80 mt-1 font-ocr">
+                            Only the server owner can edit server settings.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -186,26 +184,26 @@ export default function ServerProfile() {
     }
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 relative">
             {/* Background decoration */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
 
             <div className="relative z-10 max-w-2xl mx-auto space-y-6">
                 {/* Server Name */}
-                <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
+                <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative">
                     {/* Card glow effect */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
+                    <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-xl pointer-events-none" />
 
                     <CardHeader className="relative z-10 pb-3">
-                        <CardTitle className="font-freecam text-primary tracking-wide">SERVER NAME</CardTitle>
+                        <CardTitle className="font-freecam text-primary/80 tracking-wide text-sm uppercase">SERVER NAME</CardTitle>
                     </CardHeader>
                     <CardContent className="relative z-10">
                         <Input
                             value={serverName}
                             onChange={(e) => setServerName(e.target.value)}
                             placeholder="Enter server name"
-                            className="font-ocr bg-background/80 border-primary/30 focus:border-primary focus:ring-primary/20"
+                            className="font-ocr bg-background/80 border-primary/20 focus:border-primary/40 focus:ring-primary/15"
                             maxLength={100}
                         />
                         <p className="text-xs text-primary/60 mt-2 font-ocr">
@@ -215,13 +213,13 @@ export default function ServerProfile() {
                 </Card>
 
                 {/* Server Icon */}
-                <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
+                <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative">
                     {/* Card glow effect */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
+                    <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-xl pointer-events-none" />
 
                     <CardHeader className="relative z-10 pb-3">
-                        <CardTitle className="font-freecam text-primary tracking-wide">SERVER ICON</CardTitle>
-                        <CardDescription className="font-ocr text-primary/60">
+                        <CardTitle className="font-freecam text-primary/80 tracking-wide text-sm uppercase">SERVER ICON</CardTitle>
+                        <CardDescription className="font-ocr text-primary/60 text-xs">
                             We recommend an image of at least 512x512. (Logo upload coming soon)
                         </CardDescription>
                     </CardHeader>
@@ -258,7 +256,7 @@ export default function ServerProfile() {
                                     <Button
                                         variant="outline"
                                         asChild
-                                        className="cursor-pointer font-ocr border-primary/30 hover:border-primary text-primary hover:bg-primary/10"
+                                        className="cursor-pointer font-ocr border-primary/20 hover:border-primary/40 text-primary/80 hover:bg-primary/5"
                                         disabled={isUploading}
                                     >
                                         <span>
@@ -291,13 +289,13 @@ export default function ServerProfile() {
                 </Card>
 
                 {/* Server Description */}
-                <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
+                <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative">
                     {/* Card glow effect */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
+                    <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-xl pointer-events-none" />
 
                     <CardHeader className="relative z-10 pb-3">
-                        <CardTitle className="font-freecam text-primary tracking-wide">SERVER DESCRIPTION</CardTitle>
-                        <CardDescription className="font-ocr text-primary/60">
+                        <CardTitle className="font-freecam text-primary/80 tracking-wide text-sm uppercase">SERVER DESCRIPTION</CardTitle>
+                        <CardDescription className="font-ocr text-primary/60 text-xs">
                             Help others discover your server by providing a description.
                         </CardDescription>
                     </CardHeader>
@@ -306,7 +304,7 @@ export default function ServerProfile() {
                             value={serverDescription}
                             onChange={(e) => setServerDescription(e.target.value)}
                             placeholder="Write a short description about your server..."
-                            className="w-full min-h-[100px] p-3 rounded-md border border-primary/30 bg-background/80 resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary font-ocr text-foreground placeholder:text-muted-foreground"
+                            className="w-full min-h-[100px] p-3 rounded-md border border-primary/20 bg-background/80 resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 font-ocr text-foreground placeholder:text-primary/50"
                             maxLength={500}
                         />
                         <p className="text-xs text-primary/60 mt-2 font-ocr">
@@ -323,7 +321,7 @@ export default function ServerProfile() {
                     <div className="flex gap-3">
                         <Button
                             variant="outline"
-                            className="font-ocr border-primary/30 hover:border-primary text-primary hover:bg-primary/10"
+                            className="font-ocr border-primary/20 hover:border-primary/40 text-primary/80 hover:bg-primary/5"
                             onClick={resetForm}
                             disabled={!hasChanges || isSaving}
                         >

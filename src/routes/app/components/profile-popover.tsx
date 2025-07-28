@@ -2,12 +2,13 @@ import { useSubspace } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { cn, shortenAddress } from "@/lib/utils"
+import { PermissionHelpers, Permissions } from "@/lib/permissions"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import alien from "@/assets/subspace/alien-black.svg"
@@ -46,6 +47,49 @@ export default function ProfilePopover({
     // Get display name following priority order
     const displayName = nickname || profile?.primaryName || shortenAddress(userId)
 
+    // Check if current user can manage roles
+    const canManageRoles = useMemo(() => {
+        if (!server || !address) return false
+
+        // Server owner can always manage roles
+        if (server.ownerId === address) return true
+
+        // Check if user has appropriate permissions
+        const serverMembers = (server as any)?.members || []
+        const currentMember = serverMembers.find((m: any) => m.userId === address)
+
+        if (!currentMember || !currentMember.roles) return false
+
+        // Check permissions from user's roles
+        for (const roleId of currentMember.roles) {
+            const role = server.roles[roleId.toString()]
+            if (role) {
+                if (PermissionHelpers.hasPermission(role.permissions, Permissions.ADMINISTRATOR) ||
+                    PermissionHelpers.hasPermission(role.permissions, Permissions.MANAGE_ROLES)) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }, [server, address, (server as any)?.members])
+
+    // Check if current user can manage this specific user's roles
+    const canManageThisUserRoles = useMemo(() => {
+        // If viewing own profile, can only modify if has permissions or is owner
+        if (isCurrentUser) {
+            return canManageRoles
+        }
+
+        // If viewing another user's profile, need permissions and target can't be owner
+        if (!canManageRoles) return false
+
+        // Can't modify server owner's roles
+        if (server?.ownerId === userId) return false
+
+        return true
+    }, [canManageRoles, isCurrentUser, server?.ownerId, userId])
+
     // Get user's roles from the server
     const getUserRoles = () => {
         if (!server || !member || !member.roles || !Array.isArray(member.roles)) {
@@ -56,9 +100,9 @@ export default function ProfilePopover({
             return []
         }
 
-        // Filter server roles to get only the ones assigned to this user (match member-list logic)
+        // Filter server roles to get only the ones assigned to this user (match server-roles.tsx logic)
         const userRoles = Object.values(server.roles).filter((role: any) => member.roles.includes(role.roleId))
-            .sort((a: any, b: any) => (a.position || 0) - (b.position || 0)) // Sort by position like member-list
+            .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Sort by orderId/position descending like server-roles.tsx
 
         return userRoles
     }
@@ -79,7 +123,7 @@ export default function ProfilePopover({
                 // For now, allow all role assignments - permission checking can be added later
                 return true
             })
-            .sort((a: any, b: any) => (a.orderId || 0) - (b.orderId || 0))
+            .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))
     }
 
     const userRoles = getUserRoles()
@@ -92,12 +136,17 @@ export default function ProfilePopover({
             return
         }
 
+        if (!canManageThisUserRoles) {
+            toast.error("You don't have permission to manage this user's roles")
+            return
+        }
+
         setAssigningRole(true)
         try {
-            // For now, we'll use updateMember to add roles - this might need adjustment based on actual SDK
-            const success = await actions.servers.updateMember(activeServerId, {
+            // Use the dedicated assignRole method for proper role management
+            const success = await actions.servers.assignRole(activeServerId, {
                 userId: userId,
-                roles: [...(member?.roles || []), roleId]
+                roleId: roleId
             })
 
             if (success) {
@@ -132,12 +181,17 @@ export default function ProfilePopover({
             return
         }
 
+        if (!canManageThisUserRoles) {
+            toast.error("You don't have permission to manage this user's roles")
+            return
+        }
+
         setRemovingRoles(prev => [...prev, roleId])
         try {
-            const updatedRoles = (member?.roles || []).filter((r: string) => r !== roleId)
-            const success = await actions.servers.updateMember(activeServerId, {
+            // Use the dedicated unassignRole method for proper role management
+            const success = await actions.servers.unassignRole(activeServerId, {
                 userId: userId,
-                roles: updatedRoles
+                roleId: roleId
             })
 
             if (success) {
@@ -296,8 +350,8 @@ export default function ProfilePopover({
                                                 <span className="text-xs font-medium text-primary/60 uppercase tracking-wide">
                                                     Roles
                                                 </span>
-                                                {/* Role assignment for server members - simplified for now */}
-                                                {!isCurrentUser && (
+                                                {/* Role assignment for server members */}
+                                                {canManageThisUserRoles && (
                                                     <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
                                                         <PopoverTrigger asChild>
                                                             <Button
@@ -386,8 +440,8 @@ export default function ProfilePopover({
                                                                     className="w-2.5 h-2.5 rounded-full absolute inset-0 group-hover:opacity-0 transition-opacity"
                                                                     style={{ backgroundColor: role.color }}
                                                                 />
-                                                                {/* X button - only visible on hover for non-current users */}
-                                                                {!isCurrentUser && (
+                                                                {/* X button - only visible on hover when user has permissions */}
+                                                                {canManageThisUserRoles && (
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon"

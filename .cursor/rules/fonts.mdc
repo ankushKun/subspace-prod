@@ -1,0 +1,7 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+font-ocr should only be used for titles and headings, the rest should use the default font (geist)

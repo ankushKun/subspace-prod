@@ -70,7 +70,10 @@ interface SubspaceState {
             getMember: (serverId: string, userId: string) => Promise<Member | null>
             updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
             createRole: (serverId: string, params: { name: string; color?: string; permissions?: number | string; position?: number }) => Promise<boolean>
-            updateRole: (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number }) => Promise<boolean>
+            updateRole: (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number; orderId?: number }) => Promise<boolean>
+            reorderRole: (serverId: string, roleId: string, newOrderId: number) => Promise<boolean>
+            moveRoleAbove: (serverId: string, roleId: string, targetRoleId: string) => Promise<boolean>
+            moveRoleBelow: (serverId: string, roleId: string, targetRoleId: string) => Promise<boolean>
             deleteRole: (serverId: string, roleId: string) => Promise<boolean>
             assignRole: (serverId: string, params: { userId: string; roleId: string }) => Promise<boolean>
             unassignRole: (serverId: string, params: { userId: string; roleId: string }) => Promise<boolean>
@@ -849,7 +852,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return false
                 }
             },
-            updateRole: async (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number }) => {
+            updateRole: async (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number; orderId?: number }) => {
                 const subspace = get().subspace
                 if (!subspace) return false
 
@@ -874,6 +877,90 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return success
                 } catch (error) {
                     console.error("Failed to update role:", error)
+                    return false
+                }
+            },
+            reorderRole: async (serverId: string, roleId: string, newOrderId: number) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await (subspace.server as any).reorderRole(serverId, roleId, newOrderId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated role order
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after role reorder")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after role reorder")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after role reorder:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to reorder role:", error)
+                    return false
+                }
+            },
+            moveRoleAbove: async (serverId: string, roleId: string, targetRoleId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await (subspace.server as any).moveRoleAbove(serverId, roleId, targetRoleId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated role order
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after moving role above")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after moving role above")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after moving role above:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to move role above:", error)
+                    return false
+                }
+            },
+            moveRoleBelow: async (serverId: string, roleId: string, targetRoleId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await (subspace.server as any).moveRoleBelow(serverId, roleId, targetRoleId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated role order
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                            if (updatedServer) {
+                                console.log("✅ Server refreshed successfully after moving role below")
+                            } else {
+                                console.warn("⚠️ Server refresh returned null after moving role below")
+                            }
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after moving role below:", refreshError)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to move role below:", error)
                     return false
                 }
             },

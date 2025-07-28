@@ -1401,6 +1401,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             placeholder={`Message #${channelName || 'channel'}`}
                             disabled={isSending || disabled}
                             singleLine={false}
+                            autoFocus
                             forceSuggestionsAboveCursor
                             className="mentions-input"
                             style={{

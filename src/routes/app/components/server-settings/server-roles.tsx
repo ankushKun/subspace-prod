@@ -21,6 +21,28 @@ import {
     Save,
     X
 } from "lucide-react"
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay
+} from '@dnd-kit/core'
+import type {
+    DragEndEvent,
+    DragStartEvent,
+    DragOverEvent
+} from '@dnd-kit/core'
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { cn } from "@/lib/utils"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useGlobalState } from "@/hooks/use-global-state"
@@ -46,6 +68,7 @@ const roleColors = [
 interface ExtendedRole extends Role {
     memberCount?: number
     isDefault?: boolean
+    orderId?: number
 }
 
 export default function ServerRoles() {
@@ -67,13 +90,45 @@ export default function ServerRoles() {
     const [isUpdating, setIsUpdating] = useState(false)
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
 
+    // Role editing state
+    const [editedRole, setEditedRole] = useState<Partial<ExtendedRole>>({})
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+    // Drag and drop state
+    const [activeId, setActiveId] = useState<string | null>(null)
+    const [isDragging, setIsDragging] = useState(false)
+    const [dragOverId, setDragOverId] = useState<string | null>(null)
+    const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null)
+    const [dragDirection, setDragDirection] = useState<'up' | 'down' | null>(null)
+    const [lastSuccessfulReorder, setLastSuccessfulReorder] = useState<string | null>(null)
+
+    // Drag and drop sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8, // 8px minimum distance before drag starts
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    )
+
+    // Modifier to restrict movement to vertical axis only
+    const restrictToVerticalAxis = ({ transform }: { transform: { x: number; y: number; scaleX: number; scaleY: number } }) => {
+        return {
+            ...transform,
+            x: 0, // Always keep horizontal position at 0 to prevent horizontal movement
+        }
+    }
+
     // Convert server roles to extended roles with member counts
     const roles = useMemo((): ExtendedRole[] => {
         if (!server || !server.roles) return []
 
         const serverMembers = (server as any)?.members || []
 
-        return Object.values(server.roles).map(role => {
+        const result = Object.values(server.roles).map(role => {
             // Count members with this role
             const memberCount = serverMembers.filter((member: any) =>
                 member.roles && member.roles.includes(parseInt(role.roleId))
@@ -84,7 +139,9 @@ export default function ServerRoles() {
                 memberCount,
                 isDefault: parseInt(role.roleId) === 1 // roleId 1 is always the default @everyone role
             } as ExtendedRole
-        }).sort((a, b) => (b.position || 0) - (a.position || 0)) // Sort by position descending
+        }).sort((a, b) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Sort by orderId/position descending
+
+        return result
     }, [server])
 
     // Check if user has permission to manage roles
@@ -118,12 +175,23 @@ export default function ServerRoles() {
     useEffect(() => {
         setSelectedRole(null)
         setSelectedRoleHexColor("")
+        setEditedRole({})
+        setHasUnsavedChanges(false)
     }, [activeServerId])
 
-    // Update hex color when selected role changes
+    // Update hex color and initialize edited role when selected role changes
     useEffect(() => {
         if (selectedRole) {
             setSelectedRoleHexColor(selectedRole.color || "#99AAB5")
+            setEditedRole({
+                name: selectedRole.name,
+                color: selectedRole.color,
+                permissions: selectedRole.permissions
+            })
+            setHasUnsavedChanges(false)
+        } else {
+            setEditedRole({})
+            setHasUnsavedChanges(false)
         }
     }, [selectedRole])
 
@@ -191,35 +259,60 @@ export default function ServerRoles() {
         }
     }
 
-    const updateRoleColor = async (role: ExtendedRole, newColor: string) => {
-        if (!activeServerId || !canManageRoles) return
+    const updateLocalRoleProperty = (property: keyof ExtendedRole, value: any) => {
+        if (!selectedRole) return
+
+        setEditedRole(prev => ({
+            ...prev,
+            [property]: value
+        }))
+        setHasUnsavedChanges(true)
+
+        // Update hex color display immediately for color changes
+        if (property === 'color') {
+            setSelectedRoleHexColor(value)
+        }
+    }
+
+    const saveRoleChanges = async () => {
+        if (!selectedRole || !activeServerId || !canManageRoles || !hasUnsavedChanges) return
 
         setIsUpdating(true)
         try {
             const success = await subspaceActions.servers.updateRole(activeServerId, {
-                roleId: role.roleId.toString(),
-                color: newColor
+                roleId: selectedRole.roleId.toString(),
+                ...editedRole
             })
 
             if (success) {
-                toast.success(`${role.name} color updated!`)
-                // Update local state
-                if (selectedRole?.roleId === role.roleId) {
-                    setSelectedRole({ ...selectedRole, color: newColor })
-                    setSelectedRoleHexColor(newColor)
-                }
+                toast.success(`${editedRole.name || selectedRole.name} updated successfully!`)
+                // Update local state to reflect saved changes
+                setSelectedRole({ ...selectedRole, ...editedRole })
+                setHasUnsavedChanges(false)
             } else {
-                toast.error("Failed to update role color")
+                toast.error("Failed to update role")
             }
         } catch (error) {
-            console.error("Error updating role color:", error)
-            toast.error("Failed to update role color")
+            console.error("Error updating role:", error)
+            toast.error("Failed to update role")
         } finally {
             setIsUpdating(false)
         }
     }
 
-    const handleHexColorUpdate = async (role: ExtendedRole, hexColor: string) => {
+    const discardRoleChanges = () => {
+        if (!selectedRole) return
+
+        setEditedRole({
+            name: selectedRole.name,
+            color: selectedRole.color,
+            permissions: selectedRole.permissions
+        })
+        setSelectedRoleHexColor(selectedRole.color || "#99AAB5")
+        setHasUnsavedChanges(false)
+    }
+
+    const handleHexColorUpdate = (role: ExtendedRole, hexColor: string) => {
         if (!hexColor.trim()) return
 
         if (!isValidHexColor(hexColor)) {
@@ -228,35 +321,10 @@ export default function ServerRoles() {
         }
 
         const formattedColor = formatHexColor(hexColor)
-        await updateRoleColor(role, formattedColor)
+        updateLocalRoleProperty('color', formattedColor)
     }
 
-    const updateRolePermissions = async (role: ExtendedRole, newPermissions: number) => {
-        if (!activeServerId || !canManageRoles || role.isDefault) return
 
-        setIsUpdating(true)
-        try {
-            const success = await subspaceActions.servers.updateRole(activeServerId, {
-                roleId: role.roleId.toString(),
-                permissions: newPermissions
-            })
-
-            if (success) {
-                toast.success("Role permissions updated!")
-                // Update local state
-                if (selectedRole?.roleId === role.roleId) {
-                    setSelectedRole({ ...selectedRole, permissions: newPermissions })
-                }
-            } else {
-                toast.error("Failed to update role permissions")
-            }
-        } catch (error) {
-            console.error("Error updating role permissions:", error)
-            toast.error("Failed to update role permissions")
-        } finally {
-            setIsUpdating(false)
-        }
-    }
 
     const deleteRole = async (roleId: string) => {
         if (!activeServerId || !canManageRoles) {
@@ -295,14 +363,14 @@ export default function ServerRoles() {
     const togglePermission = (permission: number) => {
         if (!selectedRole || !canManageRoles || selectedRole.isDefault) return
 
-        const currentPermissions = selectedRole.permissions || 0
+        const currentPermissions = editedRole.permissions ?? selectedRole.permissions ?? 0
         const hasPermission = PermissionHelpers.hasPermission(currentPermissions, permission)
 
         const newPermissions = hasPermission
             ? PermissionHelpers.removePermission(currentPermissions, permission)
             : PermissionHelpers.addPermission(currentPermissions, permission)
 
-        updateRolePermissions(selectedRole, newPermissions)
+        updateLocalRoleProperty('permissions', newPermissions)
     }
 
     const getRoleIcon = (role: ExtendedRole) => {
@@ -313,23 +381,134 @@ export default function ServerRoles() {
         return Settings2
     }
 
+    // Drag and drop handlers
+    const handleDragStart = (event: DragStartEvent) => {
+        const dragId = event.active.id as string
+        setActiveId(dragId)
+        setIsDragging(true)
+        setDragOverId(null)
+    }
+
+    const handleDragOver = (event: DragOverEvent) => {
+        const { active, over } = event
+
+        if (!over) {
+            setDragOverId(null)
+            setDragDirection(null)
+            return
+        }
+
+        const activeIdStr = active.id as string
+        const overIdStr = over.id as string
+
+        setDragOverId(overIdStr)
+
+        // Calculate drag direction for better visual feedback
+        if (activeIdStr.startsWith('role-') && overIdStr.startsWith('role-')) {
+            const activeRoleId = activeIdStr.replace('role-', '')
+            const overRoleId = overIdStr.replace('role-', '')
+
+            const activeIndex = roles.findIndex(role => role.roleId.toString() === activeRoleId)
+            const overIndex = roles.findIndex(role => role.roleId.toString() === overRoleId)
+
+            if (activeIndex !== -1 && overIndex !== -1) {
+                setDragDirection(activeIndex > overIndex ? 'up' : 'down')
+            }
+        }
+    }
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        try {
+            const { active, over } = event
+            setActiveId(null)
+            setIsDragging(false)
+            setDragOverId(null)
+            setDragDirection(null)
+
+            if (!over || active.id === over.id) {
+                return
+            }
+
+            const activeIdStr = active.id as string
+            const overIdStr = over.id as string
+
+            // Handle role reordering
+            if (activeIdStr.startsWith('role-') && overIdStr.startsWith('role-')) {
+                const activeRoleId = activeIdStr.replace('role-', '')
+                const overRoleId = overIdStr.replace('role-', '')
+
+                // Convert string IDs to match the type used in roles array
+                const activeIndex = roles.findIndex(role => role.roleId.toString() === activeRoleId)
+                const overIndex = roles.findIndex(role => role.roleId.toString() === overRoleId)
+
+                if (activeIndex !== -1 && overIndex !== -1) {
+                    const activeRole = roles[activeIndex]
+                    const overRole = roles[overIndex]
+
+                    // Calculate the new order position for the moved role
+                    // We want to insert the active role at the position of the over role
+                    const newOrderId = overRole.orderId || overRole.position || (overIndex + 1)
+
+                    try {
+                        // Show visual indicator
+                        setUpdatingRoleId(activeRole.roleId.toString())
+
+                        // Use the proper SDK reorderRole method
+                        const success = await subspaceActions.servers.reorderRole(
+                            activeServerId,
+                            activeRole.roleId.toString(),
+                            newOrderId
+                        )
+
+                        if (success) {
+                            toast.success(`${activeRole.name} moved ${dragDirection || 'successfully'}!`, {
+                                duration: 2000,
+                                style: {
+                                    background: 'hsl(var(--primary) / 0.1)',
+                                    borderColor: 'hsl(var(--primary) / 0.3)'
+                                }
+                            })
+
+                            // Show temporary success indicator
+                            setLastSuccessfulReorder(activeRole.roleId.toString())
+                            setTimeout(() => setLastSuccessfulReorder(null), 2000)
+                        } else {
+                            throw new Error("Server returned false")
+                        }
+                    } catch (error) {
+                        console.error("Failed to update role position:", error)
+                        toast.error("Failed to update role position")
+                    } finally {
+                        // Clear visual indicator
+                        setUpdatingRoleId(null)
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('ERROR in handleDragEnd:', error)
+            toast.error("An error occurred during role reordering")
+        } finally {
+            // Ensure visual indicator is cleared
+            setUpdatingRoleId(null)
+        }
+    }
+
     if (!server) {
         return (
-            <div className="p-6 space-y-6">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
+            <div className="flex items-center justify-center min-h-[600px] relative">
+                {/* Background decoration */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.03)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.03)_0%,transparent_50%)] pointer-events-none" />
 
-                <div className="relative z-10 max-w-2xl mx-auto">
-                    <div className="text-center space-y-6">
-                        <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center border border-primary/30">
-                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold font-freecam text-primary tracking-wide">LOADING SERVER</h1>
-                            <p className="text-primary/80 font-ocr mt-2">
-                                Please wait while we load the server data...
-                            </p>
-                        </div>
+                <div className="text-center space-y-4 relative z-10">
+                    <div className="w-12 h-12 mx-auto bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
+                        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    </div>
+                    <div>
+                        <h3 className="font-freecam text-sm uppercase tracking-wide text-primary">Loading Server</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Fetching role data...
+                        </p>
                     </div>
                 </div>
             </div>
@@ -338,21 +517,20 @@ export default function ServerRoles() {
 
     if (!canManageRoles) {
         return (
-            <div className="p-6 space-y-6">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
+            <div className="flex items-center justify-center min-h-[600px] relative">
+                {/* Background decoration */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(red/0.02)_0%,transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(red/0.02)_0%,transparent_50%)] pointer-events-none" />
 
-                <div className="relative z-10 max-w-2xl mx-auto">
-                    <div className="text-center space-y-6">
-                        <div className="w-16 h-16 mx-auto bg-orange-500/10 rounded-full flex items-center justify-center border border-orange-500/30">
-                            <X className="w-8 h-8 text-orange-500" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold font-freecam text-orange-500 tracking-wide">ACCESS DENIED</h1>
-                            <p className="text-orange-500/80 font-ocr mt-2">
-                                You don't have permission to manage server roles.
-                            </p>
-                        </div>
+                <div className="text-center space-y-4 relative z-10">
+                    <div className="w-12 h-12 mx-auto bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20">
+                        <X className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div>
+                        <h3 className="font-freecam text-sm uppercase tracking-wide text-red-500">Access Denied</h3>
+                        <p className="text-xs text-red-500/80 mt-1">
+                            You don't have permission to manage roles
+                        </p>
                     </div>
                 </div>
             </div>
@@ -371,52 +549,126 @@ export default function ServerRoles() {
     }, [])
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="p-6 flex flex-col items-center justify-center w-full h-full relative">
             {/* Background decoration */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.02)_0%,transparent_50%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(var(--primary)/0.01)_0%,transparent_50%)] pointer-events-none" />
 
-            <div className="relative z-10 max-w-6xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex justify-between items-center">
-                    <p className="text-sm text-primary/60 font-ocr">
-                        Members use the color of the highest role they have on this list. Drag roles to reorder them.
-                    </p>
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                modifiers={[restrictToVerticalAxis]}
+            >
+                <DragOverlay>
+                    {activeId ? (
+                        <div className="bg-card border rounded-lg p-4 shadow-lg border-primary/30 opacity-80">
+                            {(() => {
+                                const roleId = activeId.replace('role-', '')
+                                const role = roles.find(r => r.roleId === roleId)
+                                const Icon = role ? getRoleIcon(role) : Settings2
+
+                                return (
+                                    <div className="flex items-center gap-4">
+                                        <GripVertical className="w-4 h-4 text-muted-foreground" />
+                                        <div
+                                            className="w-6 h-6 rounded-full border border-white/20"
+                                            style={{ backgroundColor: role?.color || "#99AAB5" }}
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Icon className="w-4 h-4 text-primary/50" />
+                                            <span className="font-semibold text-foreground text-sm">
+                                                {role?.name || 'Unknown Role'}
+                                            </span>
+                                            {role?.isDefault && (
+                                                <Badge variant="outline" className="text-xs">
+                                                    Default
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <Badge variant="secondary" className="text-xs">
+                                            {role?.memberCount || 0} members
+                                        </Badge>
+                                    </div>
+                                )
+                            })()}
+                        </div>
+                    ) : null}
+                </DragOverlay>
+
+                <div className="relative z-10 flex flex-col h-full space-y-6 max-h-[95vh] w-full ">
+                    {/* Header */}
+                    <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative z-10">
+                        {/* Card glow effect */}
+                        <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
+
+                        <CardHeader className="pb-4 relative z-10">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
+                                        <Shield className="w-4 h-4 text-primary/40" />
+                                        Role Management
+                                    </CardTitle>
+                                    <p className="text-xs text-primary/50 mt-1">
+                                        {roles.length} roles • Hover and drag <GripVertical className="w-3 h-3 inline mx-1" /> to reorder • Members use highest role color
+                                    </p>
+                                </div>
+                                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-xs border-primary/20 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200"
+                                        >
+                                            <Plus className="w-3 h-3 mr-1" />
+                                            New Role
+                                        </Button>
+                                    </DialogTrigger>
+                                </Dialog>
+                            </div>
+                        </CardHeader>
+                    </Card>
+
+                    {/* Create Role Dialog */}
                     <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="font-freecam tracking-wide">
-                                <Plus className="w-4 h-4 mr-2" />
-                                CREATE ROLE
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="border-primary/20 bg-background/95 backdrop-blur-sm">
+                        <DialogContent className="border-primary/30 bg-card/95 backdrop-blur-sm">
                             <DialogHeader>
-                                <DialogTitle className="font-freecam text-primary tracking-wide">CREATE NEW ROLE</DialogTitle>
+                                <DialogTitle className="font-freecam text-sm uppercase tracking-wide text-primary">
+                                    Create Role
+                                </DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4">
                                 <div>
-                                    <Label htmlFor="role-name" className="font-ocr text-primary">Role Name</Label>
+                                    <Label htmlFor="role-name" className="text-xs text-primary/80">Role Name</Label>
                                     <Input
                                         id="role-name"
                                         value={newRoleName}
                                         onChange={(e) => setNewRoleName(e.target.value)}
                                         placeholder="Enter role name"
-                                        className="font-ocr bg-background/80 border-primary/30 focus:border-primary focus:ring-primary/20"
+                                        className="text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50"
                                         maxLength={50}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newRoleName.trim()) {
+                                                createRole()
+                                            }
+                                        }}
+                                        disabled={isCreating}
                                     />
-                                    <p className="text-xs text-primary/60 mt-1 font-ocr">
+                                    <p className="text-xs text-primary/60 mt-1">
                                         {newRoleName.length}/50 characters
                                     </p>
                                 </div>
-                                <div className="space-y-4">
+                                <div className="space-y-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
                                     <div>
-                                        <Label className="font-ocr text-primary">Preset Colors</Label>
+                                        <Label className="text-xs text-primary/80">Preset Colors</Label>
                                         <div className="grid grid-cols-5 gap-2 mt-2">
                                             {roleColors.map((color) => (
                                                 <button
                                                     key={color}
                                                     className={cn(
-                                                        "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110",
+                                                        "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
                                                         newRoleColor === color && !newRoleHexColor
                                                             ? "border-primary ring-2 ring-primary/50 scale-105"
                                                             : "border-primary/30 hover:border-primary/60"
@@ -433,7 +685,7 @@ export default function ServerRoles() {
                                     </div>
 
                                     <div>
-                                        <Label className="font-ocr text-primary">Custom Hex Color</Label>
+                                        <Label className="text-xs text-primary/80">Custom Hex Color</Label>
                                         <div className="flex gap-2 mt-2">
                                             <Input
                                                 value={newRoleHexColor}
@@ -444,11 +696,11 @@ export default function ServerRoles() {
                                                     }
                                                 }}
                                                 placeholder="#FF5733"
-                                                className="font-mono text-sm bg-background/80 border-primary/30 focus:border-primary focus:ring-primary/20"
+                                                className="font-mono text-sm border-primary/30 focus:border-primary/50 bg-background/50"
                                                 disabled={isCreating}
                                             />
                                             <div
-                                                className="w-10 h-10 rounded border-2 border-primary/30 flex-shrink-0"
+                                                className="w-8 h-8 rounded border-2 border-primary/30 flex-shrink-0 shadow-sm"
                                                 style={{
                                                     backgroundColor: newRoleHexColor && isValidHexColor(newRoleHexColor)
                                                         ? formatHexColor(newRoleHexColor)
@@ -456,16 +708,21 @@ export default function ServerRoles() {
                                                 }}
                                             />
                                         </div>
-                                        <p className="text-xs text-primary/60 mt-1 font-ocr">
+                                        <p className="text-xs text-primary/60 mt-1">
                                             Enter a hex color (e.g., #FF5733 or #F73)
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex justify-end gap-2">
+                                <div className="flex justify-end gap-2 pt-2">
                                     <Button
                                         variant="outline"
-                                        onClick={() => setIsCreateDialogOpen(false)}
-                                        className="font-ocr border-primary/30 hover:border-primary text-primary hover:bg-primary/10"
+                                        onClick={() => {
+                                            setIsCreateDialogOpen(false)
+                                            setNewRoleName("")
+                                            setNewRoleColor(roleColors[0])
+                                            setNewRoleHexColor("")
+                                        }}
+                                        className="text-xs border-primary/30 hover:border-primary/50"
                                         disabled={isCreating}
                                     >
                                         Cancel
@@ -473,11 +730,11 @@ export default function ServerRoles() {
                                     <Button
                                         onClick={createRole}
                                         disabled={!newRoleName.trim() || isCreating || (!newRoleColor && (!newRoleHexColor || !isValidHexColor(newRoleHexColor)))}
-                                        className="font-ocr"
+                                        className="text-xs bg-primary hover:bg-primary/90 text-black"
                                     >
                                         {isCreating ? (
                                             <>
-                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                                                 Creating...
                                             </>
                                         ) : (
@@ -488,118 +745,153 @@ export default function ServerRoles() {
                             </div>
                         </DialogContent>
                     </Dialog>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Role List */}
-                    <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
-                        {/* Card glow effect */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
+                        {/* Role List */}
+                        <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative z-10 flex flex-col overflow-scroll">
+                            {/* Card glow effect */}
+                            <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
 
-                        <CardHeader className="relative z-10 pb-3">
-                            <CardTitle className="font-freecam text-primary tracking-wide">ROLES - {roles.length}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="relative z-10">
-                            <ScrollArea className="h-[500px]">
-                                <div className="space-y-2 pr-4">
-                                    {roles.map((role) => {
-                                        const Icon = getRoleIcon(role)
-                                        const isSelected = selectedRole?.roleId === role.roleId
-                                        const isDeletingThis = isDeleting === role.roleId
-
-                                        return (
-                                            <div
+                            <CardHeader className="relative z-10 pb-4 flex-shrink-0">
+                                <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-primary/40" />
+                                    Server Roles
+                                </CardTitle>
+                                <p className="text-xs text-primary/50 mt-1">
+                                    {roles.length} total roles • Click to configure
+                                </p>
+                            </CardHeader>
+                            <CardContent className="relative z-10 flex-1 min-h-0 p-0">
+                                <SortableContext
+                                    items={roles.map(role => `role-${role.roleId}`)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="space-y-2 py-1 px-8">
+                                        {roles.map((role) => (
+                                            <SortableRole
                                                 key={role.roleId}
-                                                className={cn(
-                                                    "flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all group",
-                                                    isSelected
-                                                        ? "border-primary bg-primary/10 ring-1 ring-primary/20"
-                                                        : "border-primary/20 hover:border-primary/40 hover:bg-primary/5"
+                                                role={role}
+                                                isSelected={selectedRole?.roleId === role.roleId}
+                                                isDeletingThis={isDeleting === role.roleId}
+                                                isUpdating={updatingRoleId === role.roleId.toString()}
+                                                isRecentlySuccessful={lastSuccessfulReorder === role.roleId.toString()}
+                                                onSelect={setSelectedRole}
+                                                onDelete={deleteRole}
+                                                getRoleIcon={getRoleIcon}
+                                                dragOverId={dragOverId}
+                                                dragDirection={dragDirection}
+                                            />
+                                        ))}
+                                    </div>
+                                </SortableContext>
+                            </CardContent>
+                        </Card>
+
+                        {/* Role Permissions */}
+                        <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative z-10 flex flex-col overflow-scroll">
+                            {/* Card glow effect */}
+                            <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
+
+                            <CardHeader className="relative z-10 pb-4 flex-shrink-0">
+                                <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
+                                    <Settings className="w-4 h-4 text-primary/40" />
+                                    {selectedRole ? `${selectedRole.name} Settings` : "Role Configuration"}
+                                </CardTitle>
+                                <p className="text-xs text-primary/50 mt-1">
+                                    {selectedRole ? "Permissions and appearance settings" : "Select a role to configure"}
+                                </p>
+                            </CardHeader>
+                            <CardContent className="relative z-10 flex-1 min-h-0">
+                                {selectedRole ? (
+                                    <div className="space-y-4 pb-4">
+                                        {/* Role Name and Save/Discard Buttons */}
+                                        {!selectedRole.isDefault && (
+                                            <div className="space-y-3 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                                                <div className="flex items-center justify-between">
+                                                    <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                        Role Settings
+                                                    </h3>
+                                                    {hasUnsavedChanges && (
+                                                        <div className="flex items-center gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={discardRoleChanges}
+                                                                disabled={isUpdating}
+                                                                className="text-xs h-7"
+                                                            >
+                                                                Discard
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={saveRoleChanges}
+                                                                disabled={isUpdating}
+                                                                className="text-xs h-7 bg-primary hover:bg-primary/90 text-black"
+                                                            >
+                                                                {isUpdating ? (
+                                                                    <>
+                                                                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                                                        Saving...
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Save className="w-3 h-3 mr-1" />
+                                                                        Save Changes
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <Label className="text-xs text-primary/80">Role Name</Label>
+                                                        <Input
+                                                            value={editedRole.name ?? selectedRole.name}
+                                                            onChange={(e) => updateLocalRoleProperty('name', e.target.value)}
+                                                            placeholder="Enter role name"
+                                                            className="text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50"
+                                                            maxLength={50}
+                                                            disabled={isUpdating}
+                                                        />
+                                                        <p className="text-xs text-primary/60 mt-1">
+                                                            {(editedRole.name ?? selectedRole.name).length}/50 characters
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {hasUnsavedChanges && (
+                                                    <div className="text-xs text-amber-600 bg-amber-50/10 border border-amber-200/50 rounded p-2 flex items-center gap-2">
+                                                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                                                        You have unsaved changes
+                                                    </div>
                                                 )}
-                                                onClick={() => setSelectedRole(role)}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <GripVertical className="w-4 h-4 text-primary/40 cursor-grab opacity-0 group-hover:opacity-100 hover:text-primary/60" />
-                                                    <div
-                                                        className="w-4 h-4 rounded-full ring-1 ring-black/20"
-                                                        style={{ backgroundColor: role.color || "#99AAB5" }}
-                                                    />
-                                                    <Icon className="w-4 h-4 text-primary/60" />
-                                                    <span className="font-ocr font-medium text-foreground">{role.name}</span>
-                                                    {role.isDefault && (
-                                                        <Badge variant="secondary" className="text-xs font-ocr bg-blue-500/10 text-blue-500 border-blue-500/30">
-                                                            default
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Badge variant="secondary" className="text-xs font-ocr bg-primary/10 text-primary border-primary/30">
-                                                        {role.memberCount || 0} {(role.memberCount || 0) === 1 ? 'member' : 'members'}
-                                                    </Badge>
-                                                    {!role.isDefault && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                deleteRole(role.roleId)
-                                                            }}
-                                                            className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-500 hover:bg-red-500/10"
-                                                            disabled={isDeletingThis}
-                                                        >
-                                                            {isDeletingThis ? (
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                            ) : (
-                                                                <Trash2 className="w-4 h-4" />
-                                                            )}
-                                                        </Button>
-                                                    )}
-                                                </div>
                                             </div>
-                                        )
-                                    })}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Role Permissions */}
-                    <Card className="border-primary/30 shadow-lg backdrop-blur-sm relative">
-                        {/* Card glow effect */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
-
-                        <CardHeader className="relative z-10 pb-3">
-                            <CardTitle className="font-freecam text-primary tracking-wide">
-                                {selectedRole ? `${selectedRole.name.toUpperCase()} PERMISSIONS` : "SELECT A ROLE"}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="relative z-10">
-                            {selectedRole ? (
-                                <ScrollArea className="h-[500px]">
-                                    <div className="space-y-4 pr-4">
+                                        )}
                                         {selectedRole.isDefault ? (
                                             <div className="space-y-4">
                                                 <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                                                    <p className="text-sm text-blue-500 font-ocr text-center mb-4">
+                                                    <p className="text-sm text-blue-500 text-center mb-4">
                                                         The @everyone role permissions cannot be modified, but you can change its color.
                                                         This role is automatically assigned to all server members.
                                                     </p>
 
                                                     <div className="space-y-4">
                                                         <div>
-                                                            <Label className="font-ocr text-primary">Preset Colors</Label>
+                                                            <Label className="text-primary">Preset Colors</Label>
                                                             <div className="grid grid-cols-5 gap-2 mt-2">
                                                                 {roleColors.map((color) => (
                                                                     <button
                                                                         key={color}
                                                                         className={cn(
                                                                             "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110",
-                                                                            (selectedRole.color || "#99AAB5") === color
+                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
                                                                                 ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                 : "border-primary/30 hover:border-primary/60"
                                                                         )}
                                                                         style={{ backgroundColor: color }}
-                                                                        onClick={() => updateRoleColor(selectedRole, color)}
+                                                                        onClick={() => updateLocalRoleProperty('color', color)}
                                                                         disabled={isUpdating}
                                                                     />
                                                                 ))}
@@ -633,7 +925,7 @@ export default function ServerRoles() {
                                                                 </div>
                                                                 <div
                                                                     className="w-10 h-10 rounded border-2 border-primary/30"
-                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : "#99AAB5" }}
+                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? "#99AAB5") }}
                                                                 />
                                                             </div>
                                                             <p className="text-xs text-primary/60 mt-1 font-ocr">
@@ -652,10 +944,10 @@ export default function ServerRoles() {
 
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
-                                                        <h3 className="text-sm font-freecam font-medium text-primary/60 uppercase tracking-wider">
+                                                        <h3 className="text-xs font-freecam font-medium text-primary/60 uppercase tracking-wider">
                                                             Default Permissions (Read-Only)
                                                         </h3>
-                                                        <Separator className="flex-1" />
+                                                        <Separator className="flex-1 bg-primary/20" />
                                                     </div>
                                                     <div className="space-y-2">
                                                         {(PermissionDefinitions.filter(perm =>
@@ -687,10 +979,10 @@ export default function ServerRoles() {
                                                 {/* Color Management Section for Regular Roles */}
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
-                                                        <h3 className="text-sm font-freecam font-medium text-primary uppercase tracking-wider">
+                                                        <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
                                                             Role Color
                                                         </h3>
-                                                        <Separator className="flex-1" />
+                                                        <Separator className="flex-1 bg-primary/20" />
                                                     </div>
 
                                                     <div className="space-y-4">
@@ -702,12 +994,12 @@ export default function ServerRoles() {
                                                                         key={color}
                                                                         className={cn(
                                                                             "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110",
-                                                                            (selectedRole.color || "#99AAB5") === color
+                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
                                                                                 ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                 : "border-primary/30 hover:border-primary/60"
                                                                         )}
                                                                         style={{ backgroundColor: color }}
-                                                                        onClick={() => updateRoleColor(selectedRole, color)}
+                                                                        onClick={() => updateLocalRoleProperty('color', color)}
                                                                         disabled={isUpdating}
                                                                     />
                                                                 ))}
@@ -741,7 +1033,7 @@ export default function ServerRoles() {
                                                                 </div>
                                                                 <div
                                                                     className="w-8 h-8 rounded border-2 border-primary/30"
-                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (selectedRole.color || "#99AAB5") }}
+                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? "#99AAB5") }}
                                                                 />
                                                             </div>
                                                             <p className="text-xs text-primary/60 mt-1 font-ocr">
@@ -762,19 +1054,20 @@ export default function ServerRoles() {
                                                 {Object.entries(permissionsByCategory).map(([category, permissions]) => (
                                                     <div key={category} className="space-y-3">
                                                         <div className="flex items-center gap-2">
-                                                            <h3 className="text-sm font-freecam font-medium text-primary uppercase tracking-wider">
+                                                            <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
                                                                 {category} Permissions
                                                             </h3>
-                                                            <Separator className="flex-1" />
+                                                            <Separator className="flex-1 bg-primary/20" />
                                                         </div>
                                                         <div className="space-y-2">
                                                             {permissions.map((permission) => {
+                                                                const currentPermissions = editedRole.permissions ?? selectedRole.permissions ?? 0
                                                                 const hasPermission = PermissionHelpers.hasPermission(
-                                                                    selectedRole.permissions || 0,
+                                                                    currentPermissions,
                                                                     permission.value
                                                                 )
                                                                 const isAdminOverride = PermissionHelpers.hasPermission(
-                                                                    selectedRole.permissions || 0,
+                                                                    currentPermissions,
                                                                     Permissions.ADMINISTRATOR
                                                                 ) && permission.value !== Permissions.ADMINISTRATOR
 
@@ -813,15 +1106,173 @@ export default function ServerRoles() {
                                             </>
                                         )}
                                     </div>
-                                </ScrollArea>
-                            ) : (
-                                <div className="text-center py-8 text-primary/60 font-ocr">
-                                    Select a role to view and edit its permissions
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                ) : (
+                                    <div className="flex-1 flex items-center justify-center">
+                                        <div className="text-center space-y-3">
+                                            <Settings className="w-8 h-8 mx-auto text-primary/30" />
+                                            <div>
+                                                <h4 className="font-freecam text-xs uppercase tracking-wide text-primary/60">
+                                                    No Role Selected
+                                                </h4>
+                                                <p className="text-xs text-primary/40 font-ocr mt-1">
+                                                    Click a role to configure permissions
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
+            </DndContext>
+        </div>
+    )
+}
+
+// Sortable Role Component
+function SortableRole({
+    role,
+    isSelected,
+    isDeletingThis,
+    isUpdating,
+    isRecentlySuccessful,
+    onSelect,
+    onDelete,
+    getRoleIcon,
+    dragOverId,
+    dragDirection
+}: {
+    role: ExtendedRole
+    isSelected: boolean
+    isDeletingThis: boolean
+    isUpdating: boolean
+    isRecentlySuccessful: boolean
+    onSelect: (role: ExtendedRole) => void
+    onDelete: (roleId: string) => void
+    getRoleIcon: (role: ExtendedRole) => React.ComponentType<any>
+    dragOverId?: string | null
+    dragDirection?: 'up' | 'down' | null
+}) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: `role-${role.roleId}` })
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition: isDragging ? transition : 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
+        opacity: isDragging ? 0.5 : isUpdating ? 0.7 : 1,
+    }
+
+    const Icon = getRoleIcon(role)
+    const isDraggedOver = dragOverId === `role-${role.roleId}`
+    const isDropZone = isDraggedOver && !isDragging
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={cn(
+                "flex items-center relative justify-between p-4 rounded-lg border cursor-pointer transition-all duration-200 group hover:shadow-sm",
+                isUpdating
+                    ? "border-blue-400/50 bg-blue-500/5"
+                    : isRecentlySuccessful
+                        ? "border-green-400/50 bg-green-500/5"
+                        : isSelected
+                            ? "border-primary/40 bg-primary/5 shadow-sm"
+                            : isDropZone
+                                ? "border-primary/30 bg-primary/5"
+                                : "border-border hover:border-primary/30 hover:bg-accent/30"
+            )}
+            onClick={() => onSelect(role)}
+        >
+            {/* Drop zone indicator */}
+            {isDropZone && (
+                <div className={cn(
+                    "absolute left-4 right-4 h-0.5 bg-primary transition-all duration-200",
+                    dragDirection === 'up' ? 'top-0' : 'bottom-0'
+                )} />
+            )}
+
+            <div className="flex items-center gap-4">
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className={cn(
+                        "cursor-grab active:cursor-grabbing transition-opacity duration-200 flex items-center justify-center w-6 h-6 rounded",
+                        isUpdating || isRecentlySuccessful
+                            ? "opacity-60"
+                            : "opacity-0 group-hover:opacity-100"
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <GripVertical className="w-4 h-4 text-muted-foreground" />
+                </div>
+
+                {/* Role Color Indicator */}
+                <div className="relative">
+                    <div
+                        className="w-6 h-6 rounded-full border border-white/20"
+                        style={{ backgroundColor: role.color || "#99AAB5" }}
+                    />
+                    {role.isDefault && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border border-background flex items-center justify-center">
+                            <div className="w-1 h-1 bg-white rounded-full" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Role Info Section */}
+                <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-primary/50" />
+                        <span className="font-semibold text-foreground text-sm">{role.name}</span>
+                        {isUpdating && (
+                            <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
+                        )}
+                        {isRecentlySuccessful && !isUpdating && (
+                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                        )}
+                        {role.isDefault && (
+                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500/60 border-blue-500/20 px-2 py-0.5">
+                                Default
+                            </Badge>
+                        )}
+                    </div>
+                </div>
+
+                {/* Member Count Badge */}
+                <Badge variant="secondary" className="text-xs">
+                    {role.memberCount || 0} {(role.memberCount || 0) === 1 ? 'member' : 'members'}
+                </Badge>
+            </div>
+
+            {/* Right Side Actions */}
+            <div className="flex items-center gap-3">
+                {/* Delete Button */}
+                {!role.isDefault && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onDelete(role.roleId)
+                        }}
+                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-500 hover:scale-110 transition-all duration-200 rounded-lg"
+                        disabled={isDeletingThis}
+                    >
+                        {isDeletingThis ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Trash2 className="w-4 h-4" />
+                        )}
+                    </Button>
+                )}
             </div>
         </div>
     )
