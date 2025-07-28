@@ -2,7 +2,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, User, Sparkles, Check } from "lucide-react"
+import { Loader2, User, Sparkles, Check, X } from "lucide-react"
 import alien from "@/assets/subspace/alien-green.svg"
 import { useState, useEffect } from "react"
 import { useSubspace } from "@/hooks/use-subspace"
@@ -92,17 +92,37 @@ export default function NicknameSettingDialog({
         }, 300)
     }
 
+    const handleDialogClose = (open: boolean) => {
+        // If dialog is being closed (open = false), treat it as skip
+        if (!open) {
+            handleSkip()
+        }
+    }
+
     const handleInputKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter" && !isSaving) {
             handleSetNickname()
+        } else if (e.key === "Escape" && !isSaving) {
+            handleSkip()
         }
     }
 
     if (!isOpen || !serverId) return null
 
     return (
-        <Dialog open={true} onOpenChange={() => { }}>
-            <DialogContent className="max-w-md w-[95vw] p-6 outline-0 overflow-hidden flex flex-col bg-background border border-primary/30 shadow-2xl">
+        <Dialog open={true} onOpenChange={handleDialogClose}>
+            <DialogContent removeCloseButton className="max-w-md w-[95vw] p-6 outline-0 overflow-hidden flex flex-col bg-background border border-primary/30 shadow-2xl">
+                {/* Close button */}
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSkip}
+                    disabled={isSaving || isSkipping}
+                    className="absolute right-4 top-4 h-8 w-8 p-0 text-primary/60 hover:text-primary hover:bg-primary/10"
+                >
+                    <X className="h-4 w-4" />
+                </Button>
+
                 <div className="flex flex-col items-center justify-center py-4 gap-6">
                     <div className="relative">
                         <div className="w-20 h-20 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center border-2 border-primary/30">

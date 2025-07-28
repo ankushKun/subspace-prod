@@ -7,12 +7,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
-import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock, Save } from "lucide-react"
+import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock, Save, ChevronDown, ChevronUp } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useState, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import alien from "@/assets/subspace/alien-black.svg"
+import { Constants } from "@/lib/constants"
+import ProfileBadge from "@/components/profile-badge"
+
+const MAX_VISIBLE_BADGES = 10
 
 export default function ProfilePopover({
     userId,
@@ -40,6 +45,9 @@ export default function ProfilePopover({
     const [editedNickname, setEditedNickname] = useState("")
     const [isSavingNickname, setIsSavingNickname] = useState(false)
 
+    // Badge expansion state
+    const [showAllBadges, setShowAllBadges] = useState(false)
+
     const server = activeServerId ? servers[activeServerId] : null
     const profile = profiles[userId]
     const isCurrentUser = address === userId
@@ -52,6 +60,34 @@ export default function ProfilePopover({
 
     // Get display name following priority order
     const displayName = nickname || profile?.primaryName || shortenAddress(userId)
+
+    // Create badges array based on user profile
+    const allBadges = useMemo(() => {
+        const badges = []
+
+        // Add ArNS badge if user has primary name
+        if (profile?.primaryName) {
+            badges.push({
+                logo: Constants.Icons.ArnsLogo,
+                hoverText: "ArNS",
+                link: "https://arns.ar.io"
+            })
+        }
+
+        // Add Wander Tier badge
+        if (profile?.wndrTier) {
+            badges.push({
+                logo: Constants.WanderTiers[profile.wndrTier.tier]?.Icon,
+                hoverText: `${Constants.WanderTiers[profile.wndrTier.tier]?.Label} Tier`,
+                link: "https://www.wander.app/wndr"
+            })
+        }
+
+        return badges
+    }, [profile])
+
+    const visibleBadges = showAllBadges ? allBadges : allBadges.slice(0, MAX_VISIBLE_BADGES)
+    const hasMoreBadges = allBadges.length > MAX_VISIBLE_BADGES
 
     // Initialize nickname editing when starting to edit
     const handleStartEditingNickname = () => {
@@ -321,26 +357,25 @@ export default function ProfilePopover({
             </PopoverTrigger>
             <PopoverContent className="w-80 p-0 shadow-md bg-background border border-primary/30 font-ocr" side={side} align={align}>
                 {profile ? (
-                    <div className="relative overflow-hidden rounded-md">
-                        {/* Header with gradient background */}
-                        <div className="h-16 bg-gradient-to-r from-primary/30 via-primary/20 to-primary/30 relative">
-                            <div className="absolute inset-0 bg-background/10"></div>
-                            {/* Refresh indicator */}
-                            <div className="absolute top-2 right-2">
-                                <div className="w-6 h-6 rounded-full bg-background/20 backdrop-blur-sm flex items-center justify-center">
-                                    {isRefreshing ? (
-                                        <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                                    ) : null}
-                                </div>
+                    <div className="relative overflow-hidden rounded-md bg-gradient-to-b from-primary/10 via-primary/0 to-primary/0">
+                        <div className="absolute top-2 right-2">
+                            <div className="w-6 h-6 rounded-full bg-background/20 backdrop-blur-sm flex items-center justify-center">
+                                {isRefreshing ? (
+                                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                ) : null}
                             </div>
                         </div>
+                        {/* Header with gradient background */}
+                        {/* <div className="h-22 bg-gradient-to-br from-primary/20 via-primary/5 to-primary/0 relative">
+                            <div className="absolute inset-0 bg-background/10"></div>
+                        </div> */}
 
                         {/* Profile content */}
-                        <div className="px-4 pb-4 -mt-8 relative">
+                        <div className="px-4 pb-4 mt-3.5 relative">
                             {/* Avatar with border */}
-                            <div className="relative mb-3">
+                            <div className="relative mb-3 flex items-start gap-2 max-w-full">
                                 <div className={cn(
-                                    "w-16 h-16 rounded-sm overflow-hidden border-4 border-background shadow-lg flex items-center justify-center",
+                                    "w-16 h-16 min-w-16 rounded-sm overflow-clip border-2 border-background shadow-lg flex items-center justify-center",
                                     (profile.pfp || profile.primaryLogo) ? "bg-transparent" : "bg-primary/20"
                                 )}>
                                     {profile.pfp ? (
@@ -357,6 +392,57 @@ export default function ProfilePopover({
                                         />
                                     ) : (
                                         <img src={alien} alt="alien" className="w-8 h-8 opacity-60" />
+                                    )}
+                                </div>
+                                <div className="my-1.5 max-w-56 w-full">
+                                    {/* Profile badges section */}
+                                    <div className="flex flex-wrap gap-1 mb-1">
+                                        {visibleBadges.map((badge, index) => (
+                                            <ProfileBadge
+                                                key={index}
+                                                logo={badge.logo}
+                                                hoverText={badge.hoverText}
+                                                link={badge.link}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {/* Collapsible additional badges */}
+                                    {hasMoreBadges && (
+                                        <Collapsible open={showAllBadges} onOpenChange={setShowAllBadges}>
+                                            <CollapsibleContent className="space-y-2">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {allBadges.slice(5).map((badge, index) => (
+                                                        <ProfileBadge
+                                                            key={index + 5}
+                                                            logo={badge.logo}
+                                                            hoverText={badge.hoverText}
+                                                            link={badge.link}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </CollapsibleContent>
+
+                                            <CollapsibleTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-4 !px-0.5 !pl-1 mt-1 text-xs gap-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                                >
+                                                    {showAllBadges ? (
+                                                        <>
+                                                            <ChevronUp className="h-3 w-3" />
+                                                            Show less
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ChevronDown className="h-3 w-3" />
+                                                            Show {allBadges.length - MAX_VISIBLE_BADGES} more
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </CollapsibleTrigger>
+                                        </Collapsible>
                                     )}
                                 </div>
                             </div>
@@ -454,25 +540,25 @@ export default function ProfilePopover({
                                         <span className="text-xs font-medium text-primary/60 uppercase tracking-wide">
                                             User ID
                                         </span>
-                                        <Badge variant="secondary" className="font-mono text-xs bg-primary/10 text-primary border-primary/30 cursor-pointer">
+                                        <Badge variant="secondary" className="font-mono text-xs bg-primary/10 text-primary border-primary/30 cursor-pointer"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(userId)
+                                                toast.success("User ID copied to clipboard")
+                                                const copyIcon = document.getElementById(`copy-icon-${userId}`)
+                                                const checkIcon = document.getElementById(`check-icon-${userId}`)
+                                                if (copyIcon && checkIcon) {
+                                                    copyIcon.classList.add("hidden")
+                                                    checkIcon.classList.remove("hidden")
+                                                    setTimeout(() => {
+                                                        copyIcon.classList.remove("hidden")
+                                                        checkIcon.classList.add("hidden")
+                                                    }, 550)
+                                                }
+                                            }}>
                                             {shortenAddress(userId)}
                                             <Copy
                                                 id={`copy-icon-${userId}`}
                                                 className="w-3 h-3 ml-1 cursor-pointer"
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(userId)
-                                                    toast.success("User ID copied to clipboard")
-                                                    const copyIcon = document.getElementById(`copy-icon-${userId}`)
-                                                    const checkIcon = document.getElementById(`check-icon-${userId}`)
-                                                    if (copyIcon && checkIcon) {
-                                                        copyIcon.classList.add("hidden")
-                                                        checkIcon.classList.remove("hidden")
-                                                        setTimeout(() => {
-                                                            copyIcon.classList.remove("hidden")
-                                                            checkIcon.classList.add("hidden")
-                                                        }, 550)
-                                                    }
-                                                }}
                                             />
                                             <Check id={`check-icon-${userId}`} className="w-3 h-3 ml-1 hidden" />
                                         </Badge>

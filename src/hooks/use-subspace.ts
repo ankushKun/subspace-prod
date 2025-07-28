@@ -12,7 +12,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
 import { useWallet } from "./use-wallet";
 import { useGlobalState } from "./use-global-state";
-import { getPrimaryName } from "@/lib/utils";
+import { getPrimaryName, getWanderTierInfo, type WanderTierInfo } from "@/lib/utils";
 import { Constants as WebConstants } from "@/lib/constants";
 
 // Helper function to get CU URL from localStorage
@@ -26,7 +26,7 @@ export function setCuUrl(url: string): void {
     localStorage.setItem('subspace-cu-url', url);
 }
 
-type ExtendedProfile = Profile & { primaryName: string, primaryLogo: string }
+type ExtendedProfile = Profile & { primaryName: string, primaryLogo: string, wndrTier?: WanderTierInfo }
 
 interface CreateServerParams {
     name: string;
@@ -166,7 +166,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
                 try {
-                    let profile: Profile | null = null
+                    let profile: ExtendedProfile | null = null
 
                     // ✅ ADDED: Mark this profile as being loaded
                     const currentLoadingProfiles = new Set(get().loadingProfiles)
@@ -177,7 +177,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     })
 
                     try {
-                        profile = await subspace.user.getProfile(targetUserId)
+                        profile = await subspace.user.getProfile(targetUserId) as ExtendedProfile
                     } catch (e) {
                         // Only show creating profile dialog if this is our own profile
                         // and we don't already have a profile in the store
@@ -203,7 +203,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             try {
                                 // create their profile
                                 const profileId = await subspace.user.createProfile()
-                                profile = await subspace.user.getProfile(profileId)
+                                profile = await subspace.user.getProfile(profileId) as ExtendedProfile
 
                                 // If profile was created successfully, refresh the page
                                 if (profile) {
@@ -223,19 +223,35 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                     if (profile) {
                         const { primaryName, primaryLogo } = await getPrimaryName(profile.userId || userId)
-                        if (userId) { // means we are getting the profile for someone elses id
-                            set({ profiles: { ...get().profiles, [userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile } })
-                            return profile as ExtendedProfile // read only
+
+                        // ✅ FIXED: Fetch tier info for ALL users, not just current user
+                        try {
+                            const tierInfo = await getWanderTierInfo(profile.userId || userId)
+                            profile.wndrTier = tierInfo // Can be WanderTierInfo or null
+                        } catch (e) {
+                            console.error("Failed to get Wander tier info:", e)
+                            profile.wndrTier = null
                         }
-                        set({
-                            profile: { ...profile, primaryName, primaryLogo } as ExtendedProfile,
-                            profiles: { ...get().profiles, [profile.userId]: { ...profile, primaryName, primaryLogo } as ExtendedProfile }
-                        })
 
-                        // ✅ FIXED: Removed automatic server loading to break the loop
-                        // Servers will be loaded separately when needed (e.g., in server-list component)
+                        // Create enhanced profile with all data
+                        const enhancedProfile = {
+                            ...profile,
+                            primaryName,
+                            primaryLogo
+                        } as ExtendedProfile
 
-                        return profile as ExtendedProfile
+                        if (userId) {
+                            // For other users: update profiles cache and return
+                            set({ profiles: { ...get().profiles, [userId]: enhancedProfile } })
+                            return enhancedProfile
+                        } else {
+                            // For current user: update both profile and profiles cache
+                            set({
+                                profile: enhancedProfile,
+                                profiles: { ...get().profiles, [profile.userId]: enhancedProfile }
+                            })
+                            return enhancedProfile
+                        }
                     } else {
                         console.error("Failed to get profile")
                         set({ profile: null })

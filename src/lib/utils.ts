@@ -5,6 +5,7 @@ import { Constants } from "@/lib/constants"
 import type { JWKInterface } from "arweave/web/lib/wallet"
 import Arweave from "arweave"
 import { ArconnectSigner, ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
+import { dryrun } from "@permaweb/aoconnect"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -104,5 +105,50 @@ export async function uploadFileTurbo(file: File, jwk?: JWKInterface, customSign
     } catch (error) {
         console.error("Failed to upload file to Turbo:", error)
         return undefined
+    }
+}
+
+export type WanderTierInfo = {
+    balance: string;
+    progress: number;
+    rank: number;
+    snapshotTimestamp: number;
+    tier: number;
+    totalHolders: number;
+}
+
+export async function getWanderTierInfo(walletAddress: string): Promise<WanderTierInfo | null> {
+    try {
+        const dryrunRes = await dryrun({
+            Owner: walletAddress,
+            process: "rkAezEIgacJZ_dVuZHOKJR8WKpSDqLGfgPJrs_Es7CA",
+            tags: [{ name: "Action", value: "Get-Wallet-Info" }]
+        });
+
+        const message = dryrunRes.Messages?.[0];
+
+        if (!message?.Data) {
+            console.warn(`No message data returned for wallet: ${walletAddress}`);
+            return null;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(message.Data);
+        } catch (parseError) {
+            console.warn(`Failed to parse tier data for wallet: ${walletAddress}`, parseError);
+            return null;
+        }
+
+        if (data?.tier === undefined || data?.tier === null) {
+            console.warn(`No tier data found for wallet: ${walletAddress}`);
+            return null;
+        }
+
+        const tierInfo: WanderTierInfo = { ...data };
+        return tierInfo;
+    } catch (error) {
+        console.warn(`Failed to fetch tier info for wallet: ${walletAddress}`, error);
+        return null;
     }
 }

@@ -56,9 +56,17 @@ export class Constants {
         UploadFileTurbo: "Upload-File-Turbo",
     };
 
+    static readonly WanderTiers = {
+        1: { Icon: "kC43Lz81oB5TgV2q_ZltFsEsxCDsMlh4Qq4FTpfPk2Y", Label: "Prime" },
+        2: { Icon: "Yg5GsfEBo5QxcB8Ibs1rEOs_jdizSbhrIk-yzESKC2s", Label: "Edge" },
+        3: { Icon: "_3OAjbRwSnf99Mbko4Pgx00Z5SNjWUKO5fDRLrRqIm0", Label: "Reserve" },
+        4: { Icon: "hj-mPoYd1Uk8JR6pLI46pg7aAN4_rOdK0WnSGRR-zzI", Label: "Select" },
+        5: { Icon: "w1kEyfGsZgE1omIwtvtIXkOxGPaUrGmQRl_bjYmL0p8", Label: "Core" },
+    };
+
     static readonly Icons = {
         DefaultServerIcon: "yClwNR7Pa6yxyEr5jnSLBY943rcsMQzrt_iX5GveZXM",
-        ArnsLogo: ""
+        ArnsLogo: "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A",
     };
 
     static readonly TKey = "AIzaSyAPpbqyilDRCuMQ-on7V76t6CS10lKTwUs";
