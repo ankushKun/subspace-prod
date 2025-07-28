@@ -4,7 +4,7 @@ import { useGlobalState } from "@/hooks/use-global-state"
 import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils"
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Settings, LogOut, User, Edit2, Save, X, Camera, Loader2 } from "lucide-react"
+import { Settings, LogOut, User, Edit2, Save, X, Camera, Loader2, Wallet } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import alien from "@/assets/subspace/alien-black.svg"
 import LoginDialog from "@/components/login-dialog"
-import { useNavigate } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { toast } from "sonner"
 
 
@@ -42,6 +42,7 @@ export default function Profile({ className }: { className?: string }) {
     const [pfpPromptOpen, setPfpPromptOpen] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [editedNickname, setEditedNickname] = useState("")
+    const [originalNickname, setOriginalNickname] = useState("") // Track original nickname for change detection
     const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
     const [isUploading, setIsUploading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -63,32 +64,64 @@ export default function Profile({ className }: { className?: string }) {
         }
     }, [profile, isCreatingProfile])
 
-    // Load current nickname when server is selected
+    // Load current nickname when server is selected or servers data changes
     useEffect(() => {
-        if (!selectedServerId || !profile?.userId) return
+        if (!selectedServerId || !profile?.userId) {
+            setEditedNickname("")
+            setOriginalNickname("")
+            return
+        }
 
         const loadCurrentNickname = async () => {
             try {
                 const server = servers[selectedServerId]
                 if (server) {
-                    const member = await actions.servers.getMember(selectedServerId, profile.userId)
-                    setEditedNickname(member?.nickname || "")
+                    // First try to get from local server data
+                    let currentNickname = ""
+
+                    if (server.members) {
+                        if (Array.isArray(server.members)) {
+                            // Handle members as array
+                            const member = server.members.find((m: any) => m.userId === profile.userId) as any
+                            currentNickname = member?.nickname || ""
+                        } else if (server.members[profile.userId]) {
+                            // Handle members as object
+                            const member = server.members[profile.userId] as any
+                            currentNickname = member?.nickname || ""
+                        }
+                    }
+
+                    // If not found locally, fetch from server
+                    if (!currentNickname) {
+                        const member = await actions.servers.getMember(selectedServerId, profile.userId)
+                        currentNickname = member?.nickname || ""
+                    }
+
+                    setEditedNickname(currentNickname)
+                    setOriginalNickname(currentNickname)
                 }
             } catch (error) {
                 console.error("Failed to load current nickname:", error)
                 setEditedNickname("")
+                setOriginalNickname("")
             }
         }
 
         loadCurrentNickname()
-    }, [selectedServerId, profile?.userId, servers])
+    }, [selectedServerId, profile?.userId, servers, actions.servers])
 
-    // Reset form state when dialog opens or editing changes
+    // Reset form state when dialog opens and auto-select active server
     useEffect(() => {
         if (profileDialogOpen) {
+            // Reset all form state when dialog opens
+            setIsEditing(false)
             setProfilePicFile(null)
             setProfilePicPreview(null)
             setIsUploading(false)
+            setIsSaving(false)
+            setEditedNickname("")
+            setOriginalNickname("")
+
             if (fileInputRef.current) {
                 fileInputRef.current.value = ""
             }
@@ -106,6 +139,24 @@ export default function Profile({ className }: { className?: string }) {
                 if (isActiveServerJoined) {
                     setSelectedServerId(activeServerId)
                 }
+            }
+        } else {
+            // Comprehensive reset when dialog closes - ensure fresh start
+            setIsEditing(false)
+            setSelectedServerId(null)
+            setEditedNickname("")
+            setOriginalNickname("")
+            setProfilePicFile(null)
+            setProfilePicPreview(null)
+            setIsUploading(false)
+            setIsSaving(false)
+
+            // Clear file inputs
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ""
+            }
+            if (pfpPromptFileInputRef.current) {
+                pfpPromptFileInputRef.current.value = ""
             }
         }
     }, [profileDialogOpen, servers, profile?.serversJoined])
@@ -200,7 +251,8 @@ export default function Profile({ className }: { className?: string }) {
 
     const handleCancelEdit = () => {
         setIsEditing(false)
-        setEditedNickname("")
+        // Reset nickname to original value
+        setEditedNickname(originalNickname)
         setProfilePicFile(null)
         setProfilePicPreview(null)
     }
@@ -231,15 +283,26 @@ export default function Profile({ className }: { className?: string }) {
         reader.readAsDataURL(file)
     }
 
+    // Helper functions to detect changes
+    const hasProfilePictureChanged = () => !!profilePicFile
+    const hasNicknameChanged = () => editedNickname.trim() !== originalNickname.trim()
+    const hasAnyChanges = () => hasProfilePictureChanged() || hasNicknameChanged()
+
     const handleSaveProfile = async () => {
         if (!profile) return
 
+        // Don't save if nothing has changed
+        if (!hasAnyChanges()) {
+            setIsEditing(false)
+            return
+        }
+
         setIsSaving(true)
         try {
-            let profileUpdated = false
+            let updateTasks = []
 
             // Upload and update profile picture if changed
-            if (profilePicFile) {
+            if (hasProfilePictureChanged() && profilePicFile) {
                 try {
                     setIsUploading(true)
                     toast.loading("Uploading profile picture to Arweave...")
@@ -255,16 +318,9 @@ export default function Profile({ className }: { className?: string }) {
                         if (success) {
                             toast.dismiss()
                             toast.success("Profile picture updated successfully")
-                            profileUpdated = true
 
-                            // Update the local profile cache immediately for instant UI feedback
-                            if (profile) {
-                                // Update the main profile state
-                                const updatedProfile = { ...profile, pfp: pfpId }
-
-                                // Force refresh to get the latest data from the server
-                                await actions.profile.refresh()
-                            }
+                            // Force refresh to get the latest data from the server
+                            await actions.profile.refresh()
 
                             // Clear the file selection and preview
                             setProfilePicFile(null)
@@ -290,15 +346,17 @@ export default function Profile({ className }: { className?: string }) {
             }
 
             // Update server nickname if changed and server is selected
-            if (selectedServerId && profile?.userId) {
+            if (hasNicknameChanged() && selectedServerId && profile?.userId) {
                 const server = servers[selectedServerId]
                 if (server) {
                     const success = await actions.servers.updateMember(selectedServerId, {
                         userId: profile.userId,
-                        nickname: editedNickname || undefined
+                        nickname: editedNickname.trim() || undefined
                     })
                     if (success) {
                         toast.success("Nickname updated successfully")
+                        // Update the original nickname to reflect the new saved value
+                        setOriginalNickname(editedNickname.trim())
                     } else {
                         toast.error("Failed to update nickname")
                     }
@@ -586,11 +644,14 @@ export default function Profile({ className }: { className?: string }) {
 
             {/* Profile Settings Dialog */}
             <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
-                <DialogContent className="max-w-4xl w-[95vw] sm:w-full max-h-[90vh] p-4 outline-0 overflow-hidden flex flex-col bg-background border border-primary/30 shadow-2xl" removeCloseButton>
-                    <DialogHeader className="flex-shrink-0 border-b border-primary/20 pb-4">
-                        <DialogTitle className="flex items-center justify-between font-freecam text-xl text-primary">
+                <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] border-primary/10 bg-background/90 shadow-md p-4 backdrop-blur-sm overflow-hidden" removeCloseButton>
+                    {/* Background decoration */}
+                    <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
+
+                    <DialogHeader className="relative z-10 flex-shrink-0 border-b border-primary/10 pb-3">
+                        <DialogTitle className="flex items-center justify-between font-freecam text-sm uppercase tracking-wide text-primary/70">
                             <div className="flex items-center gap-2">
-                                {/* <img src={alien} alt="alien" className="w-6 h-6" /> */}
+                                <User className="w-4 h-4 text-primary/40" />
                                 <span>Profile Settings</span>
                             </div>
                             {!isEditing ? (
@@ -598,256 +659,368 @@ export default function Profile({ className }: { className?: string }) {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setIsEditing(true)}
-                                    className="flex items-center gap-2 font-ocr bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                                    className="text-xs border-primary/20 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200"
                                 >
-                                    <Edit2 className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Edit</span>
+                                    <Edit2 className="w-3 h-3" />
                                 </Button>
                             ) : (
                                 <div className="flex items-center gap-2">
+                                    {/* {hasAnyChanges() && (
+                                        <div className="flex items-center gap-1 text-xs text-orange-500">
+                                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+                                            <span>Unsaved changes</span>
+                                        </div>
+                                    )} */}
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={handleCancelEdit}
-                                        className="flex items-center gap-2 font-ocr bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20"
+                                        className="text-xs border-red-500/30 text-red-500 hover:bg-red-500/10"
                                     >
-                                        <X className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Cancel</span>
+                                        <X className="w-3 h-3" />
                                     </Button>
                                     <Button
                                         size="sm"
                                         onClick={handleSaveProfile}
-                                        disabled={isSaving || isUploading}
-                                        className="flex items-center gap-2 font-ocr bg-primary text-black hover:bg-primary/90 disabled:opacity-50"
+                                        disabled={isSaving || isUploading || !hasAnyChanges()}
+                                        className="text-xs bg-primary hover:bg-primary/90 text-black disabled:opacity-50"
                                     >
-                                        <Save className="h-4 w-4" />
-                                        <span className="hidden sm:inline">
-                                            {isUploading ? "Uploading..." : isSaving ? "Saving..." : "Save"}
-                                        </span>
+                                        {isSaving || isUploading ? (
+                                            <>
+                                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                                {isUploading ? "Uploading..." : "Saving..."}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-3 h-3 mr-1" />
+                                                Save
+                                            </>
+                                        )}
                                     </Button>
                                 </div>
                             )}
                         </DialogTitle>
-                        <DialogDescription className="font-ocr text-primary/60 text-left">
-                            Manage your profile and server settings.
+                        <DialogDescription className="text-xs text-primary/50 mt-1">
+                            Manage your global profile and server-specific settings
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                    <div className="relative z-10 flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
                         <Tabs defaultValue="global" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 bg-primary/10 border border-primary/30">
-                                <TabsTrigger value="global" className="text-xs sm:text-sm font-ocr data-[state=active]:bg-primary data-[state=active]:text-black">
+                            <TabsList className="grid w-full grid-cols-2 bg-primary/5 border border-primary/20">
+                                <TabsTrigger value="global" className="text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-black">
                                     Global Profile
                                 </TabsTrigger>
-                                <TabsTrigger value="server" className="text-xs sm:text-sm font-ocr data-[state=active]:bg-primary data-[state=active]:text-black">
+                                <TabsTrigger value="server" className="text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-black">
                                     <span className="hidden sm:inline">Server Profile</span>
                                     <span className="sm:hidden">Server</span>
                                 </TabsTrigger>
                             </TabsList>
 
-                            <TabsContent value="global" className="space-y-6 mt-6">
+                            <TabsContent value="global" className="space-y-4 mt-4">
                                 {/* Profile Picture Section */}
-                                <div className="space-y-4">
-                                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                                <div className="bg-primary/5 rounded-lg border border-primary/20 p-4">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-6 h-6 bg-primary/10 rounded-md flex items-center justify-center">
+                                            <Camera className="w-3 h-3 text-primary/50" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                Profile Picture
+                                            </h3>
+                                            <div className="text-xs text-primary/60 mt-0.5">
+                                                Your avatar displayed across all servers
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4">
                                         <div className="relative group">
                                             <div
-                                                className={`w-20 h-20 rounded-sm overflow-hidden bg-primary/20 flex items-center justify-center transition-all duration-200 border-2 ${isEditing && !isUploading
-                                                    ? 'border-dashed border-primary/60 group-hover:border-primary group-hover:scale-105 cursor-pointer shadow-lg group-hover:shadow-xl'
-                                                    : 'border-primary/30'
-                                                    } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                className={cn(
+                                                    "w-16 h-16 rounded-lg overflow-hidden bg-primary/20 flex items-center justify-center transition-all duration-200 border-2",
+                                                    isEditing && !isUploading
+                                                        ? "border-dashed border-primary/60 group-hover:border-primary cursor-pointer"
+                                                        : "border-primary/30",
+                                                    isUploading && "opacity-50 cursor-not-allowed"
+                                                )}
                                                 onClick={isEditing && !isUploading ? () => fileInputRef.current?.click() : undefined}
                                             >
                                                 {profilePicPreview ? (
                                                     <img
                                                         src={profilePicPreview}
                                                         alt="Profile Preview"
-                                                        className={`w-full h-full object-cover transition-all duration-200 ${isEditing ? 'group-hover:brightness-75' : ''
-                                                            }`}
+                                                        className="w-full h-full object-cover"
                                                     />
                                                 ) : profileProxy.pfp ? (
                                                     <img
                                                         src={`https://arweave.net/${profileProxy.pfp}`}
                                                         alt="Profile"
-                                                        className={`w-full h-full object-cover transition-all duration-200 ${isEditing ? 'group-hover:brightness-75' : ''
-                                                            }`}
+                                                        className="w-full h-full object-cover"
                                                     />
                                                 ) : (
                                                     <img
                                                         src={alien}
                                                         alt="alien"
-                                                        className={`w-10 h-10 opacity-80 transition-all duration-200 ${isEditing ? 'group-hover:opacity-50' : ''
-                                                            }`}
+                                                        className="w-8 h-8 opacity-60"
                                                     />
                                                 )}
+
+                                                {isEditing && !isUploading && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                        <Camera className="w-4 h-4 text-white" />
+                                                    </div>
+                                                )}
+
+                                                {isUploading && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-lg">
+                                                        <Loader2 className="w-4 h-4 text-white animate-spin" />
+                                                    </div>
+                                                )}
                                             </div>
+
                                             {isEditing && (
-                                                <>
-                                                    <div
-                                                        className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-sm cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
-                                                        onClick={() => fileInputRef.current?.click()}
-                                                    >
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <Camera className="h-6 w-6 text-primary" />
-                                                            <span className="text-xs text-primary font-ocr">UPLOAD</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="absolute -bottom-1 -right-1 bg-primary text-black rounded-sm p-1.5 shadow-lg border border-primary/30 z-20 pointer-events-none">
-                                                        <Camera className="h-3 w-3" />
-                                                    </div>
-                                                    <div className="absolute inset-0 rounded-sm border-2 border-primary/30 animate-pulse z-0 pointer-events-none"></div>
-                                                </>
+                                                <div className="absolute -bottom-1 -right-1 bg-primary text-black rounded-full p-1 shadow-sm border border-background">
+                                                    <Camera className="w-2.5 h-2.5" />
+                                                </div>
                                             )}
                                         </div>
-                                        <div className="flex-1 text-center sm:text-left">
-                                            <h3 className="text-lg font-freecam text-primary">Profile Picture</h3>
-                                            {!profilePicFile ? (
-                                                <p className="text-sm text-primary/60 font-ocr">
-                                                    {isEditing
-                                                        ? isUploading ? "Uploading..." : "Click to upload new avatar (max 100KB)"
-                                                        : "Your avatar is visible across all servers"
-                                                    }
-                                                </p>
-                                            ) : (
-                                                <p className="text-sm text-green-600 dark:text-green-400 font-ocr">
-                                                    Selected: {profilePicFile.name} ({(profilePicFile.size / 1024).toFixed(1)} KB)
-                                                </p>
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium text-foreground">
+                                                {profilePicFile ? profilePicFile.name : "Profile Avatar"}
+                                            </div>
+                                            <div className="text-xs text-primary/60 mt-1">
+                                                {isEditing ? (
+                                                    isUploading ? "Uploading to Arweave..." :
+                                                        profilePicFile ? `${(profilePicFile.size / 1024).toFixed(1)} KB selected` :
+                                                            "Click avatar to upload (max 100KB)"
+                                                ) : (
+                                                    "Visible across all servers"
+                                                )}
+                                            </div>
+                                            {isEditing && !profilePicFile && !isUploading && (
+                                                <div className="text-xs text-primary/40 mt-1">
+                                                    PNG, JPEG supported
+                                                </div>
                                             )}
-                                            {isEditing && !profilePicFile && (
-                                                <p className="text-xs text-primary/40 mt-1 font-ocr">
-                                                    Supported formats: PNG, JPEG • Max size: 100KB
-                                                </p>
-                                            )}
-                                            {/* Hidden file input */}
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleFileUpload}
-                                                className="hidden"
-                                                disabled={isUploading}
-                                            />
                                         </div>
+
+                                        {/* Hidden file input */}
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileUpload}
+                                            className="hidden"
+                                            disabled={isUploading}
+                                        />
                                     </div>
                                 </div>
 
                                 {/* Primary Name Section */}
-                                <div className="space-y-2">
-                                    <Label className="text-base font-freecam text-primary">Primary Name</Label>
-                                    <div className="p-2 px-3 bg-primary/10 rounded-sm">
-                                        <p className="text-lg font-ocr text-primary/80">
-                                            {profileProxy.primaryName || (
-                                                <span className="text-primary/40 italic">No primary name set</span>
-                                            )}
-                                        </p>
-                                        {!profileProxy.primaryName && (
-                                            <p className="text-xs text-primary/60 mt-1 font-ocr">
-                                                Get your primary name at{" "}
-                                                <a
-                                                    href="https://arns.ar.io"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-primary hover:underline"
-                                                >
-                                                    arns.ar.io
-                                                </a>
-                                            </p>
-                                        )}
+                                <div className="bg-primary/5 rounded-lg border border-primary/20 p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-6 h-6 bg-primary/10 rounded-md flex items-center justify-center">
+                                            <User className="w-3 h-3 text-primary/50" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                Primary Name
+                                            </h3>
+                                            <div className="text-xs text-primary/60 mt-0.5">
+                                                {profileProxy.primaryName ? "Your verified ArNS name" : "Get a human-readable name"}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-primary/60 font-ocr">
-                                        Primary names can be acquired from the <a href="https://arns.ar.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ArNS registry</a>
-                                    </p>
+
+                                    <div className="p-3 bg-background/30 rounded-md border border-primary/30">
+                                        <div className="flex items-center justify-between">
+                                            <div className="min-w-0 flex-1">
+                                                <div className=" font-ocr font-medium text-foreground">
+                                                    {profileProxy.primaryName || "No primary name set"}
+                                                </div>
+                                                <div className="text-xs text-primary/60 mt-1">
+                                                    {profileProxy.primaryName ? (
+                                                        "Unique name for wallet address"
+                                                    ) : (
+                                                        <>
+                                                            Get yours at{" "}
+                                                            <a
+                                                                href="https://arns.ar.io"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-primary hover:underline font-medium"
+                                                            >
+                                                                arns.ar.io
+                                                            </a>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {profileProxy.primaryName && (
+                                                <div className="flex items-center gap-1">
+                                                    <Link to="https://arns.ar.io" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline underline-offset-4 cursor-pointer">
+                                                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                                                        <span className="text-xs text-green-600 font-medium">ArNS Verified</span>
+                                                    </Link>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Wallet Address Section */}
-                                <div className="space-y-2">
-                                    <Label className="text-base font-freecam text-primary">Wallet Address</Label>
-                                    <div className="p-2 px-3 bg-primary/10 rounded-sm">
-                                        <p className="text-sm font-mono text-primary/80 break-all">{address}</p>
+                                <div className="bg-primary/5 rounded-lg border border-primary/20 p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-6 h-6 bg-primary/10 rounded-md flex items-center justify-center">
+                                            <Wallet className="w-3 h-3 text-primary/50" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                Wallet Address
+                                            </h3>
+                                            <div className="text-xs text-primary/60 mt-0.5">
+                                                Your unique Permaweb identifier
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-primary/60 font-ocr">
-                                        Your unique identifier on the Permaweb
-                                    </p>
+
+                                    <div className="p-3 bg-background/30 rounded-md border border-primary/30">
+                                        <div className="text-sm font-mono text-foreground break-all">
+                                            {address}
+                                        </div>
+                                        <div className="text-xs text-primary/60 mt-1">
+                                            Permanent cryptographic identity
+                                        </div>
+                                    </div>
                                 </div>
                             </TabsContent>
 
-                            <TabsContent value="server" className="space-y-6 mt-6">
-                                {/* Server Selector */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="server-selector" className="text-base font-freecam text-primary">
-                                        Select Server
-                                    </Label>
-                                    <Select
-                                        value={selectedServerId || undefined}
-                                        onValueChange={(value) => setSelectedServerId(value)}
-                                    >
-                                        <SelectTrigger className="w-full bg-primary/10 border-primary/30 text-primary font-ocr">
-                                            <SelectValue placeholder="Choose a server" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-background border border-primary/30">
-                                            {availableServers.map(([serverId, server]) => (
-                                                <SelectItem key={serverId} value={serverId} className="font-ocr text-primary hover:bg-primary/10">
-                                                    {server.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    {availableServers.length === 0 && (
-                                        <p className="text-sm text-primary/60 mt-2 font-ocr">
-                                            No servers joined yet. Join a server to set server-specific nicknames.
-                                        </p>
-                                    )}
-                                </div>
-
-                                {selectedServerId && servers[selectedServerId] ? (
-                                    <>
-                                        {/* Server Nickname Section */}
-                                        <div className="space-y-2">
-                                            <Label htmlFor="server-nickname" className="text-base font-freecam text-primary">
-                                                Server Nickname
-                                            </Label>
-                                            {isEditing ? (
-                                                <Input
-                                                    id="server-nickname"
-                                                    value={editedNickname}
-                                                    onChange={(e) => setEditedNickname(e.target.value)}
-                                                    placeholder="Enter nickname for this server"
-                                                    className="w-full bg-primary/10 border-primary/30 text-primary font-ocr placeholder:text-primary/40"
-                                                />
-                                            ) : (
-                                                <div className="p-3 bg-primary/10 rounded-sm border border-primary/30">
-                                                    <p className="text-sm font-ocr text-primary/80">
-                                                        {editedNickname || (
-                                                            <span className="text-primary/40 italic">No nickname set</span>
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            <p className="text-xs text-primary/60 font-ocr">
-                                                This nickname will only be visible to members of {servers[selectedServerId]?.name}.
-                                            </p>
+                            <TabsContent value="server" className="space-y-4 mt-4">
+                                {availableServers.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                                        <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                                            <User className="w-6 h-6 text-primary/30" />
                                         </div>
+                                        <div className="text-sm font-medium text-foreground mb-1">
+                                            No Servers Joined
+                                        </div>
+                                        <div className="text-xs text-primary/60 max-w-sm">
+                                            Join a server to set server-specific nicknames.
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Server Selection Card */}
+                                        <div className="bg-primary/5 rounded-lg border border-primary/20 p-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="w-6 h-6 bg-primary/10 rounded-md flex items-center justify-center">
+                                                    <User className="w-3 h-3 text-primary/50" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                        Server Selection
+                                                    </h3>
+                                                    <div className="text-xs text-primary/60 mt-0.5">
+                                                        Choose which server to customize
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                        {/* Server Profile Picture Note */}
-                                        <div className="p-3 bg-primary/5 rounded-sm border border-primary/20">
-                                            <p className="text-sm text-primary/80 font-ocr">
-                                                <strong>Note:</strong> Your avatar is shared across all servers.
-                                                Update it in the Global Profile tab.
-                                            </p>
+                                            <Select
+                                                value={selectedServerId || undefined}
+                                                onValueChange={(value) => setSelectedServerId(value)}
+                                            >
+                                                <SelectTrigger className="w-full bg-background/50 border-primary/30 text-primary hover:bg-background/80 transition-colors">
+                                                    <SelectValue placeholder="Choose a server..." />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-background border border-primary/20">
+                                                    {availableServers.map(([serverId, server]) => (
+                                                        <SelectItem key={serverId} value={serverId} className="text-primary hover:bg-primary/10">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 bg-primary rounded-full" />
+                                                                {server.name}
+                                                            </div>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     </>
-                                ) : (
-                                    <div className="text-center py-8">
-                                        <p className="text-primary/60 font-ocr">
-                                            Select a server to view and manage server-specific profile settings.
-                                        </p>
-                                    </div>
                                 )}
+
+                                {selectedServerId && servers[selectedServerId] ? (
+                                    <div className="space-y-4">
+                                        {/* Server Nickname Configuration */}
+                                        <div className="bg-primary/5 rounded-lg border border-primary/20 p-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="w-6 h-6 bg-primary/10 rounded-md flex items-center justify-center">
+                                                    <Edit2 className="w-3 h-3 text-primary/50" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                        Server Nickname
+                                                    </h3>
+                                                    <div className="text-xs text-primary/60 mt-0.5">
+                                                        Customize how you appear in {servers[selectedServerId]?.name}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {isEditing ? (
+                                                <div className="space-y-2">
+                                                    <Input
+                                                        value={editedNickname}
+                                                        onChange={(e) => setEditedNickname(e.target.value)}
+                                                        placeholder="Enter your nickname for this server"
+                                                        className="bg-background/50 border-primary/30 text-primary placeholder:text-primary/40 focus:bg-background/80 transition-colors"
+                                                    />
+                                                    <div className="text-xs text-primary/60">
+                                                        Only visible to members of this server
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 bg-background/30 rounded-md border border-primary/30">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="text-sm font-medium text-foreground">
+                                                                {editedNickname || "No nickname set"}
+                                                            </div>
+                                                            <div className="text-xs text-primary/60 mt-1">
+                                                                {editedNickname ?
+                                                                    `Visible to ${servers[selectedServerId]?.name} members` :
+                                                                    "Set a custom nickname for this server"
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                        {editedNickname && (
+                                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : availableServers.length > 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-2">
+                                            <Edit2 className="w-5 h-5 text-primary/30" />
+                                        </div>
+                                        <div className="text-sm font-medium text-foreground mb-1">
+                                            Server Profile Ready
+                                        </div>
+                                        <div className="text-xs text-primary/60 max-w-sm">
+                                            Select a server above to customize your nickname.
+                                        </div>
+                                    </div>
+                                ) : null}
                             </TabsContent>
                         </Tabs>
                     </div>
 
-                    <DialogFooter className="px-4  pt-4 border-t border-primary/20 bg-background flex-shrink-0">
-                        <DialogClose className="cursor-pointer font-ocr text-primary hover:text-primary/80 bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors px-4 py-2 rounded-sm">
+                    <DialogFooter className="relative z-10 px-4 py-3 border-t border-primary/10 bg-background/80 backdrop-blur-sm flex-shrink-0">
+                        <DialogClose className="text-xs bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors px-3 py-1.5 rounded-sm">
                             Close
                         </DialogClose>
                     </DialogFooter>
