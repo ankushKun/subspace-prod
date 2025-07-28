@@ -455,6 +455,9 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
         },
 
         disconnect: (reload: boolean = false) => {
+            // Trigger disconnect event before clearing wallet state
+            window.dispatchEvent(new CustomEvent("subspace-wallet-disconnected"))
+
             set((state) => {
                 if (state.wanderInstance) {
                     state.wanderInstance.destroy();

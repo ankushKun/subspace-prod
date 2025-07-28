@@ -248,6 +248,7 @@ function ThemedToaster() {
 function Main() {
     const { actions: subspaceActions } = useSubspace()
     const { jwk, address, connected, connectionStrategy, provider, actions: walletActions } = useWallet()
+    const { actions: globalStateActions } = useGlobalState()
     const [errorBoundary, setErrorBoundary] = useState<ErrorBoundary | null>(null);
 
     // Set the global error boundary reference
@@ -342,6 +343,21 @@ function Main() {
         }, initDelay);
     }, [])
 
+    // Set up wallet disconnection listener
+    useEffect(() => {
+        const handleWalletDisconnected = () => {
+            console.log("🔌 Wallet disconnected, clearing all state")
+            subspaceActions.clear()
+            globalStateActions.clear()
+        }
+
+        window.addEventListener("subspace-wallet-disconnected", handleWalletDisconnected)
+
+        return () => {
+            window.removeEventListener("subspace-wallet-disconnected", handleWalletDisconnected)
+        }
+    }, [subspaceActions, globalStateActions])
+
     useEffect(() => {
         if (connected && address) {
             try {
@@ -350,6 +366,10 @@ function Main() {
                 console.error("Subspace initialization failed:", error)
                 handleAsyncError(error as Error)
             }
+        } else if (!connected && !address) {
+            // Clear state when wallet becomes disconnected
+            subspaceActions.clear()
+            globalStateActions.clear()
         }
     }, [connected, address])
 
@@ -366,6 +386,7 @@ function Main() {
                         <Route path="/app" element={<App />} />
                         <Route path="/invite/:invite" element={<Invite />} />
                         <Route path="/app/settings" element={<Settings />} />
+                        <Route path="/app/dm/:friendId" element={<App />} />
                         <Route path="/app/:serverId" element={<App />} />
                         <Route path="/app/:serverId/:channelId" element={<App />} />
                         <Route path="/app/:serverId/settings" element={<ServerSettings />} />

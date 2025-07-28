@@ -57,7 +57,7 @@ export default function Profile({ className }: { className?: string }) {
         if (!profile || isCreatingProfile) return
 
         const DEFAULT_PFP = "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A"
-        const needsPfpPrompt = !profile.pfp || profile.pfp === DEFAULT_PFP
+        const needsPfpPrompt = (!profile.pfp || profile.pfp === DEFAULT_PFP) && !profile.primaryLogo
 
         if (needsPfpPrompt) {
             setPfpPromptOpen(true)

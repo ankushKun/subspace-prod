@@ -6,7 +6,10 @@ import type {
     Server,
     Member,
     AoSigner,
-    Message
+    Message,
+    Friend,
+    DMMessage,
+    DMResponse
 } from "@subspace-protocol/sdk"
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
@@ -34,17 +37,38 @@ interface CreateServerParams {
     description?: string;
 }
 
+export interface ExtendedFriend extends Friend {
+    profile?: ExtendedProfile;
+    lastMessageTime?: number;
+    unreadCount?: number;
+}
+
+interface DMConversation {
+    friendId: string;
+    dmProcessId: string;
+    messages: Record<string, DMMessage>;
+    lastMessageTime?: number;
+    unreadCount?: number;
+}
+
 interface SubspaceState {
     subspace: Subspace | null
     profile: ExtendedProfile | null
     profiles: Record<string, ExtendedProfile>
     servers: Record<string, Server>
     messages: Record<string, Record<string, Record<string, any>>>  // serverId -> channelId -> messageId -> message
+    // Friends and DMs state
+    friends: Record<string, ExtendedFriend>  // userId -> friend info
+    dmConversations: Record<string, DMConversation>  // friendId -> conversation
     isCreatingProfile: boolean
     isLoadingProfile: boolean
     // ✅ ADDED: Loading guards to prevent duplicate calls
     loadingProfiles: Set<string>  // userIds currently being loaded
     loadingServers: Set<string>   // serverIds currently being loaded
+    loadingFriends: Set<string>   // friendIds currently being loaded
+    loadingDMs: Set<string>       // friendIds with DMs currently being loaded
+    // Track current wallet address to detect changes
+    currentAddress: string
     actions: {
         init: () => void
         profile: {
@@ -84,9 +108,27 @@ interface SubspaceState {
             deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
             getCachedMessages: (serverId: string, channelId: string) => any[]
         }
+        friends: {
+            getFriends: () => Promise<ExtendedFriend[]>
+            sendFriendRequest: (userId: string) => Promise<boolean>
+            acceptFriendRequest: (userId: string) => Promise<boolean>
+            rejectFriendRequest: (userId: string) => Promise<boolean>
+            removeFriend: (userId: string) => Promise<boolean>
+            refreshFriends: () => Promise<void>
+        }
+        dms: {
+            getConversation: (friendId: string) => Promise<DMConversation | null>
+            getMessages: (friendId: string, limit?: number) => Promise<DMMessage[]>
+            sendMessage: (friendId: string, params: { content: string; attachments?: string; replyTo?: number }) => Promise<boolean>
+            editMessage: (friendId: string, messageId: string, content: string) => Promise<boolean>
+            deleteMessage: (friendId: string, messageId: string) => Promise<boolean>
+            getCachedMessages: (friendId: string) => DMMessage[]
+            markAsRead: (friendId: string) => void
+        }
         internal: {
             rehydrateServers: () => void
         }
+        clear: () => void
     }
 }
 
@@ -96,10 +138,15 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     profiles: {},
     servers: {},
     messages: {},
+    friends: {},
+    dmConversations: {},
     isCreatingProfile: false,
     isLoadingProfile: false,
     loadingProfiles: new Set<string>(),
     loadingServers: new Set<string>(),
+    loadingFriends: new Set<string>(),
+    loadingDMs: new Set<string>(),
+    currentAddress: "",
     actions: {
         init: async () => {
             try {
@@ -110,6 +157,24 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     owner = "0x69420"
                     console.log("no owner, using default")
                     return
+                }
+
+                const currentState = get()
+                const previousAddress = currentState.currentAddress
+
+                // Check if address has changed (wallet switch)
+                if (previousAddress && previousAddress !== owner) {
+                    console.log(`📧 Address changed from ${previousAddress} to ${owner}, clearing friends and DMs`)
+                    set({
+                        friends: {},
+                        dmConversations: {},
+                        loadingFriends: new Set<string>(),
+                        loadingDMs: new Set<string>(),
+                        currentAddress: owner
+                    })
+                } else if (!previousAddress) {
+                    // First time initialization
+                    set({ currentAddress: owner })
                 }
 
                 const subspace = getSubspace(signer, owner)
@@ -203,17 +268,19 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             try {
                                 // create their profile
                                 const profileId = await subspace.user.createProfile()
-                                profile = await subspace.user.getProfile(profileId) as ExtendedProfile
-
-                                // If profile was created successfully, refresh the page
-                                if (profile) {
-                                    window.location.reload()
+                                try {
+                                    profile = await subspace.user.getProfile(profileId) as ExtendedProfile
+                                } catch (e) {
+                                    console.error("Failed to get profile:", e)
+                                    throw e
                                 }
                             } catch (error) {
                                 console.error("Failed to create profile:", error)
                                 throw error
                             } finally {
                                 set({ isCreatingProfile: false })
+                                // If profile was created successfully, refresh the page
+                                window.location.reload()
                             }
                         } else {
                             // For other users' profiles, just throw the error
@@ -1249,6 +1316,352 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     .sort((a: any, b: any) => a.timestamp - b.timestamp)
             },
         },
+        friends: {
+            getFriends: async () => {
+                const subspace = get().subspace
+                const profile = get().profile
+                if (!subspace || !profile) return []
+
+                try {
+                    // Parse friends from profile
+                    const friendsList: ExtendedFriend[] = []
+
+                    if (profile.friends) {
+                        // Add accepted friends
+                        for (const friendId of profile.friends.accepted || []) {
+                            const friendProfile = await get().actions.profile.get(friendId)
+                            friendsList.push({
+                                userId: friendId,
+                                status: 'accepted',
+                                profile: friendProfile || undefined
+                            })
+                        }
+
+                        // Add sent friend requests
+                        for (const friendId of profile.friends.sent || []) {
+                            const friendProfile = await get().actions.profile.get(friendId)
+                            friendsList.push({
+                                userId: friendId,
+                                status: 'sent',
+                                profile: friendProfile || undefined
+                            })
+                        }
+
+                        // Add received friend requests
+                        for (const friendId of profile.friends.received || []) {
+                            const friendProfile = await get().actions.profile.get(friendId)
+                            friendsList.push({
+                                userId: friendId,
+                                status: 'received',
+                                profile: friendProfile || undefined
+                            })
+                        }
+                    }
+
+                    // Update friends cache
+                    const friendsMap = friendsList.reduce((acc, friend) => {
+                        acc[friend.userId] = friend
+                        return acc
+                    }, {} as Record<string, ExtendedFriend>)
+
+                    set({ friends: friendsMap })
+                    return friendsList
+                } catch (error) {
+                    console.error("Failed to get friends:", error)
+                    return []
+                }
+            },
+            sendFriendRequest: async (userId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.user.sendFriendRequest(userId)
+                    if (success) {
+                        // Refresh profile to update friends list
+                        await get().actions.profile.refresh()
+                        await get().actions.friends.getFriends()
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to send friend request:", error)
+                    return false
+                }
+            },
+            acceptFriendRequest: async (userId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.user.acceptFriendRequest(userId)
+                    if (success) {
+                        // Refresh profile to update friends list
+                        await get().actions.profile.refresh()
+                        await get().actions.friends.getFriends()
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to accept friend request:", error)
+                    return false
+                }
+            },
+            rejectFriendRequest: async (userId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.user.rejectFriendRequest(userId)
+                    if (success) {
+                        // Refresh profile to update friends list
+                        await get().actions.profile.refresh()
+                        await get().actions.friends.getFriends()
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to reject friend request:", error)
+                    return false
+                }
+            },
+            removeFriend: async (userId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.user.removeFriend(userId)
+                    if (success) {
+                        // Remove from local state
+                        const currentFriends = get().friends
+                        const { [userId]: removedFriend, ...remainingFriends } = currentFriends
+                        set({ friends: remainingFriends })
+
+                        // Also remove DM conversation
+                        const currentConversations = get().dmConversations
+                        const { [userId]: removedConvo, ...remainingConvos } = currentConversations
+                        set({ dmConversations: remainingConvos })
+
+                        // Refresh profile to update friends list
+                        await get().actions.profile.refresh()
+                        await get().actions.friends.getFriends()
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to remove friend:", error)
+                    return false
+                }
+            },
+            refreshFriends: async () => {
+                try {
+                    await get().actions.profile.refresh()
+                    await get().actions.friends.getFriends()
+                } catch (error) {
+                    console.error("Failed to refresh friends:", error)
+                }
+            }
+        },
+        dms: {
+            getConversation: async (friendId: string) => {
+                const subspace = get().subspace
+                const profile = get().profile
+                if (!subspace || !profile) return null
+
+                // Check if conversation already exists
+                const existingConversation = get().dmConversations[friendId]
+                if (existingConversation) {
+                    return existingConversation
+                }
+
+                try {
+                    // Use current user's DM process (not friend's DM process!)
+                    if (!profile?.dmProcess) {
+                        console.error("Current user doesn't have a DM process")
+                        return null
+                    }
+
+                    // Create conversation object
+                    const conversation: DMConversation = {
+                        friendId,
+                        dmProcessId: profile.dmProcess, // Use current user's DM process
+                        messages: {},
+                        unreadCount: 0
+                    }
+
+                    // Cache the conversation
+                    set({
+                        dmConversations: { ...get().dmConversations, [friendId]: conversation }
+                    })
+
+                    return conversation
+                } catch (error) {
+                    console.error("Failed to get conversation:", error)
+                    return null
+                }
+            },
+            getMessages: async (friendId: string, limit: number = 50) => {
+                const subspace = get().subspace
+                if (!subspace) return []
+
+                // Check if we're already loading messages for this friend
+                if (get().loadingDMs.has(friendId)) {
+                    console.log(`DMs for ${friendId} already being loaded`)
+                    return get().actions.dms.getCachedMessages(friendId)
+                }
+
+                try {
+                    // Mark as loading
+                    const currentLoadingDMs = new Set(get().loadingDMs)
+                    currentLoadingDMs.add(friendId)
+                    set({ loadingDMs: currentLoadingDMs })
+
+                    // Always use current user's DM process (not cached conversation)
+                    const profile = get().profile
+                    if (!profile?.dmProcess) {
+                        console.error("Current user doesn't have a DM process")
+                        return []
+                    }
+
+                    // Use current user's DM process directly (bypass cached conversation)
+                    const dmProcessId = profile.dmProcess
+
+                    // Get messages from the DM process (using current user's DM process)
+                    const response = await subspace.user.getDMs(dmProcessId, { friendId, limit } as any)
+                    if (!response?.messages) return []
+
+                    // Process and cache messages
+                    const messageMap = response.messages.reduce((acc, message) => {
+                        acc[message.id] = message
+                        return acc
+                    }, {} as Record<string, DMMessage>)
+
+                    // Get or create conversation for caching
+                    let existingConversation = get().dmConversations[friendId]
+                    if (!existingConversation) {
+                        existingConversation = {
+                            friendId,
+                            dmProcessId: profile.dmProcess, // Always use current user's DM process
+                            messages: {},
+                            unreadCount: 0
+                        }
+                    }
+
+                    // Update conversation with new messages
+                    const updatedConversation = {
+                        ...existingConversation,
+                        dmProcessId: profile.dmProcess, // Force update to current user's DM process
+                        messages: { ...existingConversation.messages, ...messageMap },
+                        lastMessageTime: Math.max(...response.messages.map(m => m.timestamp))
+                    }
+
+                    set({
+                        dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
+                    })
+
+                    return response.messages.sort((a, b) => a.timestamp - b.timestamp)
+                } catch (error) {
+                    console.error("Failed to get DM messages:", error)
+                    return []
+                } finally {
+                    // Clear loading state
+                    const currentLoadingDMs = new Set(get().loadingDMs)
+                    currentLoadingDMs.delete(friendId)
+                    set({ loadingDMs: currentLoadingDMs })
+                }
+            },
+            sendMessage: async (friendId: string, params: { content: string; attachments?: string; replyTo?: number }) => {
+                const subspace = get().subspace
+                const profile = get().profile
+                if (!subspace || !profile) return false
+
+                try {
+                    // Send message via main Subspace process (it will forward to both DM processes)
+                    const success = await (subspace.user as any).sendDMToFriend(friendId, params)
+                    if (success) {
+                        // Refresh messages after sending
+                        setTimeout(() => {
+                            get().actions.dms.getMessages(friendId)
+                        }, 500)
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to send DM:", error)
+                    return false
+                }
+            },
+            editMessage: async (friendId: string, messageId: string, content: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await (subspace.user as any).editDMToFriend(friendId, { messageId, content })
+                    if (success) {
+                        // Update cached message
+                        const conversation = get().dmConversations[friendId]
+                        if (conversation) {
+                            const updatedMessage = { ...conversation.messages[messageId], content, edited: true }
+                            const updatedConversation = {
+                                ...conversation,
+                                messages: { ...conversation.messages, [messageId]: updatedMessage }
+                            }
+
+                            set({
+                                dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
+                            })
+                        }
+
+                        // Refresh messages to get latest state
+                        setTimeout(() => {
+                            get().actions.dms.getMessages(friendId)
+                        }, 500)
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to edit DM:", error)
+                    return false
+                }
+            },
+            deleteMessage: async (friendId: string, messageId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await (subspace.user as any).deleteDMToFriend(friendId, messageId)
+                    if (success) {
+                        // Remove from cached messages
+                        const conversation = get().dmConversations[friendId]
+                        if (conversation) {
+                            const { [messageId]: removedMessage, ...remainingMessages } = conversation.messages
+                            const updatedConversation = {
+                                ...conversation,
+                                messages: remainingMessages
+                            }
+
+                            set({
+                                dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
+                            })
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to delete DM:", error)
+                    return false
+                }
+            },
+            getCachedMessages: (friendId: string) => {
+                const conversation = get().dmConversations[friendId]
+                if (!conversation) return []
+
+                return Object.values(conversation.messages)
+                    .sort((a, b) => a.timestamp - b.timestamp)
+            },
+            markAsRead: (friendId: string) => {
+                const conversation = get().dmConversations[friendId]
+                if (!conversation) return
+
+                const updatedConversation = { ...conversation, unreadCount: 0 }
+                set({
+                    dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
+                })
+            }
+        },
         internal: {
             rehydrateServers: () => {
                 const subspace = get().subspace
@@ -1271,6 +1684,25 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
                 set({ servers: rehydratedServers })
             }
+        },
+        clear: () => {
+            console.log("🧹 Clearing all Subspace state due to wallet disconnection")
+            set({
+                subspace: null,
+                profile: null,
+                profiles: {},
+                servers: {},
+                messages: {},
+                friends: {},
+                dmConversations: {},
+                isCreatingProfile: false,
+                isLoadingProfile: false,
+                loadingProfiles: new Set<string>(),
+                loadingServers: new Set<string>(),
+                loadingFriends: new Set<string>(),
+                loadingDMs: new Set<string>(),
+                currentAddress: "",
+            })
         }
     }
 }), {
@@ -1281,8 +1713,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         messages: state.messages,
         profile: state.profile,
         profiles: state.profiles,
-        // ✅ EXCLUDED: Loading states don't need to be persisted
-        // loadingProfiles and loadingServers are excluded from persistence
+        friends: state.friends,
+        dmConversations: state.dmConversations,
+        // ✅ EXCLUDED: Loading states and currentAddress don't need to be persisted
+        // loadingProfiles, loadingServers, loadingFriends, loadingDMs, currentAddress are excluded from persistence
     })
 }))
 

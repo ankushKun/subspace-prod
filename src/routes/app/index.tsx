@@ -5,6 +5,7 @@ import ChannelList from "./components/channel-list"
 import DmsList from "./components/dms-list"
 import MemberList from "./components/member-list"
 import Messages from "./components/messages"
+import DMMessages from "./components/dm-messages"
 import Welcome from "./components/welcome"
 import Profile from "./components/profile"
 import { useGlobalState } from "@/hooks/use-global-state"
@@ -15,7 +16,7 @@ import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
 
 export default function App() {
-    const { serverId, channelId } = useParams()
+    const { serverId, channelId, friendId } = useParams()
     const navigate = useNavigate()
     const { connected, address } = useWallet()
     const { actions: stateActions } = useGlobalState()
@@ -31,21 +32,40 @@ export default function App() {
 
     // Ref to track the previous server ID to detect actual server changes
     const previousServerIdRef = useRef<string | undefined>(undefined)
+    // Ref to track the previous address to detect address changes (wallet switches)
+    const previousAddressRef = useRef<string | undefined>(undefined)
 
     useEffect(() => {
-        if (address) {
+        const previousAddress = previousAddressRef.current
+
+        if (address && connected) {
+            // Check if address changed (wallet switch) - navigate away from specific routes
+            if (previousAddress && previousAddress !== address) {
+                console.log(`📧 Address changed from ${previousAddress} to ${address}, navigating to app root`)
+                if (serverId || channelId || friendId) {
+                    navigate("/app")
+                }
+            }
+
             if (!subspace) return
             subspaceActions.init()
             subspaceActions.profile.refresh()
-        } else {
-            navigate("/app")
+        } else if (!connected || !address) {
+            // Navigate away from specific routes when wallet disconnects
+            if (serverId || channelId || friendId) {
+                navigate("/app")
+            }
         }
-    }, [address])
+
+        // Update the address ref for next comparison
+        previousAddressRef.current = address
+    }, [address, connected])
 
     useEffect(() => {
         if (!subspace) return
-        stateActions.setActiveServerId(serverId)
-        stateActions.setActiveChannelId(channelId)
+        stateActions.setActiveServerId(serverId || "")
+        stateActions.setActiveChannelId(channelId || "")
+        stateActions.setActiveFriendId(friendId || "")
 
         // Only clear skipped servers when the server ID actually changes
         if (previousServerIdRef.current !== serverId) {
@@ -60,6 +80,7 @@ export default function App() {
         );
         console.log('%cServer ID:', 'color: #2196F3; font-weight: bold;', serverId || 'None');
         console.log('%cChannel ID:', 'color: #4CAF50; font-weight: bold;', channelId || 'None');
+        console.log('%cFriend ID:', 'color: #FF9800; font-weight: bold;', friendId || 'None');
         console.groupEnd();
 
         // update server and members
@@ -68,7 +89,12 @@ export default function App() {
             // Members are automatically loaded when forceRefresh is true
             subspaceActions.servers.get(serverId, true).catch(console.error)
         }
-    }, [serverId, channelId, subspace])
+
+        // Load DM conversation when friendId changes
+        if (friendId) {
+            subspaceActions.dms.getConversation(friendId).catch(console.error)
+        }
+    }, [serverId, channelId, friendId, subspace])
 
     // Check if user needs nickname prompt when server changes
     useEffect(() => {
@@ -165,11 +191,15 @@ export default function App() {
                     </div>
                     <Profile className="w-full h-fit p-2" />
                 </div>
+                {/* Main content area */}
                 {(serverId && channelId) ? (
                     <Messages className="grow border-r h-full" />
+                ) : friendId ? (
+                    <DMMessages className="grow border-r h-full" />
                 ) : (
                     <Welcome className="grow h-full" />
                 )}
+                {/* Right sidebar - show member list for servers, hide for DMs */}
                 {(serverId && channelId) && (
                     <MemberList className="w-80 min-w-80 border-r h-full" />
                 )}
