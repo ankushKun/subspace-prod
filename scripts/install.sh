@@ -1,5 +1,7 @@
 #!/bin/bash 
 
+git submodule update --init --recursive
+
 cd ./subspace-sdk && npm run build && npm install # subspace-sdk directory
 cd ../wauth/sdk && npm run build && npm install # wauth/sdk directory
 cd ../strategy && npm run build && npm install # wauth/strategy directory
