@@ -1,11 +1,11 @@
-import { useNavigate, useParams } from "react-router"
+import { useNavigate, useParams, useSearchParams } from "react-router"
 
 import ServerList from "./components/server-list"
 import ChannelList from "./components/channel-list"
 import DmsList from "./components/dms-list"
 import MemberList from "./components/member-list"
-import Messages, { MessagesRef } from "./components/messages"
-import DMMessages, { DMMessagesRef } from "./components/dm-messages"
+import Messages, { type MessagesRef } from "./components/messages"
+import DMMessages, { type DMMessagesRef } from "./components/dm-messages"
 import Welcome from "./components/welcome"
 import Profile from "./components/profile"
 import { useGlobalState } from "@/hooks/use-global-state"
@@ -14,9 +14,11 @@ import { useEffect, useState, useRef } from "react"
 import { useWallet } from "@/hooks/use-wallet"
 import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
+import ServerWelcomeDialog from "@/components/server-welcome-dialog"
 
 export default function App() {
     const { serverId, channelId, friendId } = useParams()
+    const [searchParams, setSearchParams] = useSearchParams()
     const navigate = useNavigate()
     const { connected, address } = useWallet()
     const { actions: stateActions } = useGlobalState()
@@ -26,6 +28,13 @@ export default function App() {
     const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false)
     const [nicknameDialogServerId, setNicknameDialogServerId] = useState<string | null>(null)
     const [nicknameDialogServerName, setNicknameDialogServerName] = useState<string>("")
+
+    // State for welcome dialog
+    const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false)
+    const [welcomeServerName, setWelcomeServerName] = useState<string>("")
+    const [welcomeMemberCount, setWelcomeMemberCount] = useState<number>(0)
+    const [welcomeServerLogo, setWelcomeServerLogo] = useState<string | undefined>(undefined)
+    const [pendingWelcomeServerId, setPendingWelcomeServerId] = useState<string | null>(null)
 
     // State to track servers where user clicked "Skip for now"
     const [skippedServers, setSkippedServers] = useState<Set<string>>(new Set())
@@ -99,6 +108,50 @@ export default function App() {
             subspaceActions.dms.getConversation(friendId).catch(console.error)
         }
     }, [serverId, channelId, friendId, subspace])
+
+    // Handle welcome popup from URL parameters
+    useEffect(() => {
+        const welcome = searchParams.get('welcome')
+
+        if (welcome === 'true' && serverId) {
+            // Get server data from loaded servers
+            const currentServer = servers[serverId]
+
+            if (currentServer) {
+                setWelcomeServerName(currentServer.name || `Server ${serverId.substring(0, 8)}...`)
+                setWelcomeMemberCount(currentServer.members?.length || currentServer.memberCount || 0)
+                setWelcomeServerLogo(currentServer.logo ? `https://arweave.net/${currentServer.logo}` : undefined)
+                setWelcomeDialogOpen(true)
+                setPendingWelcomeServerId(null) // Clear pending state
+
+                // Remove welcome parameter from URL without triggering navigation
+                const newSearchParams = new URLSearchParams(searchParams)
+                newSearchParams.delete('welcome')
+                setSearchParams(newSearchParams, { replace: true })
+            } else {
+                // Server data isn't loaded yet, mark it as pending
+                setPendingWelcomeServerId(serverId)
+
+                // Remove welcome parameter from URL without triggering navigation
+                const newSearchParams = new URLSearchParams(searchParams)
+                newSearchParams.delete('welcome')
+                setSearchParams(newSearchParams, { replace: true })
+            }
+        }
+    }, [searchParams, serverId, servers, setSearchParams])
+
+    // Show welcome popup when server data loads if it was pending
+    useEffect(() => {
+        if (pendingWelcomeServerId && servers[pendingWelcomeServerId]) {
+            const currentServer = servers[pendingWelcomeServerId]
+
+            setWelcomeServerName(currentServer.name || `Server ${pendingWelcomeServerId.substring(0, 8)}...`)
+            setWelcomeMemberCount(currentServer.members?.length || currentServer.memberCount || 0)
+            setWelcomeServerLogo(currentServer.logo ? `https://arweave.net/${currentServer.logo}` : undefined)
+            setWelcomeDialogOpen(true)
+            setPendingWelcomeServerId(null) // Clear pending state
+        }
+    }, [pendingWelcomeServerId, servers])
 
     // Check if user needs nickname prompt when server changes
     useEffect(() => {
@@ -272,6 +325,15 @@ export default function App() {
                 serverName={nicknameDialogServerName}
                 onClose={handleNicknameDialogClose}
                 onSkip={handleNicknameDialogSkip}
+            />
+
+            {/* Welcome Dialog */}
+            <ServerWelcomeDialog
+                isOpen={welcomeDialogOpen}
+                serverName={welcomeServerName}
+                memberCount={welcomeMemberCount}
+                serverLogo={welcomeServerLogo}
+                onClose={() => setWelcomeDialogOpen(false)}
             />
         </>
     )

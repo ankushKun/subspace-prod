@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -45,7 +45,9 @@ import {
     Clock,
     Edit,
     FileIcon, FileQuestion, LinkIcon, Eye,
-    ArrowBigDownDash
+    ArrowBigDownDash,
+    ExternalLink,
+    Shield
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -85,6 +87,7 @@ import "katex/dist/katex.min.css";
 import alien from "@/assets/subspace/alien-green.svg"
 import ProfilePopover from "./profile-popover"
 import type { Server } from "@subspace-protocol/sdk";
+import { useWallet } from "@/hooks/use-wallet";
 
 
 
@@ -526,6 +529,14 @@ const MessageContent = memo(({ content, attachments, activeServerId, servers }: 
                         #{mention.display}
                     </span>
                 );
+            }
+
+            // Handle server invite links
+            // example: https://subspace.ar.io/#/invite/[43-char-server-id]
+            if (href?.includes('subspace.ar.io/#/invite')) {
+                const serverId = href.split('/')[5]
+                return <InvitePreview serverId={serverId} href={href} />
+
             }
 
             // Handle regular links
@@ -1588,6 +1599,140 @@ export interface MessagesRef {
     focusInput: () => void;
     focusAndInsertText: (text: string) => void;
 }
+
+// InvitePreview Component
+interface InvitePreviewProps {
+    serverId: string;
+    href: string;
+}
+
+const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
+    const [serverInfo, setServerInfo] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const { actions } = useSubspace();
+    const { address } = useWallet();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchServerInfo = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
+                const server = await actions.servers.get(serverId);
+                setServerInfo(server);
+            } catch (err) {
+                console.error('Error fetching server info:', err);
+                setError('Failed to load server information');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchServerInfo();
+    }, [serverId, actions]);
+
+    const handleClick = () => {
+        navigate(`/invite/${serverId}`);
+    };
+
+    // Check if user is already a member
+    const isAlreadyMember = address && serverInfo?.members?.some((member: any) => member.userId === address);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md">
+                <Skeleton className="h-12 w-12 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-8 w-16" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md">
+                <div className="flex items-center justify-center h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                    <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">Invalid Invite</p>
+                    <p className="text-xs text-muted-foreground">This invite may have expired or is invalid</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!serverInfo) {
+        return (
+            <a
+                href={href}
+                className="text-blue-500 hover:underline cursor-pointer transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {href}
+            </a>
+        );
+    }
+
+    const serverIcon = serverInfo.logo
+        ? `https://arweave.net/${serverInfo.logo}`
+        : null;
+
+    const memberText = serverInfo.memberCount
+        ? `${serverInfo.memberCount} member${serverInfo.memberCount !== 1 ? 's' : ''}`
+        : 'Unknown members';
+
+    return (
+        <>
+            <Link to={href} target="_blank" className="text-blue-500 hover:underline cursor-pointer transition-colors">{href.replace("https://", "")}</Link>
+            <div
+                className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md cursor-pointer hover:bg-primary/[4%] transition-colors"
+                onClick={handleClick}
+            >
+                <div className="flex items-center justify-center h-12 w-12 bg-primary/10 rounded-lg overflow-hidden">
+                    {serverIcon ? (
+                        <img
+                            src={serverIcon}
+                            alt={serverInfo.name || 'Server'}
+                            className="h-full w-full object-cover"
+                        />
+                    ) : (
+                        <Shield className="h-6 w-6 text-primary" />
+                    )}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                        {serverInfo.name || `Server ${serverId.substring(0, 8)}...`}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                        {serverInfo.description || ``}
+                    </p>
+                    <div className="flex items-center space-x-2 text-xs mt-1 text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        <span>{memberText}</span>
+                    </div>
+                </div>
+                {isAlreadyMember ? (
+                    <Button size="sm" variant="outline" disabled className="shrink-0">
+                        <UserCheck className="h-3 w-3 mr-1" />
+                        Joined
+                    </Button>
+                ) : (
+                    <Button size="sm" variant="outline" className="shrink-0">
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Join
+                    </Button>
+                )}
+            </div>
+        </>
+
+    );
+};
 
 const Messages = React.forwardRef<MessagesRef, {
     className?: string;

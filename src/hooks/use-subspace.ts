@@ -409,11 +409,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return null
 
-                // ✅ ADDED: Check if this server is already being loaded
-                if (get().loadingServers.has(serverId)) {
-                    return get().servers[serverId] || null
-                }
-
                 // Check if we already have a proper server instance
                 const existingServer = get().servers[serverId]
                 if (existingServer && !forceRefresh) {

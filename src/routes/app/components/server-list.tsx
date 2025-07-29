@@ -1193,14 +1193,28 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
 
 // Skeleton Loader Component
 const ServerSkeleton = () => (
-    <div className="relative group mb-3 animate-pulse">
-        <div className="absolute inset-0 bg-muted/20 rounded-2xl blur-xl" />
+    <div className="relative group mb-3">
+        <div className="absolute inset-0 bg-muted/20 rounded-2xl blur-xl animate-pulse" />
         <div className="flex justify-center relative">
             <div className="w-12 h-12 p-0 rounded-3xl bg-muted/50 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-muted-foreground/10 to-transparent -translate-x-full animate-shimmer" />
-                <div className="w-full h-full rounded-xl bg-muted/30 flex items-center justify-center">
+                {/* Enhanced shimmer animation */}
+                <div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent animate-shimmer"
+                    style={{
+                        animation: 'shimmer 2s ease-in-out infinite',
+                        transform: 'translateX(-100%)'
+                    }}
+                />
+                <div className="w-full h-full rounded-xl bg-muted/30 flex items-center justify-center animate-pulse">
                     <div className="w-6 h-6 bg-muted-foreground/20 rounded animate-pulse" />
                 </div>
+            </div>
+        </div>
+
+        {/* Loading indicator */}
+        <div className="absolute -bottom-1 -right-1 z-10 pointer-events-none">
+            <div className="flex items-center justify-center w-[18px] h-[18px] rounded-full bg-gradient-to-br from-primary/60 to-primary/40 shadow-lg shadow-primary/30 border border-background/20 backdrop-blur-sm">
+                <div className="w-2 h-2 bg-primary rounded-full animate-ping" />
             </div>
         </div>
     </div>
@@ -1210,7 +1224,7 @@ export default function ServerList({ className, onServerJoined }: {
     className?: string
     onServerJoined?: (data: any) => void
 }) {
-    const { profile, servers, actions } = useSubspace()
+    const { profile, servers, actions, isLoadingProfile, loadingServers } = useSubspace()
     const { activeServerId } = useGlobalState()
     const navigate = useNavigate()
     const { connected, address, wanderInstance } = useWallet()
@@ -1238,7 +1252,12 @@ export default function ServerList({ className, onServerJoined }: {
         : []
 
     const loadedServersCount = displayServers.length
-    const skeletonsToShow = Math.max(0, expectedServerIds.length - loadedServersCount)
+    let skeletonsToShow = Math.max(0, expectedServerIds.length - loadedServersCount)
+
+    // Show placeholder skeletons when profile is loading and we don't know server count yet
+    if (isLoadingProfile && connected && address && skeletonsToShow === 0) {
+        skeletonsToShow = 3 // Show 3 placeholder skeletons during initial profile load
+    }
 
     function handleServerJoined(data: any) {
         // Navigate to the new server
@@ -1281,21 +1300,25 @@ export default function ServerList({ className, onServerJoined }: {
 
             {/* Server Buttons */}
             <div className="space-y-1 py-3">
-                {displayServers.map((server, index) => (
-                    <div
-                        key={server.serverId}
-                        style={{ animationDelay: `${index * 100}ms` }}
-                        className="animate-in slide-in-from-left-5 fade-in duration-500"
-                    >
-                        <ServerButton
-                            server={server}
-                            isActive={server.serverId === activeServerId}
-                            onClick={() => {
-                                navigate(`/app/${server.serverId}`)
-                            }}
-                        />
-                    </div>
-                ))}
+                {displayServers.map((server, index) => {
+                    const isServerLoading = loadingServers.has(server.serverId)
+                    return (
+                        <div
+                            key={server.serverId}
+                            style={{ animationDelay: `${index * 100}ms` }}
+                            className="animate-in slide-in-from-left-5 fade-in duration-500"
+                        >
+                            <ServerButton
+                                server={server}
+                                isActive={server.serverId === activeServerId}
+                                isUpdating={isServerLoading}
+                                onClick={() => {
+                                    navigate(`/app/${server.serverId}`)
+                                }}
+                            />
+                        </div>
+                    )
+                })}
 
                 {/* Skeleton loaders for servers being loaded */}
                 {Array.from({ length: skeletonsToShow }, (_, index) => (

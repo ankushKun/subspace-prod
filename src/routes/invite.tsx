@@ -162,12 +162,8 @@ export default function Invite() {
 
                 // Navigate to the server after a short delay
                 setTimeout(() => {
-                    const serverName = serverInfo?.name || `Server ${invite.substring(0, 8)}...`
-                    const memberCount = serverInfo?.memberCount || 0
-
-                    // Navigate with URL parameters for the welcome popup
-                    navigate(`/app?welcome=true&serverId=${invite}&serverName=${encodeURIComponent(serverName)}&memberCount=${memberCount}`)
-                    navigate(`/app/${invite}`)
+                    // Navigate to the server with welcome parameter
+                    navigate(`/app/${invite}?welcome=true`)
                 }, 1500)
             } else {
                 toast.error("Failed to join server")
@@ -300,10 +296,7 @@ export default function Invite() {
                                 ) : hasJoined ? (
                                     <Button
                                         onClick={() => {
-                                            const serverName = serverInfo?.name || `Server ${invite.substring(0, 8)}...`
-                                            const memberCount = serverInfo?.memberCount || 0
-                                            navigate(`/app?welcome=true&serverId=${invite}&serverName=${encodeURIComponent(serverName)}&memberCount=${memberCount}`)
-                                            navigate(`/app/${invite}`)
+                                            navigate(`/app/${invite}?welcome=true`)
                                         }}
                                         className="w-full h-12 text-base font-medium bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white"
                                     >

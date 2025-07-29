@@ -133,12 +133,12 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
             <div className="relative z-10 max-w-lg mx-auto px-6 space-y-12">
                 {/* Server Logo - Bright Green */}
                 <div className="flex justify-center">
-                    <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center shadow-2xl">
+                    <div className="w-24 h-24 rounded-2xl bg-primary flex items-center justify-center shadow-2xl">
                         {server.logo ? (
-                            <img src={`https://arweave.net/${server.logo}`} alt={`${server.name} logo`} className="w-19 h-19 rounded-2xl object-cover" />
+                            <img src={`https://arweave.net/${server.logo}`} alt={`${server.name} logo`} className="w-[99%] h-[99%] rounded-2xl object-cover" />
                         ) : (
                             <div className="w-10 h-10 text-primary-foreground">
-                                <img src={alien} alt="server" className="w-full h-full opacity-90" />
+                                <img src={alien} alt="server" className="w-[99%] h-[99%] opacity-90" />
                             </div>
                         )}
                     </div>
