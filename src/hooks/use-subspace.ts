@@ -107,6 +107,9 @@ interface SubspaceState {
             editMessage: (serverId: string, channelId: string, messageId: string, content: string) => Promise<boolean>
             deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
             getCachedMessages: (serverId: string, channelId: string) => any[]
+            updateServerCode: (serverId: string) => Promise<boolean>
+            refreshSources: () => Promise<boolean>
+            getSources: () => any | null
         }
         friends: {
             getFriends: () => Promise<ExtendedFriend[]>
@@ -1242,6 +1245,48 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 return Object.values(cachedChannelMessages)
                     .sort((a: any, b: any) => a.timestamp - b.timestamp)
             },
+            updateServerCode: async (serverId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.updateServerCode(serverId)
+                    if (success) {
+                        // Wait a moment for the server to process the change
+                        await new Promise(resolve => setTimeout(resolve, 200))
+
+                        // Force refresh the server to get updated version while preserving members
+                        try {
+                            const updatedServer = await get().actions.servers.get(serverId, true)
+                        } catch (refreshError) {
+                            console.error("❌ Failed to refresh server after code update:", refreshError)
+                            // Don't fail the operation just because refresh failed
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to update server code:", error)
+                    return false
+                }
+            },
+            refreshSources: async () => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    // Type assertion to access connectionManager
+                    const sources = await subspace.connectionManager.refreshSources()
+                    return !!sources
+                } catch (error) {
+                    console.error("Failed to refresh sources:", error)
+                    return false
+                }
+            },
+            getSources: () => {
+                const subspace = get().subspace
+                if (!subspace) return null
+                return subspace.connectionManager.sources
+            }
         },
         friends: {
             getFriends: async () => {

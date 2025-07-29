@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Settings, Users, Shield, Hash, Trash2, Settings2 } from "lucide-react"
+import { ArrowLeft, Settings, Users, Shield, Hash, Trash2, Settings2, Code2 } from "lucide-react"
 import { useNavigate, useParams } from "react-router"
 import alien from "@/assets/subspace/alien-black.svg"
 
@@ -10,6 +10,7 @@ import ServerProfile from "./components/server-settings/server-profile"
 import ServerChannels from "./components/server-settings/server-channels"
 import ServerRoles from "./components/server-settings/server-roles"
 import ServerMembers from "./components/server-settings/server-members"
+import ServerUpdate from "./components/server-settings/server-update"
 
 import { useSubspace } from "@/hooks/use-subspace"
 import { useGlobalState } from "@/hooks/use-global-state"
@@ -42,6 +43,13 @@ const settingsNavigation = [
         icon: Users,
         component: ServerMembers,
         section: "PEOPLE"
+    },
+    {
+        id: "update",
+        label: "Update Server",
+        icon: Code2,
+        component: ServerUpdate,
+        section: "SERVER SETTINGS"
     },
     {
         id: "delete",

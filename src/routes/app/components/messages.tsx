@@ -313,7 +313,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
         <div
             {...props}
             className={cn("flex items-start gap-2 border-muted-foreground/30 hover:border-primary/50 transition-all duration-200 cursor-pointer rounded-r-md hover:bg-muted/30 py-1.5 pl-2 -mb-2 group/reply", props.className)}
-            onClick={() => onJumpToMessage?.(replyToMessage.messageId)}
+            onClick={() => onJumpToMessage?.(String(replyToMessage.messageId))}
             title="Click to jump to original message"
         >
             <CornerLeftDown className="w-3 h-3 text-muted-foreground/50 group-hover/reply:text-primary/70 mt-0.5 flex-shrink-0 transition-colors" />
@@ -785,7 +785,7 @@ const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
             {/* Date badge */}
-            <div className="relative bg-background px-2.5 py-0.5 flex items-center justify-center rounded-full border border-border/50 shadow-sm">
+            <div className="relative bg-background px-2.5 py-0.5 flex items-center justify-center rounded-full border border-border">
                 <span className="text-xs font-medium text-muted-foreground">
                     {formatDate(timestamp)}
                 </span>
@@ -867,7 +867,8 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
     const { profiles, servers } = useSubspace()
     const { activeServerId } = useGlobalState()
 
-    const isMyReply = message.replyToMessage?.authorId === profile?.userId
+    // Only highlight replies when both profile and reply author are properly loaded
+    const isMyReply = !!(profile?.userId && message.replyToMessage?.authorId && message.replyToMessage.authorId === profile.userId)
     const authorRoleColor = getUserRoleColor(message.authorId, activeServerId, servers)
 
 
@@ -942,9 +943,9 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
             {isHovered && (
                 <MessageActions
                     message={message}
-                    onReply={() => onReply(message.messageId)}
-                    onEdit={() => onEdit(message.messageId, message.content)}
-                    onDelete={() => onDelete(message.messageId)}
+                    onReply={() => onReply(String(message.messageId))}
+                    onEdit={() => onEdit(String(message.messageId), message.content)}
+                    onDelete={() => onDelete(String(message.messageId))}
                 />
             )}
         </div>
@@ -962,8 +963,11 @@ interface MessageInputRef {
 
 interface MessageInputProps {
     onSendMessage: (content: string, attachments?: string[]) => void;
+    onEditMessage?: (messageId: string, content: string) => void;
     replyingTo?: Message | null;
+    editingMessage?: { id: string; content: string } | null;
     onCancelReply?: () => void;
+    onCancelEdit?: () => void;
     disabled?: boolean;
     channelName?: string;
     messagesInChannel?: Message[];
@@ -974,8 +978,11 @@ interface MessageInputProps {
 
 const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     onSendMessage,
+    onEditMessage,
     replyingTo,
+    editingMessage,
     onCancelReply,
+    onCancelEdit,
     disabled = false,
     channelName,
     messagesInChannel = [],
@@ -990,6 +997,16 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const fileInputRef = useRef<HTMLInputElement>(null)
     const { profiles } = useSubspace()
     const isMobile = useIsMobile()
+
+    // Set message content when editing mode starts
+    React.useEffect(() => {
+        if (editingMessage) {
+            setMessage(editingMessage.content)
+        } else if (!replyingTo) {
+            // Only clear when not replying (to preserve message when switching from reply to normal mode)
+            setMessage("")
+        }
+    }, [editingMessage, replyingTo])
 
     // Expose focus and blur methods to parent component
     React.useImperativeHandle(ref, () => ({
@@ -1320,15 +1337,26 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
         setIsSending(true)
         try {
-            await onSendMessage(message.trim(), attachments)
-            setMessage("") // Clear input after sending
-            setAttachments([]) // Clear attachments
-            if (replyingTo && onCancelReply) {
-                onCancelReply()
+            if (editingMessage) {
+                // Handle message editing
+                if (onEditMessage) {
+                    await onEditMessage(editingMessage.id, message.trim())
+                }
+                if (onCancelEdit) {
+                    onCancelEdit()
+                }
+            } else {
+                // Handle new message sending
+                await onSendMessage(message.trim(), attachments)
+                if (replyingTo && onCancelReply) {
+                    onCancelReply()
+                }
             }
+            setMessage("") // Clear input after sending/editing
+            setAttachments([]) // Clear attachments
         } catch (error) {
-            console.error("Error sending message:", error)
-            toast.error("Failed to send message")
+            console.error("Error processing message:", error)
+            toast.error(editingMessage ? "Failed to update message" : "Failed to send message")
         } finally {
             setIsSending(false)
         }
@@ -1339,6 +1367,13 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             e.preventDefault()
             if (!isSending) {
                 handleSend()
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault()
+            if (editingMessage && onCancelEdit) {
+                onCancelEdit()
+            } else if (replyingTo && onCancelReply) {
+                onCancelReply()
             }
         }
     }
@@ -1379,14 +1414,31 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             Cancel
                         </Button>
                     </div>
-                    {replyingTo.replyToMessage ? (
+                    {replyingTo.content && (
                         <div className="flex items-center gap-2 px-4 py-2 bg-muted/20">
-                            <span className="text-sm text-muted-foreground">
-                                {replyingTo.replyToMessage.content}
+                            <span className="text-sm text-muted-foreground truncate">
+                                {replyingTo.content.length > 100 ? replyingTo.content.substring(0, 100) + "..." : replyingTo.content}
                             </span>
                         </div>
-                    ) : null}
+                    )}
                 </>
+            )}
+
+            {/* Edit indicator */}
+            {editingMessage && (
+                <div className="flex items-center gap-2 px-4 -mb-3">
+                    <Edit className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm text-muted-foreground">
+                        Editing message
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onCancelEdit}
+                    >
+                        Cancel
+                    </Button>
+                </div>
             )}
 
             {/* Message Input */}
@@ -1428,7 +1480,8 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         size="icon"
                         className="h-11 w-11"
                         onClick={handleFileUpload}
-                        disabled={isSending || disabled}
+                        disabled={isSending || disabled || !!editingMessage}
+                        title={editingMessage ? "File uploads not available when editing" : "Upload file"}
                     >
                         <Paperclip className="w-4 h-4" />
                     </Button>
@@ -1438,7 +1491,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             value={message}
                             onChange={(event, newValue) => setMessage(newValue)}
                             onKeyDown={handleKeyPress}
-                            placeholder={`Message #${channelName || 'channel'}`}
+                            placeholder={editingMessage ? "Edit your message..." : `Message #${channelName || 'channel'}`}
                             disabled={isSending || disabled}
                             singleLine={false}
                             autoFocus
@@ -1561,9 +1614,12 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         size="icon"
                         disabled={(!message.trim() && attachments.length === 0) || isSending || disabled}
                         className="h-11 w-11"
+                        title={editingMessage ? "Save changes" : "Send message"}
                     >
                         {isSending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : editingMessage ? (
+                            <Check className="w-4 h-4 text-green-600" />
                         ) : (
                             <Send className="w-4 h-4" />
                         )}
@@ -1582,7 +1638,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
                 <div className="flex items-center justify-between text-[10px] mt-1 -mb-2.5 px-2 text-xs text-muted-foreground/50">
                     <span>
-                        Press Enter to send, Shift+Enter for new line
+                        {editingMessage ? "Press Enter to save changes, Shift+Enter for new line" : "Press Enter to send, Shift+Enter for new line"}
                     </span>
                     <span>
                         {message.length}/2000
@@ -1836,7 +1892,7 @@ const Messages = React.forwardRef<MessagesRef, {
         }, 150);
 
         // Check if we have cached messages for this channel
-        const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
+        const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, String(activeChannelId));
         if (cachedMessages && cachedMessages.length > 0) {
             setMessages(populateReplyToMessages(cachedMessages));
             setLoading(false);
@@ -1862,7 +1918,7 @@ const Messages = React.forwardRef<MessagesRef, {
         if (subspace && server && activeChannelId && channel && messages.length === 0) {
 
             // Check for cached messages first
-            const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
+            const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, String(activeChannelId));
             if (cachedMessages && cachedMessages.length > 0) {
                 setMessages(populateReplyToMessages(cachedMessages));
                 // Scroll to bottom for initial load
@@ -1948,7 +2004,9 @@ const Messages = React.forwardRef<MessagesRef, {
     // Focus input when replying or editing
     useEffect(() => {
         if (replyingTo || editingMessage) {
-            inputRef.current?.focus();
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
         }
     }, [replyingTo, editingMessage]);
 
@@ -1965,7 +2023,7 @@ const Messages = React.forwardRef<MessagesRef, {
         }
 
         try {
-            const messages = await actions.servers.getMessages(activeServerId, activeChannelId, 50);
+            const messages = await actions.servers.getMessages(activeServerId, String(activeChannelId), 50);
 
             if (messages && messages.length > 0) {
                 setMessages(populateReplyToMessages(messages));
@@ -2013,9 +2071,9 @@ const Messages = React.forwardRef<MessagesRef, {
 
         try {
             const success = await actions.servers.sendMessage(activeServerId, {
-                channelId: activeChannelId,
+                channelId: String(activeChannelId),
                 content: content.trim(),
-                replyTo: replyingTo?.messageId || undefined,
+                replyTo: replyingTo?.messageId ? String(replyingTo.messageId) : undefined,
                 attachments: JSON.stringify(attachments)
             });
 
@@ -2047,7 +2105,8 @@ const Messages = React.forwardRef<MessagesRef, {
         }
 
         try {
-            const success = await actions.servers.editMessage(activeServerId, activeChannelId, messageId, content.trim());
+            // Ensure both channelId and messageId are strings
+            const success = await actions.servers.editMessage(activeServerId, String(activeChannelId), String(messageId), content.trim());
 
             if (success) {
                 setEditingMessage(null);
@@ -2071,10 +2130,11 @@ const Messages = React.forwardRef<MessagesRef, {
         }
 
         try {
-            const success = await actions.servers.deleteMessage(activeServerId, activeChannelId, messageId);
+            // Ensure both channelId and messageId are strings
+            const success = await actions.servers.deleteMessage(activeServerId, String(activeChannelId), String(messageId));
             if (success) {
                 // Remove message from local state
-                setMessages(prev => prev.filter(m => m.messageId !== messageId));
+                setMessages(prev => prev.filter(m => String(m.messageId) !== String(messageId)));
                 toast.success("Message deleted");
             } else {
                 toast.error("Failed to delete message");
@@ -2095,14 +2155,14 @@ const Messages = React.forwardRef<MessagesRef, {
     };
 
     const handleEdit = (messageId: string, content: string) => {
-        setEditingMessage({ id: messageId, content });
+        setEditingMessage({ id: String(messageId), content });
         setReplyingTo(null);
         inputRef.current?.focus();
     };
 
     const handleJumpToMessage = (messageId: string) => {
         // Find the message element and scroll to it
-        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        const messageElement = document.querySelector(`[data-message-id="${String(messageId)}"]`);
         if (messageElement) {
             messageElement.scrollIntoView({
                 behavior: 'smooth',
@@ -2311,8 +2371,11 @@ const Messages = React.forwardRef<MessagesRef, {
             <MessageInput
                 ref={inputRef}
                 onSendMessage={sendMessage}
+                onEditMessage={editMessage}
                 replyingTo={replyingTo}
+                editingMessage={editingMessage}
                 onCancelReply={() => setReplyingTo(null)}
+                onCancelEdit={() => setEditingMessage(null)}
                 disabled={!server || !channel || !subspace}
                 channelName={channel?.name}
                 messagesInChannel={messages}
