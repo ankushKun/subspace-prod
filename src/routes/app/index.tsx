@@ -12,6 +12,7 @@ import { useGlobalState } from "@/hooks/use-global-state"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useEffect, useState, useRef, useMemo } from "react"
 import { useWallet } from "@/hooks/use-wallet"
+import { useIsMobile } from "@/hooks/use-mobile"
 import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
 import ServerWelcomeDialog from "@/components/server-welcome-dialog"
@@ -47,6 +48,22 @@ export default function App() {
     // Refs for Messages and DMMessages components to access their input focus methods
     const messagesRef = useRef<MessagesRef>(null)
     const dmMessagesRef = useRef<DMMessagesRef>(null)
+
+    // Mobile detection for responsive behavior
+    const isMobile = useIsMobile()
+
+    // State for member list visibility
+    const [showMemberList, setShowMemberList] = useState(!isMobile)
+
+    // Auto-collapse member list on mobile
+    useEffect(() => {
+        setShowMemberList(!isMobile)
+    }, [isMobile])
+
+    // Toggle member list handler
+    const handleToggleMemberList = () => {
+        setShowMemberList(prev => !prev)
+    }
 
     useEffect(() => {
         const previousAddress = previousAddressRef.current
@@ -320,7 +337,12 @@ export default function App() {
                 </div>
                 {/* Main content area */}
                 {(serverId && channelId) ? (
-                    <Messages ref={messagesRef} className="grow border-r h-full" />
+                    <Messages
+                        ref={messagesRef}
+                        className="grow border-r h-full"
+                        onToggleMemberList={handleToggleMemberList}
+                        showMemberList={showMemberList}
+                    />
                 ) : friendId ? (
                     <DMMessages ref={dmMessagesRef} className="grow border-r h-full" />
                 ) : (
@@ -328,7 +350,17 @@ export default function App() {
                 )}
                 {/* Right sidebar - show member list for servers, hide for DMs */}
                 {(serverId && channelId) && (
-                    <MemberList className="w-80 min-w-80 border-r h-full" />
+                    <MemberList
+                        className="border-r h-full transition-all duration-300 ease-in-out"
+                        style={{
+                            width: showMemberList ? '320px' : '0px',
+                            minWidth: showMemberList ? '320px' : '0px',
+                            maxWidth: showMemberList ? '320px' : '0px',
+                            overflow: 'hidden',
+                            opacity: showMemberList ? 1 : 0
+                        }}
+                        isVisible={showMemberList}
+                    />
                 )}
             </div>
 

@@ -222,7 +222,11 @@ const MemberSection = ({
     )
 }
 
-export default function MemberList({ className }: { className?: string }) {
+export default function MemberList({ className, isVisible = true, style }: {
+    className?: string
+    isVisible?: boolean
+    style?: React.CSSProperties
+}) {
     const { activeServerId } = useGlobalState()
     const { servers, actions, profiles } = useSubspace()
     const [searchQuery, setSearchQuery] = useState("")
@@ -432,15 +436,19 @@ export default function MemberList({ className }: { className?: string }) {
     }
 
     return (
-        <div className={cn(
-            "flex flex-col w-60 h-full relative",
-            "bg-gradient-to-b from-background via-background/95 to-background/90",
-            "border-l border-border/50 backdrop-blur-sm",
-            "scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/40",
-            // Alien pattern overlay
-            "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(var(--primary)/0.03)_0%,transparent_50%)] before:pointer-events-none",
-            className
-        )}>
+        <div
+            className={cn(
+                "flex flex-col w-60 h-full relative",
+                "bg-gradient-to-b from-background via-background/95 to-background/90",
+                "border-l border-border/50 backdrop-blur-sm",
+                "scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/40",
+                // Alien pattern overlay
+                "before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_50%_50%,rgba(var(--primary)/0.03)_0%,transparent_50%)] before:pointer-events-none",
+                !isVisible && "pointer-events-none",
+                className
+            )}
+            style={style}
+        >
             {/* Ambient alien glow at top */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-16 bg-primary/5 rounded-full blur-2xl" />
 

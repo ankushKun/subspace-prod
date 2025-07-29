@@ -188,7 +188,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
             <div className="flex items-center justify-center gap-1 h-full">
                 <div className="w-px h-6 bg-border/50 mx-1" />
 
-                {!isMobile && activeServerId && (
+                {activeServerId && (
                     <Button
                         size="icon"
                         variant="ghost"
