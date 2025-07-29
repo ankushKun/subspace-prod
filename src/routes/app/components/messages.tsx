@@ -76,7 +76,7 @@ import {
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobileContext } from "@/hooks/use-mobile";
 import { Mention, MentionsInput } from "react-mentions";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -161,7 +161,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
 }) => {
     const [isNotificationMuted, setIsNotificationMuted] = useState(false)
     const { activeServerId } = useGlobalState()
-    const isMobile = useIsMobile()
+    const { shouldUseOverlays } = useMobileContext()
 
     return (
         <div className="flex items-center justify-between px-4 py-3 pr-2 border-b border-border/50 bg-background/80 backdrop-blur-sm relative z-10">
@@ -375,12 +375,16 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     onDelete?: () => void;
 }) => {
     const { profile } = useSubspace()
+    const { shouldUseTouchSizes } = useMobileContext()
 
     // Check if current user can edit (only message author)
     const canEdit = message.authorId === profile?.userId
 
     // Check if current user can delete (message author for now)
     const canDelete = message.authorId === profile?.userId
+
+    // Use larger buttons on mobile/touch devices
+    const buttonSize = shouldUseTouchSizes ? "h-10 w-10" : "h-8 w-8"
 
     function copyFingerprint() {
         navigator.clipboard.writeText(message.messageTxId)
@@ -389,22 +393,22 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
 
     return (
         <div className="absolute -top-4 right-4 bg-background border border-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center">
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onReply}>
+            <Button size="sm" variant="ghost" className={`${buttonSize} p-0 hover:bg-muted`} onClick={onReply}>
                 <Reply className="w-4 h-4" />
             </Button>
             {canEdit && (
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={onEdit}>
+                <Button size="sm" variant="ghost" className={`${buttonSize} p-0 hover:bg-muted`} onClick={onEdit}>
                     <Edit className="w-4 h-4" />
                 </Button>
             )}
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-muted" onClick={copyFingerprint}>
+            <Button size="sm" variant="ghost" className={`${buttonSize} p-0 hover:bg-muted`} onClick={copyFingerprint}>
                 <Fingerprint className="w-4 h-4" />
             </Button>
             {canDelete && (
                 <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 w-8 p-0 hover:bg-muted text-destructive hover:text-destructive"
+                    className={`${buttonSize} p-0 hover:bg-muted text-destructive hover:text-destructive`}
                     onClick={onDelete}
                 >
                     <Trash2 className="w-4 h-4" />
@@ -996,7 +1000,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const mentionsInputRef = useRef<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const { profiles } = useSubspace()
-    const isMobile = useIsMobile()
+    const { isMobile } = useMobileContext()
 
     // Set message content when editing mode starts
     React.useEffect(() => {
@@ -1797,6 +1801,7 @@ const Messages = React.forwardRef<MessagesRef, {
 }>(({ className, onToggleMemberList, showMemberList }, ref) => {
     const { activeServerId, activeChannelId } = useGlobalState();
     const { servers, profile, profiles, actions, subspace } = useSubspace();
+    const { shouldUseOverlays } = useMobileContext();
 
     // State
     const [messages, setMessages] = useState<Message[]>([]);
@@ -2264,13 +2269,15 @@ const Messages = React.forwardRef<MessagesRef, {
             "bg-gradient-to-b from-background via-background/98 to-background/95",
             className
         )}>
-            {/* Enhanced Channel Header */}
-            <ChannelHeader
-                channelName={channel.name}
-                memberCount={server.memberCount}
-                onToggleMemberList={onToggleMemberList}
-                showMemberList={showMemberList}
-            />
+            {/* Enhanced Channel Header - Hidden on mobile since we use MobileHeader */}
+            {!shouldUseOverlays && (
+                <ChannelHeader
+                    channelName={channel.name}
+                    memberCount={server.memberCount}
+                    onToggleMemberList={onToggleMemberList}
+                    showMemberList={showMemberList}
+                />
+            )}
 
             {/* Messages container */}
             <div

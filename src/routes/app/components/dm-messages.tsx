@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
+import { useMobileContext } from "@/hooks/use-mobile";
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -727,6 +728,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
 }>(({ className }, ref) => {
     const { activeFriendId } = useGlobalState();
     const { friends, dmConversations, profile, profiles, actions, subspace } = useSubspace();
+    const { shouldUseOverlays } = useMobileContext();
 
     // State
     const [messages, setMessages] = useState<DMMessage[]>([]);
@@ -1042,11 +1044,13 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
             "bg-gradient-to-b from-background via-background/98 to-background/95",
             className
         )}>
-            {/* DM Header */}
-            <DMHeader
-                friendId={activeFriendId}
-                friendProfile={friend?.profile}
-            />
+            {/* DM Header - Hidden on mobile since we use MobileHeader */}
+            {!shouldUseOverlays && (
+                <DMHeader
+                    friendId={activeFriendId}
+                    friendProfile={friend?.profile}
+                />
+            )}
 
             {/* Messages container */}
             <div

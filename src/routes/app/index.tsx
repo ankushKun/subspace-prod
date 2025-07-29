@@ -12,10 +12,16 @@ import { useGlobalState } from "@/hooks/use-global-state"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useEffect, useState, useRef, useMemo } from "react"
 import { useWallet } from "@/hooks/use-wallet"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useMobileContext } from "@/hooks/use-mobile"
 import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
 import ServerWelcomeDialog from "@/components/server-welcome-dialog"
+
+// Mobile components
+import MobileSplitView from "./components/mobile-split-view"
+import MobileChannelsView from "./components/mobile-channels-view"
+import MobileMessagesView from "./components/mobile-messages-view"
+import MobileMemberSheet from "./components/mobile-member-sheet"
 
 export default function App() {
     const { serverId, channelId, friendId } = useParams()
@@ -24,6 +30,9 @@ export default function App() {
     const { connected, address } = useWallet()
     const { actions: stateActions } = useGlobalState()
     const { actions: subspaceActions, subspace, profile, servers, profiles, isCreatingProfile } = useSubspace()
+
+    // Mobile context
+    const { isMobile, shouldUseOverlays, shouldUseTouchSizes } = useMobileContext()
 
     // State for nickname setting dialog
     const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false)
@@ -49,20 +58,38 @@ export default function App() {
     const messagesRef = useRef<MessagesRef>(null)
     const dmMessagesRef = useRef<DMMessagesRef>(null)
 
-    // Mobile detection for responsive behavior
-    const isMobile = useIsMobile()
-
     // State for member list visibility
     const [showMemberList, setShowMemberList] = useState(!isMobile)
 
+    // Mobile member sheet state
+    const [showMemberSheet, setShowMemberSheet] = useState(false)
+
     // Auto-collapse member list on mobile
     useEffect(() => {
-        setShowMemberList(!isMobile)
-    }, [isMobile])
+        if (shouldUseOverlays) {
+            setShowMemberList(false)
+        } else {
+            setShowMemberList(true)
+        }
+    }, [shouldUseOverlays])
 
     // Toggle member list handler
     const handleToggleMemberList = () => {
-        setShowMemberList(prev => !prev)
+        if (shouldUseOverlays) {
+            // On mobile, show the member sheet instead
+            setShowMemberSheet(prev => !prev)
+        } else {
+            // On desktop, toggle the sidebar
+            setShowMemberList(prev => !prev)
+        }
+    }
+
+    // Get current mobile view based on URL state
+    const getMobileView = () => {
+        if (friendId) return 'messages' // DM conversation
+        if (serverId && channelId) return 'messages' // Channel conversation
+        if (serverId) return 'channels' // Server channels list
+        return 'home' // Servers + DMs split view
     }
 
     useEffect(() => {
@@ -316,53 +343,87 @@ export default function App() {
             const friendName = profiles[friendId]?.displayName || profiles[friendId]?.primaryName || friendId.substring(0, 4) + "..." + friendId.substring(friendId.length - 4)
             return `${friendName} | Subspace`
         }
-
-
-    }, [serverId, channelId, servers])
+        return "Subspace"
+    }, [serverId, channelId, servers, friendId, profiles])
 
     return (
         <>
             <title>{title}</title>
-            <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
-                <ServerList className="w-20 min-w-20 max-w-20 !overflow-x-visible overflow-y-scroll border-r h-full" />
-                <div className="flex flex-col h-full items-start justify-start">
-                    <div className="grow h-full border-r border-b rounded-br-xl">
-                        {serverId ? (
-                            <ChannelList className="w-80 min-w-80 h-full" />
-                        ) : (
-                            <DmsList className="w-80 min-w-80 h-full" />
-                        )}
-                    </div>
-                    <Profile className="w-full h-fit p-2" />
+
+            {/* Mobile Layout */}
+            {shouldUseOverlays ? (
+                <div className="h-screen w-screen overflow-hidden">
+                    {/* Mobile Navigation Stack */}
+                    {(() => {
+                        const currentView = getMobileView()
+
+                        switch (currentView) {
+                            case 'messages':
+                                return (
+                                    <MobileMessagesView
+                                        onToggleMemberList={handleToggleMemberList}
+                                        showMemberList={showMemberSheet}
+                                    />
+                                )
+                            case 'channels':
+                                return <MobileChannelsView />
+                            case 'home':
+                            default:
+                                return <MobileSplitView />
+                        }
+                    })()}
+
+                    {/* Mobile Member Sheet - only show for server channels */}
+                    {(serverId && channelId) && (
+                        <MobileMemberSheet
+                            isOpen={showMemberSheet}
+                            onClose={() => setShowMemberSheet(false)}
+                        />
+                    )}
                 </div>
-                {/* Main content area */}
-                {(serverId && channelId) ? (
-                    <Messages
-                        ref={messagesRef}
-                        className="grow border-r h-full"
-                        onToggleMemberList={handleToggleMemberList}
-                        showMemberList={showMemberList}
-                    />
-                ) : friendId ? (
-                    <DMMessages ref={dmMessagesRef} className="grow border-r h-full" />
-                ) : (
-                    <Welcome className="grow h-full" />
-                )}
-                {/* Right sidebar - show member list for servers, hide for DMs */}
-                {(serverId && channelId) && (
-                    <MemberList
-                        className="border-r h-full transition-all duration-300 ease-in-out"
-                        style={{
-                            width: showMemberList ? '320px' : '0px',
-                            minWidth: showMemberList ? '320px' : '0px',
-                            maxWidth: showMemberList ? '320px' : '0px',
-                            overflow: 'hidden',
-                            opacity: showMemberList ? 1 : 0
-                        }}
-                        isVisible={showMemberList}
-                    />
-                )}
-            </div>
+            ) : (
+                /* Desktop Layout - Original */
+                <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
+                    <ServerList className="w-20 min-w-20 max-w-20 !overflow-x-visible overflow-y-scroll border-r h-full" />
+                    <div className="flex flex-col h-full items-start justify-start">
+                        <div className="grow h-full border-r border-b rounded-br-xl">
+                            {serverId ? (
+                                <ChannelList className="w-80 min-w-80 h-full" />
+                            ) : (
+                                <DmsList className="w-80 min-w-80 h-full" />
+                            )}
+                        </div>
+                        <Profile className="w-full h-fit p-2" />
+                    </div>
+                    {/* Main content area */}
+                    {(serverId && channelId) ? (
+                        <Messages
+                            ref={messagesRef}
+                            className="grow border-r h-full"
+                            onToggleMemberList={handleToggleMemberList}
+                            showMemberList={showMemberList}
+                        />
+                    ) : friendId ? (
+                        <DMMessages ref={dmMessagesRef} className="grow border-r h-full" />
+                    ) : (
+                        <Welcome className="grow h-full" />
+                    )}
+                    {/* Right sidebar - show member list for servers, hide for DMs */}
+                    {(serverId && channelId) && (
+                        <MemberList
+                            className="border-r h-full transition-all duration-300 ease-in-out"
+                            style={{
+                                width: showMemberList ? '320px' : '0px',
+                                minWidth: showMemberList ? '320px' : '0px',
+                                maxWidth: showMemberList ? '320px' : '0px',
+                                overflow: 'hidden',
+                                opacity: showMemberList ? 1 : 0
+                            }}
+                            isVisible={showMemberList}
+                        />
+                    )}
+                </div>
+            )}
 
             {/* Profile Creation Dialog */}
             <ProfileCreationDialog />
