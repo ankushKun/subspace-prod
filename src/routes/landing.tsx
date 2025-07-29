@@ -38,6 +38,7 @@ export default function SubspaceLanding() {
 
     return (
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">
+            <title>Subspace</title>
             {/* <ThemeToggleButton className="rounded-xs left-4.5 !z-20 absolute -top-0.5 !text-black !bg-transparent" /> */}
             <img src={alien} alt="logo" className="absolute top-0.5 left-5 w-6 h-6 z-20" />
             {!connected ? <LoginDialog>

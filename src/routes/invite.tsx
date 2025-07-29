@@ -14,7 +14,7 @@ import { createSigner } from "@permaweb/aoconnect"
 export default function Invite() {
     const { invite } = useParams()
     const navigate = useNavigate()
-    const { connected, address, jwk, wauthInstance } = useWallet()
+    const { connected, address, jwk, wauthInstance, connectionStrategy } = useWallet()
 
     const [serverInfo, setServerInfo] = useState<Server | null>(null)
     const [isLoading, setIsLoading] = useState(true)
@@ -30,18 +30,18 @@ export default function Invite() {
             owner: address || "0x69420" // Use a default address for read-only operations
         }
 
-        if (connected) {
-            if (ConnectionStrategies.ArWallet) {
+        if (connected && connectionStrategy) {
+            if (connectionStrategy === ConnectionStrategies.ArWallet) {
                 config['signer'] = createSigner(window.arweaveWallet)
-            } else if (ConnectionStrategies.ScannedJWK) {
+            } else if (connectionStrategy === ConnectionStrategies.ScannedJWK) {
                 config['jwk'] = jwk
-            } else if (ConnectionStrategies.WAuth) {
+            } else if (connectionStrategy === ConnectionStrategies.WAuth) {
                 try {
                     config['signer'] = wauthInstance?.getAoSigner()
                 } catch (error) {
                     console.error("Failed to get WAuth signer:", error)
                 }
-            } else if (ConnectionStrategies.WanderConnect) {
+            } else if (connectionStrategy === ConnectionStrategies.WanderConnect) {
                 config['signer'] = createSigner(window.arweaveWallet)
             }
         }

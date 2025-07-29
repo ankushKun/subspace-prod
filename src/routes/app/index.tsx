@@ -10,7 +10,7 @@ import Welcome from "./components/welcome"
 import Profile from "./components/profile"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useSubspace } from "@/hooks/use-subspace"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { useWallet } from "@/hooks/use-wallet"
 import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
@@ -22,7 +22,7 @@ export default function App() {
     const navigate = useNavigate()
     const { connected, address } = useWallet()
     const { actions: stateActions } = useGlobalState()
-    const { actions: subspaceActions, subspace, profile, servers, isCreatingProfile } = useSubspace()
+    const { actions: subspaceActions, subspace, profile, servers, profiles, isCreatingProfile } = useSubspace()
 
     // State for nickname setting dialog
     const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false)
@@ -287,8 +287,25 @@ export default function App() {
         handleNicknameDialogClose()
     }
 
+    const title = useMemo(() => {
+        let server = ""
+        if (serverId) {
+            server = servers[serverId]?.name || "Subspace"
+            if (channelId) {
+                return `#${servers[serverId]?.channels.find(c => c.channelId == channelId)?.name} | ${server}`
+            }
+            return server
+        } else if (friendId) {
+            const friendName = profiles[friendId]?.displayName || profiles[friendId]?.primaryName || friendId.substring(0, 4) + "..." + friendId.substring(friendId.length - 4)
+            return `${friendName} | Subspace`
+        }
+
+
+    }, [serverId, channelId, servers])
+
     return (
         <>
+            <title>{title}</title>
             <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
                 <ServerList className="w-20 min-w-20 max-w-20 !overflow-x-visible overflow-y-scroll border-r h-full" />
                 <div className="flex flex-col h-full items-start justify-start">
