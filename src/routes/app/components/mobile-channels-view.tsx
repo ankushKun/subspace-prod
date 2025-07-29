@@ -13,7 +13,10 @@ import {
 import { useNavigate } from "react-router"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useSubspace } from "@/hooks/use-subspace"
+import { useWallet } from "@/hooks/use-wallet"
 import type { Channel, Category } from "@subspace-protocol/sdk"
+import LoginDialog from "@/components/login-dialog"
+import alien from "@/assets/subspace/alien-black.svg"
 
 interface MobileChannelsViewProps {
     className?: string
@@ -23,6 +26,7 @@ export default function MobileChannelsView({ className }: MobileChannelsViewProp
     const navigate = useNavigate()
     const { activeServerId, activeChannelId } = useGlobalState()
     const { servers } = useSubspace()
+    const { address, connected } = useWallet()
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
     // Get current server
@@ -93,6 +97,53 @@ export default function MobileChannelsView({ className }: MobileChannelsViewProp
             }
             return newSet
         })
+    }
+
+    // Show connect prompt if not connected
+    if (!connected || !address) {
+        return (
+            <div className={cn("flex flex-col h-full bg-background", className)}>
+                <div className="flex items-center gap-3 p-4 border-b border-border bg-background/95 backdrop-blur-sm">
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handleBack}
+                        className="h-10 w-10 hover:bg-muted/50 transition-colors flex-shrink-0"
+                        aria-label="Back to servers"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </Button>
+                    <h1 className="text-lg font-semibold text-foreground font-ocr">
+                        Server Channels
+                    </h1>
+                </div>
+
+                <div className="flex-1 flex items-center justify-center p-8">
+                    <div className="text-center space-y-6">
+                        <div className="w-16 h-16 mx-auto bg-primary/20 rounded-full flex items-center justify-center border border-primary/30">
+                            <img src={alien} alt="alien" className="w-8 h-8 opacity-60" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-lg font-medium text-foreground font-ocr">
+                                Connect Required
+                            </h3>
+                            <p className="text-sm text-muted-foreground max-w-sm">
+                                Connect your wallet to view server channels and join conversations.
+                            </p>
+                        </div>
+                        <LoginDialog>
+                            <Button
+                                size="lg"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-ocr gap-2 px-6"
+                            >
+                                <Hash className="w-5 h-5" />
+                                Connect Wallet
+                            </Button>
+                        </LoginDialog>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     if (!server) {
