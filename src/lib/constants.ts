@@ -74,6 +74,9 @@ export class Constants {
     static readonly Scheduler = "_GQ33BkPtZrqxA84vM8Zk-N2aO0toNNu_C-l-rawrBA";
     static readonly Module = "33d-3X8mpv6xYBlVB-eXMrPfH5Kzf6Hiwhcv0UA10sw";
 
+    // Role colors
+    static readonly DEFAULT_ROLE_COLOR = "#99AAB5";
+
     static readonly CuEndpoints = {
         AoTestnet: "https://cu.ao-testnet.xyz",
         ArnodeAsia: "https://cu.arnode.asia",

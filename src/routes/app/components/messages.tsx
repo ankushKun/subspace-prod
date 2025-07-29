@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
+import { Constants } from "@/lib/constants";
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -145,7 +146,7 @@ const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Rec
         .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Higher orderId = higher priority
 
     // Find the highest priority role that has a non-default color
-    const defaultColor = "#99AAB5"
+    const defaultColor = Constants.DEFAULT_ROLE_COLOR
     const roleWithColor = memberRoles.find((role: any) => role.color && role.color !== defaultColor)
 
     return roleWithColor?.color || undefined

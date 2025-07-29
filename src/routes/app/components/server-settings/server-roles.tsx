@@ -49,10 +49,11 @@ import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
 import { PermissionDefinitions, PermissionHelpers, Permissions } from "@/lib/permissions"
+import { Constants } from "@/lib/constants"
 import type { Role } from "@subspace-protocol/sdk"
 
 const roleColors = [
-    "#99AAB5", // Default grey
+    Constants.DEFAULT_ROLE_COLOR, // Default grey
     "#1ABC9C", // Teal
     "#2ECC71", // Green  
     "#3498DB", // Blue
@@ -181,7 +182,7 @@ export default function ServerRoles() {
     // Update hex color and initialize edited role when selected role changes
     useEffect(() => {
         if (selectedRole) {
-            setSelectedRoleHexColor(selectedRole.color || "#99AAB5")
+            setSelectedRoleHexColor(selectedRole.color || Constants.DEFAULT_ROLE_COLOR)
             setEditedRole({
                 name: selectedRole.name,
                 color: selectedRole.color,
@@ -307,7 +308,7 @@ export default function ServerRoles() {
             color: selectedRole.color,
             permissions: selectedRole.permissions
         })
-        setSelectedRoleHexColor(selectedRole.color || "#99AAB5")
+        setSelectedRoleHexColor(selectedRole.color || Constants.DEFAULT_ROLE_COLOR)
         setHasUnsavedChanges(false)
     }
 
@@ -574,7 +575,7 @@ export default function ServerRoles() {
                                         <GripVertical className="w-4 h-4 text-muted-foreground" />
                                         <div
                                             className="w-6 h-6 rounded-full border border-white/20"
-                                            style={{ backgroundColor: role?.color || "#99AAB5" }}
+                                            style={{ backgroundColor: role?.color || Constants.DEFAULT_ROLE_COLOR }}
                                         />
                                         <div className="flex items-center gap-2">
                                             <Icon className="w-4 h-4 text-primary/50" />
@@ -759,7 +760,7 @@ export default function ServerRoles() {
                                                 style={{
                                                     backgroundColor: newRoleHexColor && isValidHexColor(newRoleHexColor)
                                                         ? formatHexColor(newRoleHexColor)
-                                                        : newRoleColor || "#99AAB5"
+                                                        : newRoleColor || Constants.DEFAULT_ROLE_COLOR
                                                 }}
                                             />
                                         </div>
@@ -941,7 +942,7 @@ export default function ServerRoles() {
                                                                     <button
                                                                         className={cn(
                                                                             "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === roleColors[0]
+                                                                            (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === roleColors[0]
                                                                                 ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                 : "border-primary/30 hover:border-primary/60"
                                                                         )}
@@ -958,12 +959,12 @@ export default function ServerRoles() {
                                                                         <button
                                                                             className={cn(
                                                                                 "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
-                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
                                                                                     ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                     : "border-primary/30 hover:border-primary/60 border-dashed"
                                                                             )}
                                                                             style={{
-                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
                                                                                     ? formatHexColor(selectedRoleHexColor)
                                                                                     : "transparent"
                                                                             }}
@@ -974,7 +975,7 @@ export default function ServerRoles() {
                                                                             }}
                                                                             disabled={isUpdating}
                                                                         >
-                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5") ? (
+                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) ? (
                                                                                 <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
                                                                             ) : null}
                                                                         </button>
@@ -990,7 +991,7 @@ export default function ServerRoles() {
                                                                                 key={color}
                                                                                 className={cn(
                                                                                     "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110",
-                                                                                    (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
+                                                                                    (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === color
                                                                                         ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                         : "border-primary/30 hover:border-primary/60"
                                                                                 )}
@@ -1032,13 +1033,53 @@ export default function ServerRoles() {
                                                                 </div>
                                                                 <div
                                                                     className="w-10 h-10 rounded border-2 border-primary/30"
-                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? "#99AAB5") }}
+                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) }}
                                                                 />
                                                             </div>
                                                             <p className="text-xs text-primary/60 mt-1 font-ocr">
                                                                 Enter a hex color (e.g., #FF5733 or #F73)
                                                             </p>
                                                         </div>
+
+                                                        {/* Save/Discard buttons for @everyone role */}
+                                                        {hasUnsavedChanges && (
+                                                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-primary/20">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={discardRoleChanges}
+                                                                    disabled={isUpdating}
+                                                                    className="text-xs h-7"
+                                                                >
+                                                                    Discard
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={saveRoleChanges}
+                                                                    disabled={isUpdating}
+                                                                    className="text-xs h-7 bg-primary hover:bg-primary/90 text-black"
+                                                                >
+                                                                    {isUpdating ? (
+                                                                        <>
+                                                                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                                                            Saving...
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Save className="w-3 h-3 mr-1" />
+                                                                            Save Changes
+                                                                        </>
+                                                                    )}
+                                                                </Button>
+                                                            </div>
+                                                        )}
+
+                                                        {hasUnsavedChanges && (
+                                                            <div className="text-xs text-amber-600 bg-amber-50/10 border border-amber-200/50 rounded p-2 flex items-center gap-2">
+                                                                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                                                                You have unsaved changes
+                                                            </div>
+                                                        )}
 
                                                         {isUpdating && (
                                                             <div className="flex items-center justify-center gap-2 text-primary/60">
@@ -1101,7 +1142,7 @@ export default function ServerRoles() {
                                                                     <button
                                                                         className={cn(
                                                                             "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                                            (editedRole.color ?? selectedRole.color ?? "#99AAB5") === roleColors[0]
+                                                                            (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === roleColors[0]
                                                                                 ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                 : "border-primary/30 hover:border-primary/60"
                                                                         )}
@@ -1118,12 +1159,12 @@ export default function ServerRoles() {
                                                                         <button
                                                                             className={cn(
                                                                                 "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
-                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
                                                                                     ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                     : "border-primary/30 hover:border-primary/60 border-dashed"
                                                                             )}
                                                                             style={{
-                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5")
+                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
                                                                                     ? formatHexColor(selectedRoleHexColor)
                                                                                     : "transparent"
                                                                             }}
@@ -1134,7 +1175,7 @@ export default function ServerRoles() {
                                                                             }}
                                                                             disabled={isUpdating}
                                                                         >
-                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? "#99AAB5") ? (
+                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) ? (
                                                                                 <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
                                                                             ) : null}
                                                                         </button>
@@ -1150,7 +1191,7 @@ export default function ServerRoles() {
                                                                                 key={color}
                                                                                 className={cn(
                                                                                     "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                                                    (editedRole.color ?? selectedRole.color ?? "#99AAB5") === color
+                                                                                    (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === color
                                                                                         ? "border-primary ring-2 ring-primary/50 scale-105"
                                                                                         : "border-primary/30 hover:border-primary/60"
                                                                                 )}
@@ -1192,7 +1233,7 @@ export default function ServerRoles() {
                                                                 </div>
                                                                 <div
                                                                     className="w-8 h-8 rounded border-2 border-primary/30"
-                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? "#99AAB5") }}
+                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) }}
                                                                 />
                                                             </div>
                                                             <p className="text-xs text-primary/60 mt-1 font-ocr">
@@ -1377,7 +1418,7 @@ function SortableRole({
                 <div className="relative">
                     <div
                         className="w-6 h-6 rounded-full border border-white/20"
-                        style={{ backgroundColor: role.color || "#99AAB5" }}
+                        style={{ backgroundColor: role.color || Constants.DEFAULT_ROLE_COLOR }}
                     />
                     {role.isDefault && (
                         <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border border-background flex items-center justify-center">

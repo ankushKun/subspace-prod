@@ -1,6 +1,7 @@
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
 import { cn, shortenAddress } from "@/lib/utils";
+import { Constants } from "@/lib/constants";
 import type { Member, Role } from "@subspace-protocol/sdk";
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -202,7 +203,7 @@ const MemberSection = ({
                         : []
 
                     // Find the highest priority role that has a non-default color
-                    const defaultColor = "#99AAB5"
+                    const defaultColor = Constants.DEFAULT_ROLE_COLOR
                     const roleWithColor = (memberHighestRole as any[]).find((role: any) => role.color && role.color !== defaultColor)
                     const memberRoleColor = roleWithColor?.color || roleColor
 
