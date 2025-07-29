@@ -32,6 +32,14 @@ export default function ServerProfile() {
     const [originalServerDescription, setOriginalServerDescription] = useState("")
     const [originalServerIcon, setOriginalServerIcon] = useState<string | null>(null)
 
+    // Load server data when component mounts or activeServerId changes
+    useEffect(() => {
+        if (activeServerId) {
+            // Ensure server data is loaded when settings page is accessed
+            subspaceActions.servers.get(activeServerId, false).catch(console.error)
+        }
+    }, [activeServerId, subspaceActions.servers])
+
     // Initialize form with server data
     useEffect(() => {
         if (server) {

@@ -86,14 +86,15 @@ const ServerButton = ({ server, isActive = false, onClick, isUpdating = false, u
                     onClick={onClick}
                 >
                     <div className={cn(
-                        "w-12 h-12 overflow-hidden transition-all duration-300 ease-out relative pointer-events-none",
+                        "w-12 h-12 overflow-hidden transition-all duration-300 ease-out relative border pointer-events-none",
                         "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/20 before:via-transparent before:to-transparent before:opacity-0 group-hover:before:opacity-100 before:transition-opacity before:duration-300",
-                        isActive ? "rounded-2xl" : "rounded-xl group-hover:rounded-2xl"
+                        isActive ? "rounded-2xl" : "rounded-xl group-hover:rounded-2xl",
+                        server.logo ? "" : "border-primary/30 bg-primary/20"
                     )}>
                         <img
                             src={`https://arweave.net/${server.logo || Constants.Icons.DefaultServerIcon}`}
                             alt={server.name}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 pointer-events-none"
+                            className={cn("w-full h-full object-cover transition-transform duration-300 group-hover:scale-110 pointer-events-none", server.logo ? "" : "opacity-60")}
                             draggable={false}
                         />
                         {/* Shimmer effect */}

@@ -65,7 +65,7 @@ export class Constants {
     };
 
     static readonly Icons = {
-        DefaultServerIcon: "yClwNR7Pa6yxyEr5jnSLBY943rcsMQzrt_iX5GveZXM",
+        DefaultServerIcon: "_t1djb15ncsDp04zyGC1U304NU9sFqfP9J9SPUMfYKM",
         ArnsLogo: "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A",
     };
 

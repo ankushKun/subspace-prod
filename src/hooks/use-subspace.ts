@@ -127,6 +127,7 @@ interface SubspaceState {
         }
         internal: {
             rehydrateServers: () => void
+            loadUserServersSequentially: (profile: ExtendedProfile) => void
         }
         clear: () => void
     }
@@ -155,7 +156,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 if (!owner) {
                     owner = "0x69420"
-                    console.log("no owner, using default")
+                    console.log("[hooks/use-subspace] no owner, using default")
                     return
                 }
 
@@ -164,7 +165,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Check if address has changed (wallet switch)
                 if (previousAddress && previousAddress !== owner) {
-                    console.log(`📧 Address changed from ${previousAddress} to ${owner}, clearing friends and DMs`)
+                    console.log(`[hooks/use-subspace] Address changed from ${previousAddress} to ${owner}, clearing friends and DMs`)
                     set({
                         friends: {},
                         dmConversations: {},
@@ -191,14 +192,9 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     get().actions.profile.get()
                 }
 
-                // Delay rehydration slightly to ensure subspace is ready
-                setTimeout(() => {
-                    // Rehydrate servers from persisted data
-                    get().actions.internal.rehydrateServers()
-
-                    // ✅ FIXED: Removed automatic server loading on init to prevent loops
-                    // Servers will be loaded on-demand when user navigates to them
-                }, 50)
+                // ✅ UPDATED: Removed delayed server loading since servers are now loaded sequentially after profile fetch
+                // Rehydrate servers from persisted data only
+                get().actions.internal.rehydrateServers()
             } catch (error) {
                 console.error("Failed to initialize Subspace:", error)
                 // Don't throw here, just log the error
@@ -213,7 +209,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Don't run get profile if wallet address doesn't exist and no userId is provided
                 if (!userId && !walletAddress) {
-                    console.warn("No wallet address available for profile get")
+                    console.warn("[hooks/use-subspace] No wallet address available for profile get")
                     return null
                 }
 
@@ -221,7 +217,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // ✅ ADDED: Check if this profile is already being loaded
                 if (get().loadingProfiles.has(targetUserId)) {
-                    console.log(`Profile ${targetUserId} is already being loaded, skipping duplicate call`)
+                    console.log(`[hooks/use-subspace] Profile ${targetUserId} is already being loaded, skipping duplicate call`)
                     return get().profiles[targetUserId] || null
                 }
 
@@ -254,11 +250,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                     // Check if WAuth wallet is loaded by trying to get it
                                     const wallet = await walletState.wauthInstance?.getWallet()
                                     if (!wallet) {
-                                        console.log("WAuth wallet not loaded yet, skipping profile creation")
+                                        console.log("[hooks/use-subspace] WAuth wallet not loaded yet, skipping profile creation")
                                         return null
                                     }
                                 } catch (walletError) {
-                                    console.log("WAuth wallet not ready yet, skipping profile creation:", walletError)
+                                    console.log("[hooks/use-subspace] WAuth wallet not ready yet, skipping profile creation:", walletError)
                                     return null
                                 }
                             }
@@ -317,14 +313,18 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                 profile: enhancedProfile,
                                 profiles: { ...get().profiles, [profile.userId]: enhancedProfile }
                             })
+
+                            // ✅ NEW: Load user's servers one by one after profile is fetched
+                            get().actions.internal.loadUserServersSequentially(enhancedProfile)
+
                             return enhancedProfile
                         }
                     } else {
-                        console.error("Failed to get profile")
+                        console.error("[hooks/use-subspace] Failed to get profile")
                         set({ profile: null })
                     }
                 } catch (error) {
-                    console.error("Error in profile.get:", error)
+                    console.error("[hooks/use-subspace] Error in profile.get:", error)
                     throw error
                 } finally {
                     // ✅ ADDED: Clear loading state for this profile
@@ -371,7 +371,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 // Force refresh the current user's profile
                 const walletAddress = useWallet.getState().address
                 if (!walletAddress) {
-                    console.error("No wallet address available for profile refresh")
+                    console.error("[hooks/use-subspace] No wallet address available for profile refresh")
                     return null
                 }
 
@@ -383,7 +383,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     const refreshedProfile = await get().actions.profile.get()
                     return refreshedProfile
                 } catch (error) {
-                    console.error("Failed to refresh profile:", error)
+                    console.error("[hooks/use-subspace] Failed to refresh profile:", error)
                     return null
                 } finally {
                     if (!silent) {
@@ -399,7 +399,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     const success = await subspace.user.updateProfile(params)
                     return success
                 } catch (error) {
-                    console.error("Failed to update profile:", error)
+                    console.error("[hooks/use-subspace] Failed to update profile:", error)
                     return false
                 }
             }
@@ -411,7 +411,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // ✅ ADDED: Check if this server is already being loaded
                 if (get().loadingServers.has(serverId)) {
-                    console.log(`Server ${serverId} is already being loaded, returning existing data`)
                     return get().servers[serverId] || null
                 }
 
@@ -496,7 +495,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                         // Profiles will be loaded centrally in member-list component when needed
                                     }
                                 } catch (error) {
-                                    console.error("❌ Failed to load members:", error)
+                                    console.error("[hooks/use-subspace] ❌ Failed to load members:", error)
                                     // Clear loading state on error
                                     const currentServer = get().servers[serverId]
                                     if (currentServer) {
@@ -514,7 +513,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     }
                     return server
                 } catch (e) {
-                    console.error("Failed to get server:", e)
+                    console.error("[hooks/use-subspace] Failed to get server:", e)
                     return null
                 } finally {
                     // ✅ ADDED: Clear loading state for this server
@@ -545,7 +544,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     await get().actions.profile.refresh()
                 } catch (error) {
-                    console.error("Failed to refresh profile after creating server:", error)
+                    console.error("[hooks/use-subspace] Failed to refresh profile after creating server:", error)
                 }
 
                 return server
@@ -563,11 +562,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated data while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after profile update")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after profile update")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after profile update:", refreshError)
                             // Don't fail the operation just because refresh failed
@@ -592,11 +586,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated categories while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after category creation")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after category creation")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after category creation:", refreshError)
                             // Don't fail the operation just because refresh failed
@@ -621,11 +610,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated channels while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after channel creation")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after channel creation")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after channel creation:", refreshError)
                             // Don't fail the operation just because refresh failed
@@ -650,11 +634,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated channels while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after channel update")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after channel update")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after channel update:", refreshError)
                         }
@@ -678,11 +657,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated channels while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after channel deletion")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after channel deletion")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after channel deletion:", refreshError)
                         }
@@ -706,11 +680,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated categories while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after category update")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after category update")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after category update:", refreshError)
                         }
@@ -734,11 +703,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated categories while preserving members
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after category deletion")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after category deletion")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after category deletion:", refreshError)
                         }
@@ -920,11 +884,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated roles
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after role creation")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after role creation")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after role creation:", refreshError)
                         }
@@ -948,11 +907,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated roles
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after role update")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after role update")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after role update:", refreshError)
                         }
@@ -976,11 +930,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated role order
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after role reorder")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after role reorder")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after role reorder:", refreshError)
                         }
@@ -1004,11 +953,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated role order
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after moving role above")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after moving role above")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after moving role above:", refreshError)
                         }
@@ -1032,11 +976,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated role order
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after moving role below")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after moving role below")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after moving role below:", refreshError)
                         }
@@ -1060,11 +999,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Force refresh the server to get updated roles
                         try {
                             const updatedServer = await get().actions.servers.get(serverId, true)
-                            if (updatedServer) {
-                                console.log("✅ Server refreshed successfully after role deletion")
-                            } else {
-                                console.warn("⚠️ Server refresh returned null after role deletion")
-                            }
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh server after role deletion:", refreshError)
                         }
@@ -1085,7 +1019,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Refresh members to update role assignments
                         try {
                             await get().actions.servers.refreshMembers(serverId)
-                            console.log("✅ Members refreshed successfully after role assignment")
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh members after role assignment:", refreshError)
                         }
@@ -1106,7 +1039,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // Refresh members to update role assignments
                         try {
                             await get().actions.servers.refreshMembers(serverId)
-                            console.log("✅ Members refreshed successfully after role unassignment")
                         } catch (refreshError) {
                             console.error("❌ Failed to refresh members after role unassignment:", refreshError)
                         }
@@ -1502,7 +1434,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Check if we're already loading messages for this friend
                 if (get().loadingDMs.has(friendId)) {
-                    console.log(`DMs for ${friendId} already being loaded`)
                     return get().actions.dms.getCachedMessages(friendId)
                 }
 
@@ -1683,6 +1614,45 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 if (Object.keys(rehydratedServers).length > 0) {
                 }
                 set({ servers: rehydratedServers })
+            },
+            loadUserServersSequentially: (profile: ExtendedProfile) => {
+                const subspace = get().subspace
+                if (!subspace) return
+
+                const userJoinedServers = profile.serversJoined || [];
+                if (userJoinedServers.length === 0) {
+                    return;
+                }
+
+                const loadNextServer = async (index: number) => {
+                    if (index >= userJoinedServers.length) {
+                        return;
+                    }
+
+                    // Handle both string and object server identifiers
+                    const serverEntry = userJoinedServers[index];
+                    const serverId = typeof serverEntry === 'string' ? serverEntry : (serverEntry as any).serverId;
+
+                    if (!serverId) {
+                        console.warn(`Invalid server entry at index ${index}, skipping.`);
+                        loadNextServer(index + 1);
+                        return;
+                    }
+
+                    console.log(`Loading server ${serverId} (${index + 1}/${userJoinedServers.length})...`);
+                    try {
+                        const server = await get().actions.servers.get(serverId, true); // Force refresh
+                    } catch (error) {
+                        console.error(`❌ Failed to load server ${serverId}:`, error);
+                    } finally {
+                        // Wait a short delay before loading the next server to avoid overwhelming the system
+                        setTimeout(() => {
+                            loadNextServer(index + 1);
+                        }, 100);
+                    }
+                };
+
+                loadNextServer(0);
             }
         },
         clear: () => {

@@ -6,6 +6,7 @@ import type { JWKInterface } from "arweave/web/lib/wallet"
 import Arweave from "arweave"
 import { ArconnectSigner, ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
 import { dryrun } from "@permaweb/aoconnect"
+import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))

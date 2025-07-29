@@ -17,6 +17,8 @@ export enum ConnectionStrategies {
     // UploadedJWK = "uploaded_jwk" // TODO: add later
 }
 
+const requiredWalletPermissions: string[] = ["SIGN_TRANSACTION", "ACCESS_ADDRESS", "ACCESS_PUBLIC_KEY", "ACCESS_ALL_ADDRESSES", "SIGNATURE"]
+
 interface WalletState {
     address: string;
     originalAddress: string;
@@ -377,10 +379,10 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                         if (window.arweaveWallet.walletName == "Wander Connect") {
                             set((state) => {
                                 if (state.wanderInstance) state.wanderInstance.destroy();
-                                return { wanderInstance: null }
+                                return { wanderInstance: null, wauthInstance: null, jwk: null }
                             })
                         }
-                        window.arweaveWallet.connect(["SIGN_TRANSACTION", "ACCESS_ADDRESS", "ACCESS_PUBLIC_KEY"]).then(() => {
+                        window.arweaveWallet.connect(requiredWalletPermissions as any).then(() => {
                             window.arweaveWallet.getActiveAddress().then((address) => {
                                 set((state) => {
                                     if (state.connected && state.connectionStrategy !== ConnectionStrategies.ArWallet)
@@ -393,6 +395,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                         connected: true,
                                         connectionStrategy: ConnectionStrategies.ArWallet,
                                         wanderInstance: null,
+                                        wauthInstance: null,
                                         jwk: null,
                                         provider: null
                                     }
@@ -422,7 +425,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                             onAuth: (auth) => {
                                 if (!!auth) {
                                     if (window.arweaveWallet) {
-                                        window.arweaveWallet.connect(["ACCESS_ADDRESS", "SIGN_TRANSACTION", "ACCESS_PUBLIC_KEY", "ACCESS_ALL_ADDRESSES"]).then(() => {
+                                        window.arweaveWallet.connect(requiredWalletPermissions as any).then(() => {
                                             window.arweaveWallet.getActiveAddress().then((address) => {
                                                 set((state) => {
                                                     return {
@@ -430,6 +433,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                                                         connected: true,
                                                         connectionStrategy: ConnectionStrategies.WanderConnect,
                                                         wanderInstance: wander,
+                                                        wauthInstance: null,
                                                         jwk: null,
                                                         provider: null
                                                     }

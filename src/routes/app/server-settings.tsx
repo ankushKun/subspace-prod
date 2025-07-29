@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Settings, Users, Shield, Hash, Trash2, Settings2 } from "lucide-react"
@@ -10,6 +10,9 @@ import ServerProfile from "./components/server-settings/server-profile"
 import ServerChannels from "./components/server-settings/server-channels"
 import ServerRoles from "./components/server-settings/server-roles"
 import ServerMembers from "./components/server-settings/server-members"
+
+import { useSubspace } from "@/hooks/use-subspace"
+import { useGlobalState } from "@/hooks/use-global-state"
 
 const settingsNavigation = [
     {
@@ -80,6 +83,22 @@ export default function ServerSettings() {
     const navigate = useNavigate()
     const { serverId } = useParams()
 
+    const { actions: stateActions } = useGlobalState()
+    const { actions: subspaceActions, subspace } = useSubspace()
+
+    // Synchronize URL params with global state and ensure server data is loaded
+    useEffect(() => {
+        if (!subspace) return
+
+        // Set activeServerId from URL params
+        stateActions.setActiveServerId(serverId || "")
+
+        // Load server data when serverId changes
+        if (serverId) {
+            subspaceActions.servers.get(serverId, true).catch(console.error)
+        }
+    }, [serverId, subspace, stateActions, subspaceActions.servers])
+
     const handleBack = () => {
         navigate(`/app/${serverId}`)
     }
@@ -129,7 +148,7 @@ export default function ServerSettings() {
                 </div>
 
                 {/* Navigation Menu */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/40">
+                <div className="flex-1 overflow-y-auto py-4 space-y-6 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/40">
                     {/* Background decoration for sidebar */}
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(var(--primary)/0.02)_0%,transparent_60%)] pointer-events-none" />
 
@@ -150,17 +169,13 @@ export default function ServerSettings() {
                                                 variant="ghost"
                                                 onClick={() => setActiveTab(item.id)}
                                                 className={cn(
-                                                    "w-full justify-start gap-3 h-10 font-ocr text-sm transition-all duration-200 relative group",
+                                                    "w-full justify-start !rounded-none gap-3 h-10 font-ocr text-sm transition-all duration-200 relative group",
                                                     isActive
                                                         ? "bg-primary/20 text-primary border-l-2 border-l-primary rounded-l-none hover:bg-primary/25"
                                                         : "hover:bg-primary/10 text-foreground border border-transparent hover:border-primary/30",
                                                     item.destructive && "text-red-500 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/30"
                                                 )}
                                             >
-                                                {/* Glow effect for active tab */}
-                                                {isActive && (
-                                                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 rounded pointer-events-none" />
-                                                )}
                                                 <Icon className="w-4 h-4 relative z-10" />
                                                 <span className="relative z-10">{item.label}</span>
                                             </Button>
