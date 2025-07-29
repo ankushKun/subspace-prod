@@ -538,6 +538,7 @@ DMMessageItem.displayName = "DMMessageItem"
 interface DMMessageInputRef {
     focus: () => void;
     blur: () => void;
+    focusAndInsertText: (text: string) => void;
 }
 
 interface DMMessageInputProps {
@@ -565,6 +566,14 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
             setTimeout(() => {
                 textareaRef.current?.focus()
             }, 100)
+        },
+        focusAndInsertText: (text: string) => {
+            if (isMobile) return
+            setTimeout(() => {
+                // Add the text to the current message
+                setMessage(prev => prev + text)
+                textareaRef.current?.focus()
+            }, 50)
         },
         blur: () => {
             textareaRef.current?.blur()
@@ -708,9 +717,14 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
 
 DMMessageInput.displayName = "DMMessageInput"
 
-export default function DMMessages({ className }: {
+export interface DMMessagesRef {
+    focusInput: () => void;
+    focusAndInsertText: (text: string) => void;
+}
+
+const DMMessages = React.forwardRef<DMMessagesRef, {
     className?: string;
-}) {
+}>(({ className }, ref) => {
     const { activeFriendId } = useGlobalState();
     const { friends, dmConversations, profile, profiles, actions, subspace } = useSubspace();
 
@@ -725,6 +739,16 @@ export default function DMMessages({ className }: {
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<DMMessageInputRef>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Expose focusInput method to parent component
+    React.useImperativeHandle(ref, () => ({
+        focusInput: () => {
+            inputRef.current?.focus();
+        },
+        focusAndInsertText: (text: string) => {
+            inputRef.current?.focusAndInsertText(text);
+        }
+    }));
 
     // State for scroll position tracking
     const [isAtBottom, setIsAtBottom] = useState(true);
@@ -752,6 +776,11 @@ export default function DMMessages({ className }: {
 
         // Reset scroll position when switching conversations
         setIsAtBottom(true);
+
+        // Autofocus the message input when friend changes
+        setTimeout(() => {
+            inputRef.current?.focus();
+        }, 150);
 
         // Check if we have cached messages for this conversation
         const cachedMessages = actions.dms.getCachedMessages(activeFriendId);
@@ -1120,4 +1149,8 @@ export default function DMMessages({ className }: {
             />
         </div>
     );
-} 
+})
+
+DMMessages.displayName = "DMMessages"
+
+export default DMMessages; 

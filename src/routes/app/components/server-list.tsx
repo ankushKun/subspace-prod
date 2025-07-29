@@ -765,8 +765,8 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
 
     // Sample invites for user guidance
     const sampleInvites = [
-        "hGo3MIM70VMDm3L4GWcuD9THhdhLAjWtmzQ-t1GXMlU",
-        "subspace.ar.io/#/invite/hGo3MIM70VMDm3L4GWcuD9THhdhLAjWtmzQ-t1GXMlU",
+        Constants.SubspaceServer,
+        `subspace.ar.io/#/invite/${Constants.SubspaceServer}`,
     ]
 
     // Parse invite code/link with comprehensive validation

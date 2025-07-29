@@ -86,4 +86,6 @@ export class Constants {
         { name: Constants.TagNames.AppVersion, value: Constants.TagValues.AppVersion },
         { name: "Authority", value: "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY" }
     ]
+
+    static readonly SubspaceServer = "Uyg8d-jd4tbLWSD8oFyq3n28kQ72jlvrbmHqoHfemRY"
 }

@@ -946,6 +946,7 @@ MessageItem.displayName = "MessageItem"
 interface MessageInputRef {
     focus: () => void;
     blur: () => void;
+    focusAndInsertText: (text: string) => void;
 }
 
 interface MessageInputProps {
@@ -986,6 +987,14 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             setTimeout(() => {
                 focusTextarea()
             }, 100)
+        },
+        focusAndInsertText: (text: string) => {
+            if (isMobile) return
+            setTimeout(() => {
+                // Add the text to the current message
+                setMessage(prev => prev + text)
+                focusTextarea()
+            }, 50)
         },
         blur: () => {
             const mentionsContainer = mentionsInputRef.current
@@ -1575,11 +1584,16 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
 MessageInput.displayName = "MessageInput"
 
-export default function Messages({ className, onToggleMemberList, showMemberList }: {
+export interface MessagesRef {
+    focusInput: () => void;
+    focusAndInsertText: (text: string) => void;
+}
+
+const Messages = React.forwardRef<MessagesRef, {
     className?: string;
     onToggleMemberList?: () => void;
     showMemberList?: boolean;
-}) {
+}>(({ className, onToggleMemberList, showMemberList }, ref) => {
     const { activeServerId, activeChannelId } = useGlobalState();
     const { servers, profile, profiles, actions, subspace } = useSubspace();
 
@@ -1594,6 +1608,16 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<MessageInputRef>(null);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Expose focusInput method to parent component
+    React.useImperativeHandle(ref, () => ({
+        focusInput: () => {
+            inputRef.current?.focus();
+        },
+        focusAndInsertText: (text: string) => {
+            inputRef.current?.focusAndInsertText(text);
+        }
+    }));
 
     // State for scroll position tracking
     const [isAtBottom, setIsAtBottom] = useState(true);
@@ -1660,6 +1684,11 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
         // Reset scroll position when switching channels
         setIsAtBottom(true);
+
+        // Autofocus the message input when channel changes
+        setTimeout(() => {
+            inputRef.current?.focus();
+        }, 150);
 
         // Check if we have cached messages for this channel
         const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, activeChannelId);
@@ -2148,4 +2177,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             />
         </div>
     );
-}
+})
+
+export default Messages

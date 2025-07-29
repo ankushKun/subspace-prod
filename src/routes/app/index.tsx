@@ -4,8 +4,8 @@ import ServerList from "./components/server-list"
 import ChannelList from "./components/channel-list"
 import DmsList from "./components/dms-list"
 import MemberList from "./components/member-list"
-import Messages from "./components/messages"
-import DMMessages from "./components/dm-messages"
+import Messages, { MessagesRef } from "./components/messages"
+import DMMessages, { DMMessagesRef } from "./components/dm-messages"
 import Welcome from "./components/welcome"
 import Profile from "./components/profile"
 import { useGlobalState } from "@/hooks/use-global-state"
@@ -34,6 +34,10 @@ export default function App() {
     const previousServerIdRef = useRef<string | undefined>(undefined)
     // Ref to track the previous address to detect address changes (wallet switches)
     const previousAddressRef = useRef<string | undefined>(undefined)
+
+    // Refs for Messages and DMMessages components to access their input focus methods
+    const messagesRef = useRef<MessagesRef>(null)
+    const dmMessagesRef = useRef<DMMessagesRef>(null)
 
     useEffect(() => {
         const previousAddress = previousAddressRef.current
@@ -165,6 +169,59 @@ export default function App() {
         }
     }, [profile, isCreatingProfile, serverId, address, servers, nicknameDialogOpen, nicknameDialogServerId, skippedServers])
 
+    // Global keydown listener to autofocus message input when user starts typing
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            // Ignore if any modifier keys are pressed
+            if (event.ctrlKey || event.altKey || event.metaKey) {
+                return
+            }
+
+            // Ignore special keys
+            const ignoredKeys = [
+                'Tab', 'Escape', 'Enter', 'Backspace', 'Delete',
+                'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                'Home', 'End', 'PageUp', 'PageDown', 'Insert',
+                'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+            ]
+
+            if (ignoredKeys.includes(event.key)) {
+                return
+            }
+
+            // Check if any input, textarea, or contenteditable element is currently focused
+            const activeElement = document.activeElement
+            const isInputFocused = activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.getAttribute('contenteditable') === 'true' ||
+                activeElement.closest('[contenteditable="true"]')
+            )
+
+            // Don't autofocus if an input is already focused
+            if (isInputFocused) {
+                return
+            }
+
+            // Only focus if we're in a chat view (not on welcome screen)
+            if (serverId && channelId && messagesRef.current) {
+                // Focus the server channel message input
+                messagesRef.current.focusInput?.()
+            } else if (friendId && dmMessagesRef.current) {
+                // Focus the DM message input
+                dmMessagesRef.current.focusInput?.()
+            }
+        }
+
+        // Add event listener
+        document.addEventListener('keydown', handleKeyDown)
+
+        // Cleanup
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown)
+        }
+    }, [serverId, channelId, friendId])
+
     const handleNicknameDialogClose = () => {
         setNicknameDialogOpen(false)
         setNicknameDialogServerId(null)
@@ -193,9 +250,9 @@ export default function App() {
                 </div>
                 {/* Main content area */}
                 {(serverId && channelId) ? (
-                    <Messages className="grow border-r h-full" />
+                    <Messages ref={messagesRef} className="grow border-r h-full" />
                 ) : friendId ? (
-                    <DMMessages className="grow border-r h-full" />
+                    <DMMessages ref={dmMessagesRef} className="grow border-r h-full" />
                 ) : (
                     <Welcome className="grow h-full" />
                 )}
