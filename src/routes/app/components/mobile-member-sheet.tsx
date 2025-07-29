@@ -78,7 +78,7 @@ export default function MobileMemberSheet({
         } else if (typeof server.members === 'object') {
             membersArray = Object.entries(server.members).map(([userId, member]) => ({
                 userId,
-                ...member
+                ...(member as object)
             }))
         }
 
