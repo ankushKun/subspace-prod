@@ -171,7 +171,7 @@ export default function ServerMembers() {
 
         try {
             setIsLoadingMembers(true)
-            await subspaceActions.servers.getMembers(activeServerId, true)
+            await subspaceActions.servers.getMembers(activeServerId)
 
             // Get updated member list after loading
             const currentServer = servers[activeServerId]
