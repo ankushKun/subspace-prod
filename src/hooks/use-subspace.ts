@@ -15,7 +15,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
 import { useWallet } from "./use-wallet";
 import { useGlobalState } from "./use-global-state";
-import { getPrimaryName, getWanderTierInfo, type WanderTierInfo } from "@/lib/utils";
+import { getPrimaryName, getPrimaryLogo, getWanderTierInfo, type WanderTierInfo } from "@/lib/utils";
 import { Constants as WebConstants } from "@/lib/constants";
 
 // Helper function to get CU URL from localStorage
@@ -132,7 +132,6 @@ interface SubspaceState {
             rehydrateServers: () => void
             loadUserServersSequentially: (profile: ExtendedProfile) => void
         }
-        clear: () => void
     }
 }
 
@@ -190,8 +189,19 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     set({ profile: cachedProfile as ExtendedProfile })
                     // Still refresh in background but don't show loading state
                     get().actions.profile.refresh(true)
+
+                    // ✅ FIX: If we have a cached profile but no servers, load them
+                    const currentServers = get().servers
+                    const hasNoServers = Object.keys(currentServers).length === 0
+                    const profileHasServers = cachedProfile.serversJoined && cachedProfile.serversJoined.length > 0
+
+                    if (hasNoServers && profileHasServers) {
+                        console.log("[hooks/use-subspace] Cached profile found but no servers cached, loading servers...")
+                        get().actions.internal.loadUserServersSequentially(cachedProfile)
+                    }
                 } else {
-                    set({ profile: null })
+                    // Set loading state immediately when starting profile fetch
+                    set({ profile: null, isLoadingProfile: true })
                     get().actions.profile.get()
                 }
 
@@ -242,6 +252,15 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                     try {
                         profile = await subspace.user.getProfile(targetUserId) as ExtendedProfile
+                        if (profile) {
+                            // ✅ IMMEDIATE UPDATE: Set basic profile data right away
+                            const basicProfile = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
+
+                            if (!userId) {
+                                set({ profile: basicProfile })
+                            }
+                            set({ profiles: { ...get().profiles, [targetUserId]: basicProfile } })
+                        }
                     } catch (e) {
                         // Only show creating profile dialog if this is our own profile
                         // and we don't already have a profile in the store
@@ -288,39 +307,162 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     }
 
                     if (profile) {
-                        const { primaryName, primaryLogo } = await getPrimaryName(profile.userId || userId)
-
-                        // ✅ FIXED: Fetch tier info for ALL users, not just current user
-                        try {
-                            const tierInfo = await getWanderTierInfo(profile.userId || userId)
-                            profile.wndrTier = tierInfo // Can be WanderTierInfo or null
-                        } catch (e) {
-                            console.error("Failed to get Wander tier info:", e)
-                            profile.wndrTier = null
-                        }
-
-                        // Create enhanced profile with all data
-                        const enhancedProfile = {
+                        // ✅ IMMEDIATE UPDATE: Set basic profile with placeholders for primary name/logo
+                        const basicProfile = {
                             ...profile,
-                            primaryName,
-                            primaryLogo
+                            primaryName: "",
+                            primaryLogo: ""
                         } as ExtendedProfile
 
+                        // ✅ IMMEDIATE STATE UPDATE: Show basic profile right away
+                        if (!userId) {
+                            set((state) => ({
+                                profile: { ...state.profile, ...basicProfile }
+                            }))
+                        }
+                        set((state) => ({
+                            profiles: {
+                                ...state.profiles,
+                                [targetUserId]: {
+                                    ...state.profiles[targetUserId],
+                                    ...basicProfile
+                                }
+                            }
+                        }))
+
+                        // ✅ PROGRESSIVE UPDATE: Fetch primary name and logo separately for immediate feedback
+                        let currentProfile = basicProfile
+                        try {
+                            // First, get the primary name using utility function
+                            const nameRes = await getPrimaryName(profile.userId || userId)
+                            if (nameRes?.primaryName) {
+                                currentProfile = {
+                                    ...currentProfile,
+                                    primaryName: nameRes.primaryName
+                                } as ExtendedProfile
+
+                                // ✅ IMMEDIATE UPDATE: Update state as soon as primary name is available
+                                if (!userId) {
+                                    set((state) => ({
+                                        profile: { ...state.profile, ...currentProfile }
+                                    }))
+                                }
+                                set((state) => ({
+                                    profiles: {
+                                        ...state.profiles,
+                                        [targetUserId]: {
+                                            ...state.profiles[targetUserId],
+                                            ...currentProfile
+                                        }
+                                    }
+                                }))
+
+                                // Then, get the logo if we have a processId using utility function
+                                if (nameRes.processId) {
+                                    try {
+                                        const logoRes = await getPrimaryLogo(nameRes.processId)
+                                        if (logoRes) {
+                                            currentProfile = {
+                                                ...currentProfile,
+                                                primaryLogo: logoRes
+                                            } as ExtendedProfile
+
+                                            // ✅ IMMEDIATE UPDATE: Update state as soon as logo is available
+                                            if (!userId) {
+                                                set((state) => ({
+                                                    profile: { ...state.profile, ...currentProfile }
+                                                }))
+                                            }
+                                            set((state) => ({
+                                                profiles: {
+                                                    ...state.profiles,
+                                                    [targetUserId]: {
+                                                        ...state.profiles[targetUserId],
+                                                        ...currentProfile
+                                                    }
+                                                }
+                                            }))
+                                        }
+                                    } catch (logoError) {
+                                        console.warn("Failed to fetch logo for", nameRes.processId, logoError)
+                                    }
+                                }
+                            }
+                        } catch (nameError) {
+                            console.warn("Failed to fetch primary name for address:", profile.userId || userId, nameError)
+                        }
+
+                        // ✅ PROGRESSIVE UPDATE: Fetch tier info and update state immediately when received
+                        let finalProfile = currentProfile
+                        try {
+                            const tierInfo = await getWanderTierInfo(profile.userId || userId)
+                            // ✅ CREATE NEW OBJECT: Don't mutate existing object
+                            finalProfile = {
+                                ...currentProfile,
+                                wndrTier: tierInfo
+                            } as ExtendedProfile
+
+                            // ✅ SAFE STATE UPDATE: Build on latest state and preserve existing data
+                            if (!userId) {
+                                set((state) => ({
+                                    profile: { ...state.profile, ...finalProfile }
+                                }))
+                            }
+                            set((state) => ({
+                                profiles: {
+                                    ...state.profiles,
+                                    [targetUserId]: {
+                                        ...state.profiles[targetUserId],
+                                        ...finalProfile
+                                    }
+                                }
+                            }))
+                        } catch (e) {
+                            console.error("Failed to get Wander tier info:", e)
+                            // ✅ CREATE NEW OBJECT: Don't mutate existing object
+                            finalProfile = {
+                                ...currentProfile,
+                                wndrTier: null
+                            } as ExtendedProfile
+
+                            // ✅ SAFE STATE UPDATE: Build on latest state and preserve existing data
+                            if (!userId) {
+                                set((state) => ({
+                                    profile: { ...state.profile, ...finalProfile }
+                                }))
+                            }
+                            set((state) => ({
+                                profiles: {
+                                    ...state.profiles,
+                                    [targetUserId]: {
+                                        ...state.profiles[targetUserId],
+                                        ...finalProfile
+                                    }
+                                }
+                            }))
+                        }
+
+                        // Final return logic
                         if (userId) {
-                            // For other users: update profiles cache and return
-                            set({ profiles: { ...get().profiles, [userId]: enhancedProfile } })
-                            return enhancedProfile
+                            // For other users: return the enhanced profile
+                            return finalProfile
                         } else {
-                            // For current user: update both profile and profiles cache
-                            set({
-                                profile: enhancedProfile,
-                                profiles: { ...get().profiles, [profile.userId]: enhancedProfile }
-                            })
+                            // For current user: ensure final state is set with safe merging and load servers
+                            set((state) => ({
+                                profile: { ...state.profile, ...finalProfile },
+                                profiles: {
+                                    ...state.profiles,
+                                    [profile.userId]: {
+                                        ...state.profiles[profile.userId],
+                                        ...finalProfile
+                                    }
+                                }
+                            }))
 
                             // ✅ NEW: Load user's servers one by one after profile is fetched
-                            get().actions.internal.loadUserServersSequentially(enhancedProfile)
+                            get().actions.internal.loadUserServersSequentially(finalProfile)
 
-                            return enhancedProfile
+                            return finalProfile
                         }
                     } else {
                         console.error("[hooks/use-subspace] Failed to get profile")
@@ -343,29 +485,66 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return []
 
-                // const profiles = await subspace.user.getBulkProfiles(userIds) as ExtendedProfile[]
-                const profiles = []
-                // set({
-                //     profiles: profiles.reduce((acc, profile) => {
-                //         acc[profile.userId] = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
-                //         return acc
-                //     }, {} as Record<string, ExtendedProfile>)
-                // })
+                const profiles: ExtendedProfile[] = []
 
-                // get everyones primary name one by one with a small delay between each request
+                // Create placeholder entries for all users immediately
+                const placeholderProfiles: Record<string, ExtendedProfile> = {}
                 for (const userId of userIds) {
-                    // run profile.get for each user id
-                    const profile = await get().actions.profile.get(userId)
-                    if (profile) {
-                        set({ profiles: { ...get().profiles, [userId]: profile } })
+                    // Skip if we already have this profile
+                    if (get().profiles[userId]) {
+                        profiles.push(get().profiles[userId])
+                        continue
                     }
-                    await new Promise(resolve => setTimeout(resolve, 333))
 
-                    // const { primaryName, primaryLogo } = await getPrimaryName(profile.userId)
-                    // profile.primaryName = primaryName
-                    // profile.primaryLogo = primaryLogo
-                    // set({ profiles: { ...get().profiles, [profile.userId]: profile } })
-                    // await new Promise(resolve => setTimeout(resolve, 220))
+                    // Create a placeholder profile with loading state
+                    placeholderProfiles[userId] = {
+                        userId,
+                        primaryName: "",
+                        primaryLogo: "",
+                        // Add minimal required fields for ExtendedProfile
+                        displayName: "",
+                        pfp: "",
+                        bio: "",
+                        banner: "",
+                        dateCreated: 0,
+                        serversJoined: [],
+                        dmProcess: ""
+                    } as ExtendedProfile
+                }
+
+                // Update state immediately with placeholders - SAFE UPDATE
+                if (Object.keys(placeholderProfiles).length > 0) {
+                    set((state) => ({
+                        profiles: { ...state.profiles, ...placeholderProfiles }
+                    }))
+                }
+
+                // Fetch each profile one by one with real-time updates
+                for (const userId of userIds) {
+                    // Skip if we already had this profile
+                    if (profiles.find(p => p.userId === userId)) {
+                        continue
+                    }
+
+                    try {
+                        // Fetch the full profile
+                        const profile = await get().actions.profile.get(userId)
+                        if (profile) {
+                            profiles.push(profile)
+                            // State is already updated in profile.get(), but we ensure it here too with safe update
+                            set((state) => ({
+                                profiles: {
+                                    ...state.profiles,
+                                    [userId]: { ...state.profiles[userId], ...profile }
+                                }
+                            }))
+                        }
+                    } catch (error) {
+                        console.error(`Failed to fetch profile for ${userId}:`, error)
+                    }
+
+                    // Small delay to avoid overwhelming the system
+                    await new Promise(resolve => setTimeout(resolve, 333))
                 }
 
                 return profiles
@@ -1301,42 +1480,110 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     if (profile.friends) {
                         // Add accepted friends
                         for (const friendId of profile.friends.accepted || []) {
-                            const friendProfile = await get().actions.profile.get(friendId)
-                            friendsList.push({
+                            // Create placeholder friend entry immediately
+                            const placeholderFriend: ExtendedFriend = {
                                 userId: friendId,
                                 status: 'accepted',
-                                profile: friendProfile || undefined
-                            })
+                                profile: undefined
+                            }
+                            friendsList.push(placeholderFriend)
+
+                            // Update state immediately with placeholder - SAFE UPDATE
+                            set((state) => ({
+                                friends: { ...state.friends, [friendId]: placeholderFriend }
+                            }))
+
+                            // Fetch profile and update state as soon as it's received
+                            const friendProfile = await get().actions.profile.get(friendId)
+                            if (friendProfile) {
+                                const updatedFriend: ExtendedFriend = {
+                                    userId: friendId,
+                                    status: 'accepted',
+                                    profile: friendProfile
+                                }
+                                // Update the friend in the list
+                                const friendIndex = friendsList.findIndex(f => f.userId === friendId)
+                                if (friendIndex !== -1) {
+                                    friendsList[friendIndex] = updatedFriend
+                                }
+                                // Update state immediately with full profile data - SAFE UPDATE
+                                set((state) => ({
+                                    friends: { ...state.friends, [friendId]: updatedFriend }
+                                }))
+                            }
                         }
 
                         // Add sent friend requests
                         for (const friendId of profile.friends.sent || []) {
-                            const friendProfile = await get().actions.profile.get(friendId)
-                            friendsList.push({
+                            // Create placeholder friend entry immediately
+                            const placeholderFriend: ExtendedFriend = {
                                 userId: friendId,
                                 status: 'sent',
-                                profile: friendProfile || undefined
-                            })
+                                profile: undefined
+                            }
+                            friendsList.push(placeholderFriend)
+
+                            // Update state immediately with placeholder - SAFE UPDATE
+                            set((state) => ({
+                                friends: { ...state.friends, [friendId]: placeholderFriend }
+                            }))
+
+                            // Fetch profile and update state as soon as it's received
+                            const friendProfile = await get().actions.profile.get(friendId)
+                            if (friendProfile) {
+                                const updatedFriend: ExtendedFriend = {
+                                    userId: friendId,
+                                    status: 'sent',
+                                    profile: friendProfile
+                                }
+                                // Update the friend in the list
+                                const friendIndex = friendsList.findIndex(f => f.userId === friendId)
+                                if (friendIndex !== -1) {
+                                    friendsList[friendIndex] = updatedFriend
+                                }
+                                // Update state immediately with full profile data - SAFE UPDATE
+                                set((state) => ({
+                                    friends: { ...state.friends, [friendId]: updatedFriend }
+                                }))
+                            }
                         }
 
                         // Add received friend requests
                         for (const friendId of profile.friends.received || []) {
-                            const friendProfile = await get().actions.profile.get(friendId)
-                            friendsList.push({
+                            // Create placeholder friend entry immediately
+                            const placeholderFriend: ExtendedFriend = {
                                 userId: friendId,
                                 status: 'received',
-                                profile: friendProfile || undefined
-                            })
+                                profile: undefined
+                            }
+                            friendsList.push(placeholderFriend)
+
+                            // Update state immediately with placeholder - SAFE UPDATE
+                            set((state) => ({
+                                friends: { ...state.friends, [friendId]: placeholderFriend }
+                            }))
+
+                            // Fetch profile and update state as soon as it's received
+                            const friendProfile = await get().actions.profile.get(friendId)
+                            if (friendProfile) {
+                                const updatedFriend: ExtendedFriend = {
+                                    userId: friendId,
+                                    status: 'received',
+                                    profile: friendProfile
+                                }
+                                // Update the friend in the list
+                                const friendIndex = friendsList.findIndex(f => f.userId === friendId)
+                                if (friendIndex !== -1) {
+                                    friendsList[friendIndex] = updatedFriend
+                                }
+                                // Update state immediately with full profile data - SAFE UPDATE
+                                set((state) => ({
+                                    friends: { ...state.friends, [friendId]: updatedFriend }
+                                }))
+                            }
                         }
                     }
 
-                    // Update friends cache
-                    const friendsMap = friendsList.reduce((acc, friend) => {
-                        acc[friend.userId] = friend
-                        return acc
-                    }, {} as Record<string, ExtendedFriend>)
-
-                    set({ friends: friendsMap })
                     return friendsList
                 } catch (error) {
                     console.error("Failed to get friends:", error)
@@ -1664,8 +1911,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return;
                 }
 
+                console.log(`[hooks/use-subspace] Starting to load ${userJoinedServers.length} servers sequentially...`);
+
                 const loadNextServer = async (index: number) => {
                     if (index >= userJoinedServers.length) {
+                        console.log(`[hooks/use-subspace] ✅ Finished loading all ${userJoinedServers.length} servers`);
                         return;
                     }
 
@@ -1679,12 +1929,26 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         return;
                     }
 
-                    console.log(`Loading server ${serverId} (${index + 1}/${userJoinedServers.length})...`);
+                    console.log(`[hooks/use-subspace] Loading server ${serverId} (${index + 1}/${userJoinedServers.length})...`);
+
+                    // ✅ IMMEDIATE UPDATE: Mark this server as being loaded in the loadingServers set
+                    const currentLoadingServers = new Set(get().loadingServers)
+                    currentLoadingServers.add(serverId)
+                    set({ loadingServers: currentLoadingServers })
+
                     try {
                         const server = await get().actions.servers.get(serverId, true); // Force refresh
+                        if (server) {
+                            console.log(`[hooks/use-subspace] ✅ Successfully loaded server ${serverId}`);
+                        }
                     } catch (error) {
-                        console.error(`❌ Failed to load server ${serverId}:`, error);
+                        console.error(`[hooks/use-subspace] ❌ Failed to load server ${serverId}:`, error);
                     } finally {
+                        // ✅ IMMEDIATE UPDATE: Remove from loading set when done (success or failure)
+                        const updatedLoadingServers = new Set(get().loadingServers)
+                        updatedLoadingServers.delete(serverId)
+                        set({ loadingServers: updatedLoadingServers })
+
                         // Wait a short delay before loading the next server to avoid overwhelming the system
                         setTimeout(() => {
                             loadNextServer(index + 1);
@@ -1694,25 +1958,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 loadNextServer(0);
             }
-        },
-        clear: () => {
-            console.log("🧹 Clearing all Subspace state due to wallet disconnection")
-            set({
-                subspace: null,
-                profile: null,
-                profiles: {},
-                servers: {},
-                messages: {},
-                friends: {},
-                dmConversations: {},
-                isCreatingProfile: false,
-                isLoadingProfile: false,
-                loadingProfiles: new Set<string>(),
-                loadingServers: new Set<string>(),
-                loadingFriends: new Set<string>(),
-                loadingDMs: new Set<string>(),
-                currentAddress: "",
-            })
         }
     }
 }), {

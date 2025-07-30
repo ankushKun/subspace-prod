@@ -35,7 +35,7 @@ function SettingsButton(props: React.ComponentProps<typeof Button>) {
 
 export default function Profile({ className }: { className?: string }) {
     const { address, connected, actions: walletActions, jwk, wauthInstance } = useWallet()
-    const { profile, servers, actions, subspace, isCreatingProfile } = useSubspace()
+    const { profile, servers, actions, subspace, isCreatingProfile, isLoadingProfile } = useSubspace()
 
     // UI State
     const [profileDialogOpen, setProfileDialogOpen] = useState(false)
@@ -53,8 +53,8 @@ export default function Profile({ className }: { className?: string }) {
 
     // Check if user needs PFP prompt
     useEffect(() => {
-        // Don't show PFP prompt if profile is being created
-        if (!profile || isCreatingProfile) return
+        // Don't show PFP prompt if profile is being created or loaded
+        if (!profile || isCreatingProfile || isLoadingProfile) return
 
         const DEFAULT_PFP = "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A"
         const needsPfpPrompt = (!profile.pfp || profile.pfp === DEFAULT_PFP) && !profile.primaryLogo
@@ -62,7 +62,7 @@ export default function Profile({ className }: { className?: string }) {
         if (needsPfpPrompt) {
             setPfpPromptOpen(true)
         }
-    }, [profile, isCreatingProfile])
+    }, [profile, isCreatingProfile, isLoadingProfile])
 
     // Load current nickname when server is selected or servers data changes
     useEffect(() => {

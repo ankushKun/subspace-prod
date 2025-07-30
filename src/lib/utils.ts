@@ -16,22 +16,31 @@ export function shortenAddress(address: string) {
     return address.slice(0, 5) + "..." + address.slice(-5)
 }
 
-export async function getPrimaryName(address: string): Promise<{ primaryName: string, primaryLogo: string }> {
-    const ario = ARIO.mainnet()
+export async function getBothNameAndLogo(address: string): Promise<{ primaryName: string, primaryLogo: string }> {
     let primaryName = ""
     let primaryLogo = ""
     try {
-        const res = await ario.getPrimaryName({ address })
-        if (res.processId) {
-            primaryName = res.name
-            const ant = ANT.init({ processId: res.processId })
-            const logoRes = await ant.getLogo()
-            if (logoRes) primaryLogo = logoRes
+        const res = await getPrimaryName(address)
+        if (res.processId && res.primaryName) {
+            primaryName = res.primaryName
+            primaryLogo = await getPrimaryLogo(res.processId)
         }
     } catch (e) {
         console.warn("No primary name found for address:", address)
     }
     return { primaryName, primaryLogo }
+}
+
+export async function getPrimaryName(address: string): Promise<{ primaryName: string, processId: string }> {
+    const ario = ARIO.mainnet()
+    const res = await ario.getPrimaryName({ address })
+    return { primaryName: res.name, processId: res.processId }
+}
+
+export async function getPrimaryLogo(ANTprocessId: string): Promise<string> {
+    const ant = ANT.init({ processId: ANTprocessId })
+    const logoRes = await ant.getLogo()
+    return logoRes
 }
 
 export async function runGQLQuery(query: string) {

@@ -346,8 +346,7 @@ function Main() {
     // Set up wallet disconnection listener
     useEffect(() => {
         const handleWalletDisconnected = () => {
-            console.log("🔌 Wallet disconnected, clearing all state")
-            subspaceActions.clear()
+            console.log("🔌 Wallet disconnected, global state")
             globalStateActions.clear()
         }
 
@@ -356,7 +355,7 @@ function Main() {
         return () => {
             window.removeEventListener("subspace-wallet-disconnected", handleWalletDisconnected)
         }
-    }, [subspaceActions, globalStateActions])
+    }, [globalStateActions])
 
     useEffect(() => {
         if (connected && address) {
@@ -368,7 +367,6 @@ function Main() {
             }
         } else if (!connected && !address) {
             // Clear state when wallet becomes disconnected
-            subspaceActions.clear()
             globalStateActions.clear()
         }
     }, [connected, address])
