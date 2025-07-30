@@ -7,6 +7,7 @@ import discord from "@/assets/logos/discord.svg"
 import github from "@/assets/logos/github.svg"
 import google from "@/assets/logos/google.svg"
 import x from "@/assets/logos/x.svg"
+import alien from "@/assets/subspace/alien-green.svg"
 
 import { Button } from "@/components/ui/button"
 import { Mail, QrCode, User2 } from "lucide-react"
@@ -119,129 +120,178 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
             <DialogTrigger>
                 {children}
             </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>What do you want to login with?</DialogTitle>
+            <DialogContent className="max-w-md w-[95vw] p-6 bg-gradient-to-br from-background via-background/95 to-background/90 border-2 border-primary/20 shadow-2xl backdrop-blur-sm">
+                <DialogHeader className="text-center space-y-6">
+                    {/* Alien Logo */}
+                    <div className="flex justify-center">
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border-2 border-primary/30">
+                            <img src={alien} alt="alien" className="w-10 h-10 opacity-80" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <DialogTitle className="text-2xl font-freecam text-primary">
+                            Connect to Subspace
+                        </DialogTitle>
+                        <DialogDescription className="text-muted-foreground text-sm font-ocr">
+                            Choose your preferred method to join the network
+                        </DialogDescription>
+                    </div>
                 </DialogHeader>
-                <div className="flex flex-col gap-4 mt-4">
-                    {scanning ? <>
-                        <div className="space-y-4">
+
+                <div className="flex flex-col gap-6 mt-6">
+                    {scanning ? (
+                        <div className="space-y-6">
                             <div className="relative">
                                 <Scanner
                                     constraints={{ facingMode: "environment" }}
                                     classNames={{
-                                        container: "w-full max-w-sm md:!max-w-md mx-auto flex items-center justify-center rounded"
+                                        container: "w-full max-w-sm md:!max-w-md mx-auto flex items-center justify-center rounded-lg overflow-hidden border-2 border-primary/30"
                                     }}
                                     onScan={handleScan}
                                     formats={["qr_code"]}
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm text-muted-foreground">
-                                    <span>Scanning progress</span>
-                                    <span>{scanProgress}/{totalScanSteps}</span>
+                            <div className="space-y-3">
+                                <div className="flex justify-between text-sm font-ocr">
+                                    <span className="text-primary/80">Scanning progress</span>
+                                    <span className="text-primary">{scanProgress}/{totalScanSteps}</span>
                                 </div>
                                 <Progress value={(scanProgress / totalScanSteps) * 100} className="w-full" />
-                                <div className="text-center text-xs text-muted-foreground">
+                                <div className="text-center text-xs text-primary/60 font-ocr">
                                     Scan all {totalScanSteps} QR codes from subspace on desktop
                                 </div>
                             </div>
+                            <Button
+                                variant="outline"
+                                onClick={() => setScanning(false)}
+                                className="w-full font-ocr border-primary/30 text-primary/80 hover:bg-primary/10"
+                            >
+                                Cancel Scanning
+                            </Button>
                         </div>
-                        <Button
-                            variant="outline"
-                            onClick={() => setScanning(false)}
-                            className="w-full"
-                        >
-                            Cancel Scanning
-                        </Button>
-                    </> : <>
-                        <div className="flex gap-1 justify-evenly items-center">
-                            <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Discord)}
-                            >
-                                <img src={discord} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
-                            </Button>
-                            <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Github)}
-                            >
-                                <img src={github} className="w-8 h-8 p-1 ml-auto aspect-square object-contain invert dark:invert-0" />
-                            </Button>
-                            <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Google)}
-                            >
-                                <img src={google} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
-                            </Button>
-                            <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                                onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.X)}
-                            >
-                                <img src={x} className="w-8 h-8 p-1 ml-auto rounded aspect-square object-contain" />
-                            </Button>
-                            {/* <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 p-0 justify-between"
+                    ) : (
+                        <>
+                            {/* Social Login Options */}
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-ocr text-primary/80 text-center">Social Login</h3>
+                                <div className="flex items-center justify-evenly gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        className="h-12 w-12 p-2 border border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all"
+                                        onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Discord)}
+                                    >
+                                        <img src={discord} className="w-6 h-6 object-contain" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-12 w-12 p-2 border border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all"
+                                        onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Github)}
+                                    >
+                                        <img src={github} className="w-6 h-6 object-contain invert dark:invert-0" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-12 w-12 p-2 border border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all"
+                                        onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.Google)}
+                                    >
+                                        <img src={google} className="w-6 h-6 object-contain" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-12 w-12 p-2 border border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all"
+                                        onClick={() => handleLoginOptionClicked(ConnectionStrategies.WAuth, WAuthProviders.X)}
+                                    >
+                                        <img src={x} className="w-6 h-6 object-contain rounded" />
+                                    </Button>
+                                </div>
+                            </div>
 
-                            >
-                                <User2 className="w-8 h-8 ml-auto aspect-square object-contain" />
-                                <span className="text-muted-foreground/50 text-xs">guest user</span>
-                            </Button> */}
-                        </div>
-                        <div className="flex gap-1 justify-evenly items-center flex-col md:flex-row w-full">
-                            {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" &&
-                                <Button variant="ghost" className="text-start justify-start border border-border/50 h-12 grow"
-                                    onClick={() => handleLoginOptionClicked(ConnectionStrategies.ArWallet)}
+                            {/* Separator */}
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t border-primary/20" />
+                                </div>
+                                <div className="relative flex justify-center text-xs">
+                                    <span className="bg-background px-3 text-primary/60 font-ocr">or use wallet</span>
+                                </div>
+                            </div>
+
+                            {/* Wallet Options */}
+                            <div className="space-y-3">
+                                {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-12 justify-between font-ocr border-primary/30 text-primary/80 hover:bg-primary/10 hover:border-primary/40"
+                                        onClick={() => handleLoginOptionClicked(ConnectionStrategies.ArWallet)}
+                                    >
+                                        <span>Arweave Wallet</span>
+                                        <img src={arweave} className="w-6 h-6 opacity-60 invert dark:invert-0" />
+                                    </Button>
+                                )}
+
+                                <Button
+                                    variant="outline"
+                                    className="w-full h-12 justify-between font-ocr border-primary/30 text-primary/80 hover:bg-primary/10 hover:border-primary/40"
+                                    onClick={() => {
+                                        if (wanderInstance) {
+                                            wanderInstance.open()
+                                        } else {
+                                            handleLoginOptionClicked(ConnectionStrategies.WanderConnect)
+                                        }
+                                        clickClose()
+                                    }}
                                 >
-                                    <div>Arweave Wallet</div>
-                                    <img src={arweave} className="w-8 h-8 p-0.5 ml-auto aspect-square opacity-60 group-hover:opacity-100 transition-opacity duration-200 invert dark:invert-0" />
+                                    <span>Wander Connect</span>
+                                    <img src={wander} className="w-6 h-6 object-contain" />
                                 </Button>
-                            }
-                            <Button variant="ghost" className="text-start grow justify-start border border-border/50 h-12"
-                                onClick={() => {
-                                    if (wanderInstance) {
-                                        wanderInstance.open()
-                                    } else {
-                                        handleLoginOptionClicked(ConnectionStrategies.WanderConnect)
-                                    }
-                                    clickClose()
-                                }}
-                            >
-                                <div>Wander Connect</div>
-                                <img src={wander} className="w-8 h-8 ml-auto aspect-square object-contain" />
-                            </Button>
-                        </div>
-                        {/* {isMobileDevice && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                            onClick={() => setScanning(true)}
-                        >
-                            <div>Scan QR Code</div>
-                            <QrCode className="!h-8 !w-8 p-0.5" />
-                        </Button>} */}
-                        {/* <Button disabled variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between">
-                            <div>Metamask</div>
-                            <span className="text-muted-foreground/50 text-xs">(coming soon)</span>
-                            <img src={metamask} className="w-8 h-8 p-1 ml-auto aspect-square object-contain" />
-                        </Button> */}
+                            </div>
 
-                        {process.env.NODE_ENV === "development" && <div className="text-center text-muted-foreground/50 text-xs h-[0.5px] bg-foreground/50 w-[20px] mx-auto" />}
+                            {/* Development Options */}
+                            {process.env.NODE_ENV === "development" && (
+                                <>
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <span className="w-full border-t border-primary/10" />
+                                        </div>
+                                        <div className="relative flex justify-center text-xs">
+                                            <span className="bg-background px-3 text-primary/40 font-ocr">dev tools</span>
+                                        </div>
+                                    </div>
 
-                        {process.env.NODE_ENV === "development" && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                            onClick={() => {
-                                // prompt input for a jwk string
-                                const jwk = prompt("Enter the JWK string")
-                                if (jwk) {
-                                    const jwkObj = JSON.parse(jwk)
-                                    jwkObj.kty = "RSA"
-                                    jwkObj.e = "AQAB"
-                                    handleLoginOptionClicked(ConnectionStrategies.ScannedJWK, jwkObj)
-                                }
-                            }}
-                        >
-                            simulate delegation <span className="text-muted-foreground/50 text-xs">(dev only)</span>
-                        </Button>}
-                        {process.env.NODE_ENV === "development" && <Button variant="ghost" className="text-start !px-4 border border-border/50 h-12 justify-between"
-                            onClick={() => {
-                                walletActions.disconnect()
-                            }}
-                        >
-                            clear login <span className="text-muted-foreground/50 text-xs">(dev only)</span>
-                        </Button>}
-                    </>}
+                                    <div className="space-y-2">
+                                        <Button
+                                            variant="ghost"
+                                            className="w-full h-10 justify-between text-xs font-ocr border border-primary/20 hover:bg-primary/5"
+                                            onClick={() => {
+                                                const jwk = prompt("Enter the JWK string")
+                                                if (jwk) {
+                                                    const jwkObj = JSON.parse(jwk)
+                                                    jwkObj.kty = "RSA"
+                                                    jwkObj.e = "AQAB"
+                                                    handleLoginOptionClicked(ConnectionStrategies.ScannedJWK, jwkObj)
+                                                }
+                                            }}
+                                        >
+                                            <span>Simulate delegation</span>
+                                            <span className="text-primary/40">dev only</span>
+                                        </Button>
+
+                                        <Button
+                                            variant="ghost"
+                                            className="w-full h-10 justify-between text-xs font-ocr border border-destructive/20 hover:bg-destructive/5 text-destructive/80"
+                                            onClick={() => {
+                                                walletActions.disconnect()
+                                            }}
+                                        >
+                                            <span>Clear login</span>
+                                            <span className="text-destructive/40">dev only</span>
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                        </>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
