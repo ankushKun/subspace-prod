@@ -1244,19 +1244,30 @@ export default function ServerList({ className, onServerJoined }: {
             .filter(server => server !== null)
         : []
 
-    // Show skeleton loaders for servers that are expected but not yet loaded
+    // Get expected server IDs from profile
     const expectedServerIds = connected && address && profile?.serversJoined
         ? (profile.serversJoined || []).map(server =>
             typeof server === 'string' ? server : (server as any).serverId
         ).filter(Boolean)
         : []
 
+    // Calculate servers that are expected but not yet loaded
     const loadedServersCount = displayServers.length
-    let skeletonsToShow = Math.max(0, expectedServerIds.length - loadedServersCount)
+    const serversBeingLoaded = expectedServerIds.filter(serverId => loadingServers.has(serverId)).length
+    const unloadedExpectedServers = Math.max(0, expectedServerIds.length - loadedServersCount)
 
-    // Show placeholder skeletons when profile is loading and we don't know server count yet
-    if (isLoadingProfile && connected && address && skeletonsToShow === 0) {
-        skeletonsToShow = 3 // Show 3 placeholder skeletons during initial profile load
+    // Determine skeletons to show
+    let skeletonsToShow = 0
+
+    // Only show skeletons in these specific cases:
+    if (connected && address) {
+        if (isLoadingProfile && !profile) {
+            // Initial profile load - show a few placeholder skeletons
+            skeletonsToShow = 2
+        } else if (profile?.serversJoined && unloadedExpectedServers > 0) {
+            // We know what servers to expect, show skeletons for unloaded ones
+            skeletonsToShow = Math.min(unloadedExpectedServers, serversBeingLoaded || unloadedExpectedServers)
+        }
     }
 
     function handleServerJoined(data: any) {

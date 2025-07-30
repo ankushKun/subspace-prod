@@ -64,6 +64,15 @@ export default function App() {
     // Mobile member sheet state
     const [showMemberSheet, setShowMemberSheet] = useState(false)
 
+    // If profile updates fetch servers
+    useEffect(() => {
+        if (profile) {
+            for (const server of profile.serversJoined) {
+                subspaceActions.servers.get(server.serverId).catch(console.error)
+            }
+        }
+    }, [profile])
+
     // Auto-collapse member list on mobile
     useEffect(() => {
         if (shouldUseOverlays) {
@@ -142,9 +151,11 @@ export default function App() {
 
         // update server and members
         if (serverId) {
-            // Force refresh server data when serverId changes
-            // Members are automatically loaded when forceRefresh is true
-            subspaceActions.servers.get(serverId, true).catch(console.error)
+            subspaceActions.servers.get(serverId).then(() => {
+                subspaceActions.servers.getMembers(serverId).then((memberData) => {
+                    subspaceActions.profile.getBulk(memberData.map((member: any) => member.userId))
+                })
+            })
         }
 
         // Load DM conversation when friendId changes

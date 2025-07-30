@@ -1874,13 +1874,6 @@ const Messages = React.forwardRef<MessagesRef, {
         });
     }
 
-    // Load server if not available
-    useEffect(() => {
-        if (activeServerId && !server) {
-            actions.servers.get(activeServerId).catch(console.error);
-        }
-    }, [activeServerId, server, actions.servers]);
-
     // Load messages when channel changes
     useEffect(() => {
         if (!server || !activeChannelId || !channel) {

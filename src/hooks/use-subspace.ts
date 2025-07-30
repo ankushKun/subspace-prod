@@ -89,8 +89,9 @@ interface SubspaceState {
             deleteCategory: (serverId: string, categoryId: string) => Promise<boolean>
             join: (serverId: string) => Promise<boolean>
             leave: (serverId: string) => Promise<boolean>
-            getMembers: (serverId: string, forceRefresh?: boolean) => Promise<any[]>
+            getMembers: (serverId: string) => Promise<any[]>
             refreshMembers: (serverId: string) => Promise<Member[]>
+            refreshMemberProfiles: (serverId: string) => Promise<boolean>
             getMember: (serverId: string, userId: string) => Promise<Member | null>
             updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
             createRole: (serverId: string, params: { name: string; color?: string; permissions?: number | string; position?: number }) => Promise<boolean>
@@ -128,10 +129,10 @@ interface SubspaceState {
             getCachedMessages: (friendId: string) => DMMessage[]
             markAsRead: (friendId: string) => void
         }
-        internal: {
-            rehydrateServers: () => void
-            loadUserServersSequentially: (profile: ExtendedProfile) => void
-        }
+        // internal: {
+        //     rehydrateServers: () => void
+        //     loadUserServersSequentially: (profile: ExtendedProfile) => void
+        // }
     }
 }
 
@@ -158,7 +159,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 if (!owner) {
                     owner = "0x69420"
-                    console.log("[hooks/use-subspace] no owner, using default")
                     return
                 }
 
@@ -167,7 +167,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Check if address has changed (wallet switch)
                 if (previousAddress && previousAddress !== owner) {
-                    console.log(`[hooks/use-subspace] Address changed from ${previousAddress} to ${owner}, clearing friends and DMs`)
                     set({
                         friends: {},
                         dmConversations: {},
@@ -189,25 +188,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     set({ profile: cachedProfile as ExtendedProfile })
                     // Still refresh in background but don't show loading state
                     get().actions.profile.refresh(true)
-
-                    // ✅ FIX: If we have a cached profile but no servers, load them
-                    const currentServers = get().servers
-                    const hasNoServers = Object.keys(currentServers).length === 0
-                    const profileHasServers = cachedProfile.serversJoined && cachedProfile.serversJoined.length > 0
-
-                    if (hasNoServers && profileHasServers) {
-                        console.log("[hooks/use-subspace] Cached profile found but no servers cached, loading servers...")
-                        get().actions.internal.loadUserServersSequentially(cachedProfile)
-                    }
                 } else {
                     // Set loading state immediately when starting profile fetch
                     set({ profile: null, isLoadingProfile: true })
                     get().actions.profile.get()
                 }
-
-                // ✅ UPDATED: Removed delayed server loading since servers are now loaded sequentially after profile fetch
-                // Rehydrate servers from persisted data only
-                get().actions.internal.rehydrateServers()
             } catch (error) {
                 console.error("Failed to initialize Subspace:", error)
                 // Don't throw here, just log the error
@@ -228,17 +213,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 const targetUserId = userId || walletAddress
 
-                // ✅ ADDED: Check if this profile is already being loaded
-                if (get().loadingProfiles.has(targetUserId)) {
-                    console.log(`[hooks/use-subspace] Profile ${targetUserId} is already being loaded, skipping duplicate call`)
-                    return get().profiles[targetUserId] || null
-                }
-
-                // ✅ ADDED: Check if we already have this profile cached (for other users)
-                if (userId && get().profiles[userId]) {
-                    return get().profiles[userId]
-                }
-
                 try {
                     let profile: ExtendedProfile | null = null
 
@@ -254,12 +228,34 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         profile = await subspace.user.getProfile(targetUserId) as ExtendedProfile
                         if (profile) {
                             // ✅ IMMEDIATE UPDATE: Set basic profile data right away
-                            const basicProfile = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
+                            // const basicProfile = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
+
+                            // ✅ PRESERVE existing primary name/logo ONLY if they have actual values
+                            const cachedProfile = get().profiles[targetUserId]
+                            if (cachedProfile) {
+                                // Only preserve if cached values are not empty
+                                if (cachedProfile.primaryName && cachedProfile.primaryName !== "") {
+                                    profile.primaryName = cachedProfile.primaryName
+                                } else {
+                                    profile.primaryName = ""
+                                }
+
+                                if (cachedProfile.primaryLogo && cachedProfile.primaryLogo !== "") {
+                                    profile.primaryLogo = cachedProfile.primaryLogo
+                                } else {
+                                    profile.primaryLogo = ""
+                                }
+                            } else {
+                                // Initialize with empty values for new profiles
+                                profile.primaryName = ""
+                                profile.primaryLogo = ""
+                            }
+
 
                             if (!userId) {
-                                set({ profile: basicProfile })
+                                set({ profile })
                             }
-                            set({ profiles: { ...get().profiles, [targetUserId]: basicProfile } })
+                            set({ profiles: { ...get().profiles, [targetUserId]: profile } })
                         }
                     } catch (e) {
                         // Only show creating profile dialog if this is our own profile
@@ -310,11 +306,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         // ✅ IMMEDIATE UPDATE: Set basic profile with placeholders for primary name/logo
                         const basicProfile = {
                             ...profile,
-                            primaryName: "",
-                            primaryLogo: ""
+                            primaryName: profile.primaryName || "",
+                            primaryLogo: profile.primaryLogo || ""
                         } as ExtendedProfile
 
-                        // ✅ IMMEDIATE STATE UPDATE: Show basic profile right away
                         if (!userId) {
                             set((state) => ({
                                 profile: { ...state.profile, ...basicProfile }
@@ -323,25 +318,22 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         set((state) => ({
                             profiles: {
                                 ...state.profiles,
-                                [targetUserId]: {
-                                    ...state.profiles[targetUserId],
-                                    ...basicProfile
-                                }
+                                [targetUserId]: basicProfile // Use complete profile object
                             }
                         }))
 
-                        // ✅ PROGRESSIVE UPDATE: Fetch primary name and logo separately for immediate feedback
+                        // ✅ WAIT FOR COMPLETE PROFILE: Fetch primary name and logo before returning
                         let currentProfile = basicProfile
                         try {
                             // First, get the primary name using utility function
-                            const nameRes = await getPrimaryName(profile.userId || userId)
+                            const nameRes = await getPrimaryName(profile.userId || targetUserId)
+
                             if (nameRes?.primaryName) {
                                 currentProfile = {
                                     ...currentProfile,
                                     primaryName: nameRes.primaryName
                                 } as ExtendedProfile
 
-                                // ✅ IMMEDIATE UPDATE: Update state as soon as primary name is available
                                 if (!userId) {
                                     set((state) => ({
                                         profile: { ...state.profile, ...currentProfile }
@@ -350,10 +342,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                 set((state) => ({
                                     profiles: {
                                         ...state.profiles,
-                                        [targetUserId]: {
-                                            ...state.profiles[targetUserId],
-                                            ...currentProfile
-                                        }
+                                        [targetUserId]: currentProfile
                                     }
                                 }))
 
@@ -361,13 +350,13 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                 if (nameRes.processId) {
                                     try {
                                         const logoRes = await getPrimaryLogo(nameRes.processId)
+
                                         if (logoRes) {
                                             currentProfile = {
                                                 ...currentProfile,
                                                 primaryLogo: logoRes
                                             } as ExtendedProfile
 
-                                            // ✅ IMMEDIATE UPDATE: Update state as soon as logo is available
                                             if (!userId) {
                                                 set((state) => ({
                                                     profile: { ...state.profile, ...currentProfile }
@@ -376,26 +365,29 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                             set((state) => ({
                                                 profiles: {
                                                     ...state.profiles,
-                                                    [targetUserId]: {
-                                                        ...state.profiles[targetUserId],
-                                                        ...currentProfile
-                                                    }
+                                                    [targetUserId]: currentProfile
                                                 }
                                             }))
+                                        } else {
+                                            console.log(`[hooks/use-subspace] ⚠️ No logo found for process ${nameRes.processId}`)
                                         }
                                     } catch (logoError) {
-                                        console.warn("Failed to fetch logo for", nameRes.processId, logoError)
+                                        console.error(`[hooks/use-subspace] ❌ Failed to fetch logo for process ${nameRes.processId}:`, logoError)
                                     }
+                                } else {
+                                    console.log(`[hooks/use-subspace] ⚠️ No processId found for ${targetUserId}, skipping logo fetch`)
                                 }
+                            } else {
+                                console.log(`[hooks/use-subspace] ⚠️ No primary name found for ${targetUserId}`)
                             }
                         } catch (nameError) {
-                            console.warn("Failed to fetch primary name for address:", profile.userId || userId, nameError)
+                            console.error(`[hooks/use-subspace] ❌ Failed to fetch primary name for ${targetUserId}:`, nameError)
                         }
 
-                        // ✅ PROGRESSIVE UPDATE: Fetch tier info and update state immediately when received
+                        // ✅ ADD TIER INFO: Fetch tier info and add to complete profile
                         let finalProfile = currentProfile
                         try {
-                            const tierInfo = await getWanderTierInfo(profile.userId || userId)
+                            const tierInfo = await getWanderTierInfo(profile.userId || targetUserId)
                             // ✅ CREATE NEW OBJECT: Don't mutate existing object
                             finalProfile = {
                                 ...currentProfile,
@@ -411,10 +403,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             set((state) => ({
                                 profiles: {
                                     ...state.profiles,
-                                    [targetUserId]: {
-                                        ...state.profiles[targetUserId],
-                                        ...finalProfile
-                                    }
+                                    [targetUserId]: finalProfile  // Use complete profile, don't merge
                                 }
                             }))
                         } catch (e) {
@@ -434,12 +423,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             set((state) => ({
                                 profiles: {
                                     ...state.profiles,
-                                    [targetUserId]: {
-                                        ...state.profiles[targetUserId],
-                                        ...finalProfile
-                                    }
+                                    [targetUserId]: finalProfile  // Use complete profile, don't merge
                                 }
                             }))
+
+                            console.log(`[hooks/use-subspace] ✅ FINAL profile (no tier) updated for ${targetUserId}: name="${finalProfile.primaryName || 'EMPTY'}", logo="${finalProfile.primaryLogo ? finalProfile.primaryLogo.slice(0, 20) + '...' : 'EMPTY'}", pfp="${finalProfile.pfp ? finalProfile.pfp.slice(0, 20) + '...' : 'EMPTY'}"`);
                         }
 
                         // Final return logic
@@ -447,20 +435,14 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             // For other users: return the enhanced profile
                             return finalProfile
                         } else {
-                            // For current user: ensure final state is set with safe merging and load servers
+                            // For current user: ensure final state is set and load servers
                             set((state) => ({
                                 profile: { ...state.profile, ...finalProfile },
                                 profiles: {
                                     ...state.profiles,
-                                    [profile.userId]: {
-                                        ...state.profiles[profile.userId],
-                                        ...finalProfile
-                                    }
+                                    [profile.userId]: finalProfile  // Use complete profile, don't merge
                                 }
                             }))
-
-                            // ✅ NEW: Load user's servers one by one after profile is fetched
-                            get().actions.internal.loadUserServersSequentially(finalProfile)
 
                             return finalProfile
                         }
@@ -482,72 +464,32 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
             },
             getBulk: async (userIds: string[]) => {
+
                 const subspace = get().subspace
                 if (!subspace) return []
 
-                const profiles: ExtendedProfile[] = []
+                const profiles = await subspace.user.getBulkProfiles(userIds)
+                if (profiles) {
+                    const profilesKV = profiles.reduce((acc: Record<string, ExtendedProfile>, profile: Profile) => {
+                        acc[profile.userId] = profile as ExtendedProfile
+                        return acc
+                    }, {} as Record<string, ExtendedProfile>)
 
-                // Create placeholder entries for all users immediately
-                const placeholderProfiles: Record<string, ExtendedProfile> = {}
-                for (const userId of userIds) {
-                    // Skip if we already have this profile
-                    if (get().profiles[userId]) {
-                        profiles.push(get().profiles[userId])
-                        continue
-                    }
+                    // merge profiles values with any existing data from the state (primaryName, primaryLogo)
 
-                    // Create a placeholder profile with loading state
-                    placeholderProfiles[userId] = {
-                        userId,
-                        primaryName: "",
-                        primaryLogo: "",
-                        // Add minimal required fields for ExtendedProfile
-                        displayName: "",
-                        pfp: "",
-                        bio: "",
-                        banner: "",
-                        dateCreated: 0,
-                        serversJoined: [],
-                        dmProcess: ""
-                    } as ExtendedProfile
-                }
-
-                // Update state immediately with placeholders - SAFE UPDATE
-                if (Object.keys(placeholderProfiles).length > 0) {
-                    set((state) => ({
-                        profiles: { ...state.profiles, ...placeholderProfiles }
-                    }))
-                }
-
-                // Fetch each profile one by one with real-time updates
-                for (const userId of userIds) {
-                    // Skip if we already had this profile
-                    if (profiles.find(p => p.userId === userId)) {
-                        continue
-                    }
-
-                    try {
-                        // Fetch the full profile
-                        const profile = await get().actions.profile.get(userId)
-                        if (profile) {
-                            profiles.push(profile)
-                            // State is already updated in profile.get(), but we ensure it here too with safe update
-                            set((state) => ({
-                                profiles: {
-                                    ...state.profiles,
-                                    [userId]: { ...state.profiles[userId], ...profile }
-                                }
-                            }))
+                    const stateProfiles = get().profiles
+                    Object.keys(stateProfiles).forEach((userId) => {
+                        if (profilesKV[userId]) {
+                            profilesKV[userId] = {
+                                ...profilesKV[userId],
+                                ...stateProfiles[userId]
+                            }
                         }
-                    } catch (error) {
-                        console.error(`Failed to fetch profile for ${userId}:`, error)
-                    }
+                    })
 
-                    // Small delay to avoid overwhelming the system
-                    await new Promise(resolve => setTimeout(resolve, 333))
+                    set({ profiles: { ...get().profiles, ...profilesKV } })
                 }
-
-                return profiles
+                return profiles as ExtendedProfile[]
             },
             refresh: async (silent: boolean = false) => {
                 // Force refresh the current user's profile
@@ -587,116 +529,31 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             }
         },
         servers: {
-            get: async (serverId: string, forceRefresh: boolean = false) => {
+            get: async (serverId: string) => {
                 const subspace = get().subspace
                 if (!subspace) return null
 
-                // Check if we already have a proper server instance
-                const existingServer = get().servers[serverId]
-                if (existingServer && !forceRefresh) {
-                    return existingServer
-                }
-
                 try {
-                    // ✅ ADDED: Mark this server as being loaded
-                    const currentLoadingServers = new Set(get().loadingServers)
-                    currentLoadingServers.add(serverId)
-                    set({ loadingServers: currentLoadingServers })
-
                     const server = await subspace.server.getServer(serverId)
+
                     if (server) {
-                        // Preserve existing members data if it exists
-                        const preservedData: any = {}
-                        if (existingServer) {
-                            // Preserve members-related fields
-                            if ((existingServer as any).members) {
-                                preservedData.members = (existingServer as any).members
-                            }
-                            if ((existingServer as any).membersLoaded) {
-                                preservedData.membersLoaded = (existingServer as any).membersLoaded
-                            }
-                            if ((existingServer as any).membersLoading) {
-                                preservedData.membersLoading = (existingServer as any).membersLoading
-                            }
+                        const stateServer = get().servers[serverId]
+                        if (stateServer) {
+                            server.members = stateServer.members || []
+                        } else {
+                            server.members = []
                         }
-
-                        // Merge server data with preserved data
-                        const mergedServer = { ...server, ...preservedData }
-
-                        // Store the merged server data
-                        set({
-                            servers: { ...get().servers, [serverId]: mergedServer },
-                        })
-
-                        // Auto-load members when forceRefresh is true (indicating server activation)
-                        if (forceRefresh) {
-                            const hasMembers = (mergedServer as any)?.members?.length > 0
-                            const membersLoaded = (mergedServer as any)?.membersLoaded
-                            const membersLoading = (mergedServer as any)?.membersLoading;
-
-
-
-                            // Set loading state immediately
-                            (mergedServer as any).membersLoading = true;
-                            set({ servers: { ...get().servers, [serverId]: mergedServer } })
-
-                            // Load members in background without blocking server return
-                            setTimeout(async () => {
-                                try {
-                                    const membersData = await subspace.server.getAllMembers(serverId)
-
-                                    // Check if the result is an object (members by userId) or an array
-                                    let members: any[] = []
-                                    if (Array.isArray(membersData)) {
-                                        members = membersData
-                                    } else if (typeof membersData === 'object' && membersData !== null) {
-                                        // Convert object to array of member objects
-                                        members = Object.entries(membersData).map(([userId, memberData]) => ({
-                                            userId,
-                                            ...(memberData as any)
-                                        }))
-                                    }
-
-                                    // Update server with members
-                                    const currentServer = get().servers[serverId]
-                                    if (currentServer) {
-                                        (currentServer as any).members = members;
-                                        (currentServer as any).membersLoaded = true;
-                                        (currentServer as any).membersLoading = false;
-
-                                        set({
-                                            servers: { ...get().servers, [serverId]: currentServer }
-                                        })
-
-                                        // ✅ FIXED: Removed automatic profile.getBulk() to break the loop
-                                        // Profiles will be loaded centrally in member-list component when needed
-                                    }
-                                } catch (error) {
-                                    console.error("[hooks/use-subspace] ❌ Failed to load members:", error)
-                                    // Clear loading state on error
-                                    const currentServer = get().servers[serverId]
-                                    if (currentServer) {
-                                        (currentServer as any).membersLoading = false
-                                        set({
-                                            servers: { ...get().servers, [serverId]: currentServer }
-                                        })
-                                    }
-                                }
-                            }, 0)
-
-                        }
-
-                        return mergedServer
                     }
+                    set({
+                        servers: {
+                            ...get().servers,
+                            [serverId]: server
+                        }
+                    })
                     return server
                 } catch (e) {
                     console.error("[hooks/use-subspace] Failed to get server:", e)
                     return null
-                } finally {
-                    // ✅ ADDED: Clear loading state for this server
-                    const currentLoadingServers = new Set(get().loadingServers)
-                    currentLoadingServers.delete(serverId)
-                    set({ loadingServers: currentLoadingServers })
                 }
             },
             create: async (data: CreateServerParams) => {
@@ -708,11 +565,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Get the created server
                 const server = await subspace.server.getServer(serverId)
+                server.members = []
                 if (!server) throw new Error("Failed to retrieve created server")
 
-                set({
-                    servers: { ...get().servers, [serverId]: server },
-                })
+                set({ servers: { ...get().servers, [serverId]: server } })
 
                 // join the server and wait for completion
                 await get().actions.servers.join(serverId)
@@ -958,7 +814,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return false
                 }
             },
-            getMembers: async (serverId: string, forceRefresh: boolean = false): Promise<any[]> => {
+            getMembers: async (serverId: string): Promise<any[]> => {
                 const subspace = get().subspace
                 if (!subspace) return []
 
@@ -969,60 +825,82 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return []
                 }
 
-                // Check if we already have cached members and don't need to refresh
-                if (!forceRefresh && (server as any).members && (server as any).membersLoaded) {
-                    return (server as any).members || [] as Member[]
-                }
-
-                // Check if already loading to prevent duplicate requests
-                if ((server as any).membersLoading) {
-                    return (server as any).members || [] as Member[]
-                }
-
                 try {
-                    // Set loading state
-                    (server as any).membersLoading = true;
-                    set({
-                        servers: { ...get().servers, [serverId]: server }
-                    })
-
                     const membersData = await subspace.server.getAllMembers(serverId)
+                    const members = Object.entries(membersData).map(([userId, memberData]) => ({
+                        userId,
+                        ...memberData
+                    }))
+                    console.log("membersData", members)
 
-                    // Check if the result is an object (members by userId) or an array
-                    let members: Member[] = []
-                    if (Array.isArray(membersData)) {
-                        members = membersData
-                    } else if (typeof membersData === 'object' && membersData !== null) {
-                        // Convert object to array of member objects
-                        members = Object.entries(membersData).map(([userId, memberData]) => ({
-                            userId,
-                            ...(memberData as any)
-                        }))
-                    }
-
-                    // Cache the members in the server instance
-                    (server as any).members = members;
-                    (server as any).membersLoaded = true;
-                    (server as any).membersLoading = false;
-
-                    // Update the server in state
                     set({
-                        servers: { ...get().servers, [serverId]: server }
+                        servers: {
+                            ...get().servers,
+                            [serverId]: {
+                                ...server,
+                                members: members
+                            }
+                        }
                     })
 
                     return members
                 } catch (e) {
-                    console.error("Failed to get members:", e);
-                    // Clear loading state on error
-                    (server as any).membersLoading = false
-                    set({
-                        servers: { ...get().servers, [serverId]: server }
-                    })
+                    console.log("error", e)
                     return []
                 }
             },
             refreshMembers: async (serverId: string) => {
-                return get().actions.servers.getMembers(serverId, true)
+                return get().actions.servers.getMembers(serverId)
+            },
+            refreshMemberProfiles: async (serverId: string) => {
+                console.log(`[hooks/use-subspace] 🔄 Refreshing member profiles for server ${serverId}`)
+
+                const server = get().servers[serverId]
+                if (!server || !(server as any).members) {
+                    console.warn(`[hooks/use-subspace] ⚠️ No members found for server ${serverId}`)
+                    return false
+                }
+
+                try {
+                    const members = (server as any).members || []
+                    const memberUserIds = members.map((m: any) => m.userId).filter(Boolean)
+
+                    if (memberUserIds.length > 0) {
+                        console.log(`[hooks/use-subspace] 📊 Force refreshing ${memberUserIds.length} member profiles`)
+
+                        // Force refresh all member profiles (including primary names/logos)
+                        await get().actions.profile.getBulk(memberUserIds)
+
+                        // Enrich members with updated profile data using reactive pattern
+                        const updatedProfiles = get().profiles
+                        const enrichedMembers = members.map((member: any) => ({
+                            ...member,
+                            profile: updatedProfiles[member.userId] || null
+                        }))
+
+                        const currentServer = get().servers[serverId]
+                        if (currentServer) {
+                            // Create new server object to trigger reactivity
+                            const updatedServer = {
+                                ...currentServer,
+                                members: enrichedMembers
+                            }
+
+                            set((state) => ({
+                                servers: {
+                                    ...state.servers,
+                                    [serverId]: updatedServer
+                                }
+                            }))
+                            console.log(`[hooks/use-subspace] ✅ Member profiles refreshed for server ${serverId}`)
+                            return true
+                        }
+                    }
+                    return false
+                } catch (error) {
+                    console.error(`[hooks/use-subspace] ❌ Failed to refresh member profiles for server ${serverId}:`, error)
+                    return false
+                }
             },
             getMember: async (serverId: string, userId: string) => {
                 const subspace = get().subspace
@@ -1880,85 +1758,85 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 })
             }
         },
-        internal: {
-            rehydrateServers: () => {
-                const subspace = get().subspace
-                if (!subspace) return
+        // internal: {
+        //     rehydrateServers: () => {
+        //         const subspace = get().subspace
+        //         if (!subspace) return
 
-                const persistedServers = get().servers
-                const rehydratedServers: Record<string, Server> = {}
+        //         const persistedServers = get().servers
+        //         const rehydratedServers: Record<string, Server> = {}
 
-                // Recreate server instances from persisted data
-                for (const [serverId, data] of Object.entries(persistedServers)) {
-                    try {
-                        // Just use the persisted data as server data
-                        rehydratedServers[serverId] = data as Server
-                    } catch (e) {
-                        console.error(`Failed to rehydrate server ${serverId}:`, e)
-                    }
-                }
+        //         // Recreate server instances from persisted data
+        //         for (const [serverId, data] of Object.entries(persistedServers)) {
+        //             try {
+        //                 // Just use the persisted data as server data
+        //                 rehydratedServers[serverId] = data
+        //             } catch (e) {
+        //                 console.error(`Failed to rehydrate server ${serverId}:`, e)
+        //             }
+        //         }
 
-                if (Object.keys(rehydratedServers).length > 0) {
-                }
-                set({ servers: rehydratedServers })
-            },
-            loadUserServersSequentially: (profile: ExtendedProfile) => {
-                const subspace = get().subspace
-                if (!subspace) return
+        //         if (Object.keys(rehydratedServers).length > 0) {
+        //         }
+        //         set({ servers: rehydratedServers })
+        //     },
+        //     loadUserServersSequentially: (profile: ExtendedProfile) => {
+        //         const subspace = get().subspace
+        //         if (!subspace) return
 
-                const userJoinedServers = profile.serversJoined || [];
-                if (userJoinedServers.length === 0) {
-                    return;
-                }
+        //         const userJoinedServers = profile.serversJoined || [];
+        //         if (userJoinedServers.length === 0) {
+        //             return;
+        //         }
 
-                console.log(`[hooks/use-subspace] Starting to load ${userJoinedServers.length} servers sequentially...`);
+        //         console.log(`[hooks/use-subspace] Starting to load ${userJoinedServers.length} servers sequentially...`);
 
-                const loadNextServer = async (index: number) => {
-                    if (index >= userJoinedServers.length) {
-                        console.log(`[hooks/use-subspace] ✅ Finished loading all ${userJoinedServers.length} servers`);
-                        return;
-                    }
+        //         const loadNextServer = async (index: number) => {
+        //             if (index >= userJoinedServers.length) {
+        //                 console.log(`[hooks/use-subspace] ✅ Finished loading all ${userJoinedServers.length} servers`);
+        //                 return;
+        //             }
 
-                    // Handle both string and object server identifiers
-                    const serverEntry = userJoinedServers[index];
-                    const serverId = typeof serverEntry === 'string' ? serverEntry : (serverEntry as any).serverId;
+        //             // Handle both string and object server identifiers
+        //             const serverEntry = userJoinedServers[index];
+        //             const serverId = typeof serverEntry === 'string' ? serverEntry : (serverEntry as any).serverId;
 
-                    if (!serverId) {
-                        console.warn(`Invalid server entry at index ${index}, skipping.`);
-                        loadNextServer(index + 1);
-                        return;
-                    }
+        //             if (!serverId) {
+        //                 console.warn(`Invalid server entry at index ${index}, skipping.`);
+        //                 loadNextServer(index + 1);
+        //                 return;
+        //             }
 
-                    console.log(`[hooks/use-subspace] Loading server ${serverId} (${index + 1}/${userJoinedServers.length})...`);
+        //             console.log(`[hooks/use-subspace] Loading server ${serverId} (${index + 1}/${userJoinedServers.length})...`);
 
-                    // ✅ IMMEDIATE UPDATE: Mark this server as being loaded in the loadingServers set
-                    const currentLoadingServers = new Set(get().loadingServers)
-                    currentLoadingServers.add(serverId)
-                    set({ loadingServers: currentLoadingServers })
+        //             // ✅ IMMEDIATE UPDATE: Mark this server as being loaded in the loadingServers set
+        //             const currentLoadingServers = new Set(get().loadingServers)
+        //             currentLoadingServers.add(serverId)
+        //             set({ loadingServers: currentLoadingServers })
 
-                    try {
-                        const server = await get().actions.servers.get(serverId, true); // Force refresh
-                        if (server) {
-                            console.log(`[hooks/use-subspace] ✅ Successfully loaded server ${serverId}`);
-                        }
-                    } catch (error) {
-                        console.error(`[hooks/use-subspace] ❌ Failed to load server ${serverId}:`, error);
-                    } finally {
-                        // ✅ IMMEDIATE UPDATE: Remove from loading set when done (success or failure)
-                        const updatedLoadingServers = new Set(get().loadingServers)
-                        updatedLoadingServers.delete(serverId)
-                        set({ loadingServers: updatedLoadingServers })
+        //             try {
+        //                 const server = await get().actions.servers.get(serverId, true); // Force refresh
+        //                 if (server) {
+        //                     console.log(`[hooks/use-subspace] ✅ Successfully loaded server ${serverId}`);
+        //                 }
+        //             } catch (error) {
+        //                 console.error(`[hooks/use-subspace] ❌ Failed to load server ${serverId}:`, error);
+        //             } finally {
+        //                 // ✅ IMMEDIATE UPDATE: Remove from loading set when done (success or failure)
+        //                 const updatedLoadingServers = new Set(get().loadingServers)
+        //                 updatedLoadingServers.delete(serverId)
+        //                 set({ loadingServers: updatedLoadingServers })
 
-                        // Wait a short delay before loading the next server to avoid overwhelming the system
-                        setTimeout(() => {
-                            loadNextServer(index + 1);
-                        }, 100);
-                    }
-                };
+        //                 // Wait a short delay before loading the next server to avoid overwhelming the system
+        //                 setTimeout(() => {
+        //                     loadNextServer(index + 1);
+        //                 }, 100);
+        //             }
+        //         };
 
-                loadNextServer(0);
-            }
-        }
+        //         loadNextServer(0);
+        //     }
+        // }
     }
 }), {
     name: "subspace",

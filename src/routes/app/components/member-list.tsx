@@ -245,52 +245,8 @@ export default function MemberList({ className, isVisible = true, style }: {
 
 
     const isLoadingMembers = (servers[activeServerId] as any)?.membersLoading || false
-    const membersLoaded = (server as any)?.membersLoaded || false
 
-    // Load members with their roles if not already loaded
-    useEffect(() => {
-        if (activeServerId && server && !membersLoaded && !isLoadingMembers) {
-            actions.servers.getMembers(activeServerId, true)
-        }
-    }, [activeServerId, server, membersLoaded, isLoadingMembers, actions.servers])
 
-    // ✅ CENTRALIZED: Load member profiles when members list changes
-    useEffect(() => {
-        if (members.length > 0 && !loadingProfiles) {
-            const memberIds = members.map(m => m.userId)
-            const missingProfiles = memberIds.filter(id => !profiles[id])
-
-            if (missingProfiles.length > 0) {
-                setLoadingProfiles(true)
-
-                // ✅ OPTIMIZED: Load profiles in smaller batches for better performance
-                const batchSize = 10
-                const batches = []
-                for (let i = 0; i < missingProfiles.length; i += batchSize) {
-                    batches.push(missingProfiles.slice(i, i + batchSize))
-                }
-
-                // Load batches sequentially with small delays
-                const loadBatch = async (batchIndex: number = 0) => {
-                    if (batchIndex >= batches.length) {
-                        setLoadingProfiles(false)
-                        return
-                    }
-
-                    try {
-                        await actions.profile.getBulk(batches[batchIndex])
-                        // Small delay between batches to prevent overwhelming the system
-                        setTimeout(() => loadBatch(batchIndex + 1), 200)
-                    } catch (error) {
-                        console.error(`Failed to load profile batch ${batchIndex}:`, error)
-                        setTimeout(() => loadBatch(batchIndex + 1), 500) // Longer delay on error
-                    }
-                }
-
-                loadBatch()
-            }
-        }
-    }, [members, profiles, loadingProfiles, actions.profile])
 
     // Only show loading state if we have no members AND we're loading
     // Don't show loading when refreshing existing members (better UX)
