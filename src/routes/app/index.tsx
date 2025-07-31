@@ -153,7 +153,9 @@ export default function App() {
         if (serverId) {
             subspaceActions.servers.get(serverId).then(() => {
                 subspaceActions.servers.getMembers(serverId).then((memberData) => {
-                    subspaceActions.profile.getBulk(memberData.map((member: any) => member.userId))
+                    subspaceActions.profile.getBulk(memberData.map((member: any) => member.userId)).then((profiles) => {
+                        subspaceActions.profile.getBulkPrimaryNames(memberData.map((member: any) => member.userId))
+                    })
                 })
             })
         }

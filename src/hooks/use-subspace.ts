@@ -74,6 +74,7 @@ interface SubspaceState {
         profile: {
             get: (userId?: string) => Promise<ExtendedProfile | null>
             getBulk: (userIds: string[]) => Promise<ExtendedProfile[]>
+            getBulkPrimaryNames: (userIds: string[]) => Promise<void>
             refresh: (silent?: boolean) => Promise<ExtendedProfile | null>
             updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
         }
@@ -492,6 +493,21 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     set({ profiles: { ...get().profiles, ...profilesKV } })
                 }
                 return profiles as ExtendedProfile[]
+            },
+            getBulkPrimaryNames: async (userIds: string[]) => {
+                const subspace = get().subspace
+                if (!subspace) return
+
+                // promise.all wont work and api calls will get blocked due to rate limiting
+                // instead, run a loop and fetch their profiles one by one
+
+                for (const userId of userIds) {
+                    const profile = await get().actions.profile.get(userId)
+                    // delay 250ms
+                    await new Promise(resolve => setTimeout(resolve, 220))
+                }
+
+
             },
             refresh: async (silent: boolean = false) => {
                 // Force refresh the current user's profile
