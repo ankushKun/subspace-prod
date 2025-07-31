@@ -1,0 +1,10 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+When the UI needs to show something from the state, show it by directly fetching the state variables and not through a function.
+The action functions in use-subspace state is only for updating the state variables in the background and must not be used to fetch and show some data in the frontend, even if the function may return some data.
+This enables updating state data without blocking execution through promises, and whenever new data is available it automatically updates in the UI too.
+Moreover this allows UI to instantly show data in the frontend.

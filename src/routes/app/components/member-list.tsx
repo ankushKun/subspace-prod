@@ -478,10 +478,7 @@ export default function MemberList({ className, isVisible = true, style }: {
             {/* Ambient alien glow at bottom */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-24 h-12 bg-primary/3 rounded-full blur-xl" />
 
-            {/* Decorative alien elements */}
-            <div className="absolute top-1/4 right-2 w-1 h-1 bg-primary/30 rounded-full animate-pulse" />
-            <div className="absolute top-1/2 right-4 w-0.5 h-0.5 bg-primary/20 rounded-full animate-pulse delay-1000" />
-            <div className="absolute bottom-1/3 right-3 w-1.5 h-1.5 bg-primary/10 rounded-full animate-pulse delay-2000" />
+
         </div>
     )
 }

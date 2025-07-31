@@ -113,7 +113,7 @@ export default function ProfilePopover({
                 setIsEditingNickname(false)
 
                 // Refresh member data to show the updated nickname
-                await actions.servers.refreshMembers(activeServerId)
+                // await actions.servers.refreshMembers(activeServerId)
             } else {
                 toast.error("Failed to update nickname")
             }
@@ -248,7 +248,7 @@ export default function ProfilePopover({
                 setRolePopoverOpen(false)
 
                 // Refresh member data to get updated roles
-                await actions.servers.refreshMembers(activeServerId)
+                // await actions.servers.refreshMembers(activeServerId)
 
                 // Also fetch specific member data to ensure we have the latest info
                 try {
@@ -292,7 +292,7 @@ export default function ProfilePopover({
                 toast.success(`Successfully removed ${roleName} role`)
 
                 // Refresh member data to get updated roles
-                await actions.servers.refreshMembers(activeServerId)
+                // await actions.servers.refreshMembers(activeServerId)
 
                 // Also fetch specific member data to ensure we have the latest info
                 try {
@@ -325,7 +325,7 @@ export default function ProfilePopover({
                 // Fetch latest server data if we're in a server
                 if (activeServerId) {
                     // Refresh all server members to get latest data
-                    await actions.servers.refreshMembers(activeServerId)
+                    // await actions.servers.refreshMembers(activeServerId)
 
                     // Also get specific member data for this user in this server
                     try {

@@ -107,7 +107,6 @@ interface SubspaceState {
             sendMessage: (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => Promise<boolean>
             editMessage: (serverId: string, channelId: string, messageId: string, content: string) => Promise<boolean>
             deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
-            getCachedMessages: (serverId: string, channelId: string) => any[]
             updateServerCode: (serverId: string) => Promise<boolean>
             refreshSources: () => Promise<boolean>
             getSources: () => any | null
@@ -126,7 +125,6 @@ interface SubspaceState {
             sendMessage: (friendId: string, params: { content: string; attachments?: string; replyTo?: number }) => Promise<boolean>
             editMessage: (friendId: string, messageId: string, content: string) => Promise<boolean>
             deleteMessage: (friendId: string, messageId: string) => Promise<boolean>
-            getCachedMessages: (friendId: string) => DMMessage[]
             markAsRead: (friendId: string) => void
         }
         // internal: {
@@ -1126,14 +1124,45 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                 attachments: rawMessage.attachments || "[]",
                                 replyTo: rawMessage.replyTo,
                                 messageTxId: rawMessage.messageTxId,
-                                replyToMessage: rawMessage.replyToMessage
+                                replyToMessage: null // Will be populated below
                             } as any))
                             .sort((a: any, b: any) => a.timestamp - b.timestamp)
 
-                        // Cache the messages
+                        // Get current cached messages to help populate replyToMessage
                         const currentMessages = get().messages
                         const serverMessages = currentMessages[serverId] || {}
                         const channelMessages = serverMessages[channelId] || {}
+
+                        // Create a combined lookup map of all messages (current + new)
+                        const allMessagesMap: Record<string, any> = { ...channelMessages }
+                        processedMessages.forEach(msg => {
+                            allMessagesMap[msg.messageId] = msg
+                        })
+
+                        // Populate replyToMessage field for messages that have replyTo
+                        for (const message of processedMessages) {
+                            if (message.replyTo) {
+                                let replyToMessage = allMessagesMap[message.replyTo]
+
+                                // If reply message is not in cache, fetch it
+                                if (!replyToMessage) {
+                                    try {
+                                        const fetchedReplyMessage = await subspace.server.getMessage(serverId, String(message.replyTo))
+                                        if (fetchedReplyMessage) {
+                                            replyToMessage = fetchedReplyMessage
+                                            // Cache the fetched message
+                                            allMessagesMap[message.replyTo] = fetchedReplyMessage
+                                        }
+                                    } catch (error) {
+                                        console.warn(`Failed to fetch reply message ${message.replyTo}:`, error)
+                                    }
+                                }
+
+                                if (replyToMessage) {
+                                    message.replyToMessage = replyToMessage
+                                }
+                            }
+                        }
 
                         // Convert array to messageId-keyed object for caching
                         const messageMap = processedMessages.reduce((acc: Record<string, any>, message: any) => {
@@ -1172,10 +1201,34 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     const message = await subspace.server.getMessage(serverId, messageId)
                     if (message) {
-                        // Cache the message
+                        // Get current cached messages to help populate replyToMessage
                         const currentMessages = get().messages
                         const serverMessages = currentMessages[serverId] || {}
                         const channelMessages = serverMessages[channelId] || {}
+
+                        // Populate replyToMessage field if this message has replyTo
+                        if (message.replyTo) {
+                            let replyToMessage = channelMessages[message.replyTo]
+
+                            // If reply message is not in cache, fetch it
+                            if (!replyToMessage) {
+                                try {
+                                    const fetchedReplyMessage = await subspace.server.getMessage(String(serverId), String(message.replyTo))
+                                    console.log("fetchedReplyMessage", fetchedReplyMessage)
+                                    if (fetchedReplyMessage) {
+                                        replyToMessage = fetchedReplyMessage
+                                        // Cache the fetched message
+                                        channelMessages[message.replyTo] = fetchedReplyMessage
+                                    }
+                                } catch (error) {
+                                    console.warn(`Failed to fetch reply message ${message.replyTo}:`, error)
+                                }
+                            }
+
+                            if (replyToMessage) {
+                                (message as any).replyToMessage = replyToMessage
+                            }
+                        }
 
                         set({
                             messages: {
@@ -1293,14 +1346,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     console.error("Failed to delete message:", error)
                     return false
                 }
-            },
-            getCachedMessages: (serverId: string, channelId: string) => {
-                const cachedChannelMessages = get().messages[serverId]?.[channelId]
-                if (!cachedChannelMessages) return []
-
-                // Convert the messageId-keyed object back to a sorted array
-                return Object.values(cachedChannelMessages)
-                    .sort((a: any, b: any) => a.timestamp - b.timestamp)
             },
             updateServerCode: async (serverId: string) => {
                 const subspace = get().subspace
@@ -1597,11 +1642,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return []
 
-                // Check if we're already loading messages for this friend
-                if (get().loadingDMs.has(friendId)) {
-                    return get().actions.dms.getCachedMessages(friendId)
-                }
-
                 try {
                     // Mark as loading
                     const currentLoadingDMs = new Set(get().loadingDMs)
@@ -1627,6 +1667,52 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         acc[message.id] = message
                         return acc
                     }, {} as Record<string, DMMessage>)
+
+                    // Get existing cached messages to help populate replyToMessage
+                    const existingMessages = get().dmConversations[friendId]?.messages || {}
+
+                    // Create a combined lookup map of all messages (existing + new)
+                    const allMessagesMap: Record<string, DMMessage> = { ...existingMessages, ...messageMap }
+
+                    // Populate replyToMessage field for DM messages that have replyTo
+                    for (const message of response.messages) {
+                        if (message.replyTo) {
+                            // Find the referenced message (DM messages use numeric IDs)
+                            let replyToMessage = Object.values(allMessagesMap).find(m => {
+                                // Try to match by converting to numbers since DM message IDs might be stored differently
+                                return String(m.id) === String(message.replyTo) || Number(m.id) === Number(message.replyTo)
+                            })
+
+                            // If reply message is not found in current messages, try to fetch it
+                            if (!replyToMessage) {
+                                try {
+                                    // For DMs, we need to use the user's DM process to fetch the message
+                                    const profile = get().profile
+                                    if (profile?.dmProcess) {
+                                        const dmResponse = await subspace.user.getDMs(profile.dmProcess, {
+                                            friendId,
+                                            limit: 1,
+                                            messageId: message.replyTo
+                                        } as any)
+
+                                        if (dmResponse?.messages?.length > 0) {
+                                            replyToMessage = dmResponse.messages[0]
+                                            // Cache the fetched message
+                                            allMessagesMap[replyToMessage.id] = replyToMessage
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.warn(`Failed to fetch DM reply message ${message.replyTo}:`, error)
+                                }
+                            }
+
+                            if (replyToMessage) {
+                                (message as any).replyToMessage = replyToMessage
+                                // Update the messageMap as well
+                                messageMap[message.id] = { ...message, replyToMessage } as any
+                            }
+                        }
+                    }
 
                     // Get or create conversation for caching
                     let existingConversation = get().dmConversations[friendId]
@@ -1740,13 +1826,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     console.error("Failed to delete DM:", error)
                     return false
                 }
-            },
-            getCachedMessages: (friendId: string) => {
-                const conversation = get().dmConversations[friendId]
-                if (!conversation) return []
-
-                return Object.values(conversation.messages)
-                    .sort((a, b) => a.timestamp - b.timestamp)
             },
             markAsRead: (friendId: string) => {
                 const conversation = get().dmConversations[friendId]

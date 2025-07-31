@@ -784,43 +784,15 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
             inputRef.current?.focus();
         }, 150);
 
-        // Check if we have cached messages for this conversation
-        const cachedMessages = actions.dms.getCachedMessages(activeFriendId);
-        if (cachedMessages && cachedMessages.length > 0) {
-            setMessages(cachedMessages);
-            setLoading(false);
-
-            // Scroll to bottom for initial load
-            setTimeout(() => {
-                scrollToBottom();
-                setTimeout(() => setIsAtBottom(true), 100);
-            }, 100);
-
-            // Load fresh messages in the background (no loading state)
-            loadMessages(false);
-        } else {
-            // No cached messages, show loading state
-            setMessages([]);
-            loadMessages(true);
-        }
+        // Load messages for this conversation
+        setMessages([]);
+        loadMessages(true);
     }, [activeFriendId]);
 
     // Load messages when subspace becomes available
     useEffect(() => {
         if (subspace && activeFriendId && messages.length === 0) {
-            // Check for cached messages first
-            const cachedMessages = actions.dms.getCachedMessages(activeFriendId);
-            if (cachedMessages && cachedMessages.length > 0) {
-                setMessages(cachedMessages);
-                // Scroll to bottom for initial load
-                setTimeout(() => {
-                    scrollToBottom();
-                    setTimeout(() => setIsAtBottom(true), 100);
-                }, 100);
-                loadMessages(false); // Background refresh
-            } else {
-                loadMessages(true); // Show loading state
-            }
+            loadMessages(true); // Show loading state
         }
     }, [subspace, activeFriendId]);
 

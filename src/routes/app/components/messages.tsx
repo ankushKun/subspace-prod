@@ -289,12 +289,12 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
     const { profiles, servers } = useSubspace()
     const { activeServerId } = useGlobalState()
 
-    if (!replyToMessage) {
+    if (!replyToMessage || !replyToMessage.messageId) {
         return (
             <div className="flex items-center gap-2 mb-1 text-xs text-muted-foreground/60">
                 <CornerLeftDown className="w-3 h-3" />
                 <span className="italic">
-                    {replyToId ? "Replying to a message not in current view" : "Original message not found"}
+                    {replyToId ? "Message Unavailable" : "Original message not found"}
                 </span>
             </div>
         )
@@ -305,9 +305,9 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
     const roleColor = getUserRoleColor(replyToMessage.authorId, activeServerId, servers)
 
     // Truncate content for preview
-    const previewContent = replyToMessage.content.length > 50
+    const previewContent = replyToMessage ? replyToMessage.content?.length > 50
         ? replyToMessage.content.substring(0, 50) + "..."
-        : replyToMessage.content
+        : replyToMessage.content : "..."
 
 
     return (
@@ -392,6 +392,31 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
         toast.success("Message fingerprint copied to clipboard")
     }
 
+    function handleDelete() {
+        // Show confirmation toast with action buttons
+        toast("Are you sure you want to delete this message?", {
+            description: "This action cannot be undone.",
+            action: {
+                label: "Delete",
+                onClick: async () => {
+                    try {
+                        await onDelete?.()
+                        toast.success("Message deleted successfully")
+                    } catch (error) {
+                        toast.error("Failed to delete message")
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {
+                    // Do nothing, just dismiss the toast
+                }
+            },
+            duration: 10000, // 10 seconds to give user time to decide
+        })
+    }
+
     return (
         <div className="absolute -top-4 right-4 bg-background border border-border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center">
             <Button size="sm" variant="ghost" className={`${buttonSize} p-0 hover:bg-muted`} onClick={onReply}>
@@ -410,7 +435,7 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
                     size="sm"
                     variant="ghost"
                     className={`${buttonSize} p-0 hover:bg-muted text-destructive hover:text-destructive`}
-                    onClick={onDelete}
+                    onClick={handleDelete}
                 >
                     <Trash2 className="w-4 h-4" />
                 </Button>
@@ -920,7 +945,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
                         <div className="flex items-baseline gap-2 mb-1">
                             <ProfilePopover userId={message.authorId} side="bottom" align="start">
                                 <span
-                                    className="hover:underline cursor-pointer font-medium text-foreground text-sm transition-colors hover:text-primary"
+                                    className="hover:underline font-ocr cursor-pointer font-bold text-foreground text-sm transition-colors hover:text-primary"
                                     style={{ color: authorRoleColor || undefined }}
                                 >
                                     {getDisplayName(message.authorId, profiles, activeServerId, servers)}
@@ -928,7 +953,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
                             </ProfilePopover>
                             <MessageTimestamp timestamp={message.timestamp} showDate={new Date(message.timestamp).toDateString() !== new Date().toDateString()} />
                             {message.edited && (
-                                <span className="text-xs text-muted-foreground/80 italic" title="This message has been edited">
+                                <span className="text-xs text-muted-foreground/60" title="This message has been edited">
                                     (edited)
                                 </span>
                             )}
@@ -1702,7 +1727,7 @@ const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
 
     if (isLoading) {
         return (
-            <div className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md">
+            <div className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md h-20">
                 <Skeleton className="h-12 w-12 rounded-lg" />
                 <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-32" />
@@ -1715,7 +1740,7 @@ const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
 
     if (error) {
         return (
-            <div className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md">
+            <div className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md h-20">
                 <div className="flex items-center justify-center h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-lg">
                     <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
                 </div>
@@ -1752,7 +1777,7 @@ const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
         <>
             <Link to={href} target="_blank" className="text-blue-500 hover:underline cursor-pointer transition-colors">{href.replace("https://", "")}</Link>
             <div
-                className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md cursor-pointer hover:bg-primary/[4%] transition-colors"
+                className="flex items-center space-x-3 p-4 bg-primary/[2%] border border-primary/10 rounded-lg my-2 max-w-md cursor-pointer hover:bg-primary/[4%] transition-colors h-20"
                 onClick={handleClick}
             >
                 <div className="flex items-center justify-center h-12 w-12 bg-primary/10 rounded-lg overflow-hidden">
@@ -1766,11 +1791,11 @@ const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
                         <Shield className="h-6 w-6 text-primary" />
                     )}
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 overflow-hidden">
                     <p className="text-sm font-medium text-foreground truncate">
                         {serverInfo.name || `Server ${serverId.substring(0, 8)}...`}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">
+                    <p className="text-xs text-muted-foreground truncate line-clamp-1">
                         {serverInfo.description || ``}
                     </p>
                     <div className="flex items-center space-x-2 text-xs mt-1 text-muted-foreground">
@@ -1795,17 +1820,21 @@ const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
     );
 };
 
-const Messages = React.forwardRef<MessagesRef, {
-    className?: string;
-    onToggleMemberList?: () => void;
-    showMemberList?: boolean;
-}>(({ className, onToggleMemberList, showMemberList }, ref) => {
+// const Messages = React.forwardRef<MessagesRef, {
+//     className?: string;
+//     onToggleMemberList?: () => void;
+//     showMemberList?: boolean;
+// }>(({ className, onToggleMemberList, showMemberList }, ref) => {
+export default function Messages({ className, onToggleMemberList, showMemberList, ref }: { className?: string, onToggleMemberList?: () => void, showMemberList?: boolean, ref: React.RefObject<MessagesRef> }) {
     const { activeServerId, activeChannelId } = useGlobalState();
-    const { servers, profile, profiles, actions, subspace } = useSubspace();
+    const { servers, profile, profiles, actions, subspace, messages: messagesState } = useSubspace();
     const { shouldUseOverlays } = useMobileContext();
 
+    const server = servers[activeServerId];
+    const channel = server?.channels.find(c => c.channelId == activeChannelId);
+    const messages = (messagesState[activeServerId]?.[activeChannelId]) || {}; // messageId:Message
+
     // State
-    const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(false);
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
     const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
@@ -1829,19 +1858,22 @@ const Messages = React.forwardRef<MessagesRef, {
     // State for scroll position tracking
     const [isAtBottom, setIsAtBottom] = useState(true);
 
-    // Get current server and channel
-    const server = servers[activeServerId];
+    // Clear reply state when channel changes
+    useEffect(() => {
+        setReplyingTo(null);
+        setEditingMessage(null);
+    }, [activeChannelId]);
 
-    // Try multiple ways to find the channel
-    let channel = null;
-    if (server?.channels) {
-        // Handle both string and number channel IDs for compatibility
-        channel = server.channels.find(c =>
-            c.channelId.toString() === activeChannelId ||
-            (typeof c.channelId === 'string' && c.channelId === activeChannelId) ||
-            (typeof c.channelId === 'number' && c.channelId === parseInt(activeChannelId))
-        );
-    }
+    // // Try multiple ways to find the channel
+    // let channel = null;
+    // if (server?.channels) {
+    //     // Handle both string and number channel IDs for compatibility
+    //     channel = server.channels.find(c =>
+    //         c.channelId.toString() === activeChannelId ||
+    //         (typeof c.channelId === 'string' && c.channelId === activeChannelId) ||
+    //         (typeof c.channelId === 'number' && c.channelId === parseInt(activeChannelId))
+    //     );
+    // }
 
     // Helper function to check if two timestamps are on the same day
     const isSameDay = (timestamp1: number, timestamp2: number) => {
@@ -1851,86 +1883,6 @@ const Messages = React.forwardRef<MessagesRef, {
             date1.getMonth() === date2.getMonth() &&
             date1.getDate() === date2.getDate()
     }
-
-    // Helper function to populate replyToMessage field for messages that have replyTo
-    const populateReplyToMessages = (messages: Message[]): Message[] => {
-        if (!messages || messages.length === 0) return messages;
-
-        // Create a map for quick lookups
-        const messageMap = new Map<string, Message>();
-        messages.forEach(message => {
-            messageMap.set(message.messageId, message);
-        });
-
-        // Populate replyToMessage field
-        return messages.map(message => {
-            if (message.replyTo && messageMap.has(message.replyTo)) {
-                return {
-                    ...message,
-                    replyToMessage: messageMap.get(message.replyTo)
-                };
-            }
-            return message;
-        });
-    }
-
-    // Load messages when channel changes
-    useEffect(() => {
-        if (!server || !activeChannelId || !channel) {
-            setMessages([]);
-            setIsAtBottom(true);
-            return;
-        }
-
-        // Reset scroll position when switching channels
-        setIsAtBottom(true);
-
-        // Autofocus the message input when channel changes
-        setTimeout(() => {
-            inputRef.current?.focus();
-        }, 150);
-
-        // Check if we have cached messages for this channel
-        const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, String(activeChannelId));
-        if (cachedMessages && cachedMessages.length > 0) {
-            setMessages(populateReplyToMessages(cachedMessages));
-            setLoading(false);
-
-            // Scroll to bottom for initial load
-            setTimeout(() => {
-                scrollToBottom();
-                // Set isAtBottom after scrolling for initial loads
-                setTimeout(() => setIsAtBottom(true), 100);
-            }, 100);
-
-            // Load fresh messages in the background (no loading state)
-            loadMessages(false);
-        } else {
-            // No cached messages, show loading state
-            setMessages([]);
-            loadMessages(true);
-        }
-    }, [server, activeChannelId, channel]);
-
-    // Load messages when subspace becomes available
-    useEffect(() => {
-        if (subspace && server && activeChannelId && channel && messages.length === 0) {
-
-            // Check for cached messages first
-            const cachedMessages = actions.servers.getCachedMessages?.(activeServerId, String(activeChannelId));
-            if (cachedMessages && cachedMessages.length > 0) {
-                setMessages(populateReplyToMessages(cachedMessages));
-                // Scroll to bottom for initial load
-                setTimeout(() => {
-                    scrollToBottom();
-                    setTimeout(() => setIsAtBottom(true), 100);
-                }, 100);
-                loadMessages(false); // Background refresh
-            } else {
-                loadMessages(true); // Show loading state
-            }
-        }
-    }, [subspace, server, activeChannelId, channel]);
 
     // Auto-refresh messages every 2 seconds when channel is active
     useEffect(() => {
@@ -1980,7 +1932,7 @@ const Messages = React.forwardRef<MessagesRef, {
 
     // Auto-scroll to bottom when new messages arrive (only if already at bottom)
     useEffect(() => {
-        if (isAtBottom && messages.length > 0) {
+        if (isAtBottom && Object.keys(messages).length > 0) {
             // Use a small delay to ensure the DOM has updated with new messages
             const timeoutId = setTimeout(() => {
                 const container = messagesContainerRef.current;
@@ -1998,7 +1950,7 @@ const Messages = React.forwardRef<MessagesRef, {
 
             return () => clearTimeout(timeoutId);
         }
-    }, [messages]);
+    }, [messages, isAtBottom]);
 
     // Focus input when replying or editing
     useEffect(() => {
@@ -2022,11 +1974,9 @@ const Messages = React.forwardRef<MessagesRef, {
         }
 
         try {
-            const messages = await actions.servers.getMessages(activeServerId, String(activeChannelId), 50);
+            await actions.servers.getMessages(activeServerId, String(activeChannelId), 50);
 
-            if (messages && messages.length > 0) {
-                setMessages(populateReplyToMessages(messages));
-
+            if (messages && Object.keys(messages).length > 0) {
                 // Scroll to bottom on initial load
                 if (showLoadingState) {
                     setTimeout(() => {
@@ -2038,14 +1988,12 @@ const Messages = React.forwardRef<MessagesRef, {
                 // ✅ REMOVED: Profile loading is now centralized in member-list component
                 // Author profiles will be loaded when viewing the member list
             } else {
-                setMessages([]);
             }
         } catch (error) {
             console.error("Failed to load messages:", error);
             if (showLoadingState) {
                 toast.error("Failed to load messages");
             }
-            setMessages([]);
         } finally {
             if (showLoadingState) {
                 setLoading(false);
@@ -2131,21 +2079,17 @@ const Messages = React.forwardRef<MessagesRef, {
         try {
             // Ensure both channelId and messageId are strings
             const success = await actions.servers.deleteMessage(activeServerId, String(activeChannelId), String(messageId));
-            if (success) {
-                // Remove message from local state
-                setMessages(prev => prev.filter(m => String(m.messageId) !== String(messageId)));
-                toast.success("Message deleted");
-            } else {
-                toast.error("Failed to delete message");
+            if (!success) {
+                throw new Error("Failed to delete message");
             }
         } catch (error) {
             console.error("Failed to delete message:", error);
-            toast.error("Failed to delete message");
+            throw error; // Re-throw to be handled by the toast.promise
         }
     };
 
     const handleReply = (messageId: string) => {
-        const message = messages.find(m => m.messageId === messageId);
+        const message = messages[messageId];
         if (message) {
             setReplyingTo(message);
             setEditingMessage(null);
@@ -2275,10 +2219,11 @@ const Messages = React.forwardRef<MessagesRef, {
 
             {/* Messages container */}
             <div
+                key={`${activeServerId}-${activeChannelId}`}
                 ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40 relative"
             >
-                {loading && messages.length === 0 ? (
+                {loading && Object.keys(messages).length === 0 ? (
                     <div className="pt-6 mb-0.5">
                         {Array.from({ length: 15 }, (_, index) => (
                             <div key={`skeleton-${index}`} className="group relative hover:bg-accent/30 transition-colors duration-150 pt-3 pb-1 px-4">
@@ -2301,47 +2246,52 @@ const Messages = React.forwardRef<MessagesRef, {
                         ))}
                         <div ref={messagesEndRef} />
                     </div>
-                ) : messages.length === 0 ? (
+                ) : Object.keys(messages).length === 0 ? (
                     <EmptyChannelState channelName={channel.name} />
                 ) : (
                     <div className="pt-6">
-                        {messages.map((message, index) => {
-                            const prevMessage = messages[index - 1]
-                            const shouldShowDateDivider = index === 0 || (prevMessage && !isSameDay(prevMessage.timestamp, message.timestamp))
-                            const shouldShowAvatar = index === 0 || shouldShowDateDivider || messages[index - 1]?.authorId !== message.authorId
-                            const isGrouped = index > 0 && !shouldShowDateDivider && messages[index - 1]?.authorId === message.authorId
+                        {(() => {
+                            // Convert messages object to sorted array by timestamp
+                            const messagesArray = Object.values(messages).sort((a, b) => a.timestamp - b.timestamp);
 
-                            return (
-                                <React.Fragment key={message.messageId}>
-                                    {/* Date divider */}
-                                    {shouldShowDateDivider && (
-                                        <DateDivider timestamp={message.timestamp} />
-                                    )}
+                            return messagesArray.map((message, index) => {
+                                const prevMessage = index > 0 ? messagesArray[index - 1] : null;
+                                const shouldShowDateDivider = index === 0 || (prevMessage && !isSameDay(prevMessage.timestamp, message.timestamp));
+                                const shouldShowAvatar = index === 0 || shouldShowDateDivider || (prevMessage && prevMessage.authorId !== message.authorId);
+                                const isGrouped = index > 0 && !shouldShowDateDivider && prevMessage && prevMessage.authorId === message.authorId;
 
-                                    {/* Message */}
-                                    <div data-message-id={message.messageId}>
-                                        <MessageItem
-                                            message={message}
-                                            profile={profiles[message.authorId]}
-                                            onReply={handleReply}
-                                            onEdit={handleEdit}
-                                            onDelete={deleteMessage}
-                                            isOwnMessage={message.authorId === profile?.userId}
-                                            channel={channel}
-                                            showAvatar={shouldShowAvatar}
-                                            isGrouped={isGrouped}
-                                            onJumpToMessage={handleJumpToMessage}
-                                        />
-                                    </div>
-                                </React.Fragment>
-                            )
-                        })}
+                                return (
+                                    <React.Fragment key={message.messageId}>
+                                        {/* Date divider */}
+                                        {shouldShowDateDivider && (
+                                            <DateDivider timestamp={message.timestamp} />
+                                        )}
+
+                                        {/* Message */}
+                                        <div data-message-id={message.messageId}>
+                                            <MessageItem
+                                                message={message}
+                                                profile={profiles[message.authorId]}
+                                                onReply={handleReply}
+                                                onEdit={handleEdit}
+                                                onDelete={deleteMessage}
+                                                isOwnMessage={message.authorId === profile?.userId}
+                                                channel={channel}
+                                                showAvatar={shouldShowAvatar}
+                                                isGrouped={isGrouped}
+                                                onJumpToMessage={handleJumpToMessage}
+                                            />
+                                        </div>
+                                    </React.Fragment>
+                                );
+                            });
+                        })()}
                         <div ref={messagesEndRef} />
                     </div>
                 )}
 
                 {/* Scroll to bottom button */}
-                {!isAtBottom && messages.length > 0 && (
+                {!isAtBottom && Object.keys(messages).length > 0 && (
                     <div className="fixed bottom-20 mx-auto w-12 z-10">
                         <TooltipProvider>
                             <Tooltip>
@@ -2379,13 +2329,13 @@ const Messages = React.forwardRef<MessagesRef, {
                 onCancelEdit={() => setEditingMessage(null)}
                 disabled={!server || !channel || !subspace}
                 channelName={channel?.name}
-                messagesInChannel={messages}
+                messagesInChannel={Object.values(messages)}
                 servers={servers}
                 activeServerId={activeServerId}
                 activeChannelId={activeChannelId}
             />
         </div>
     );
-})
+}
 
-export default Messages
+// export default Messages
