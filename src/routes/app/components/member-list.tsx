@@ -317,11 +317,31 @@ export default function MemberList({ className, isVisible = true, style }: {
             }
         })
 
-        // Sort members within each role group alphabetically
+        // Sort members within each role group based on profile completeness
         Object.values(roleGroups).forEach(group => {
             group.members.sort((a, b) => {
                 const profileA = profiles[a.userId]
                 const profileB = profiles[b.userId]
+
+                // Helper function to get member category (1-3, where 1 is highest priority)
+                const getMemberCategory = (member: any, profile: any) => {
+                    const hasPfp = profile?.pfp || profile?.primaryLogo
+                    const hasName = member.nickname || profile?.primaryName
+
+                    if (hasPfp && hasName) return 1 // Both pfp and name
+                    if (hasName || hasPfp) return 2 // Either name or pfp (but not both)
+                    return 3 // Neither name nor pfp
+                }
+
+                const categoryA = getMemberCategory(a, profileA)
+                const categoryB = getMemberCategory(b, profileB)
+
+                // First sort by category (1-4)
+                if (categoryA !== categoryB) {
+                    return categoryA - categoryB
+                }
+
+                // Within same category, sort alphabetically by display name
                 const displayNameA = a.nickname || profileA?.primaryName || shortenAddress(a.userId)
                 const displayNameB = b.nickname || profileB?.primaryName || shortenAddress(b.userId)
                 return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())

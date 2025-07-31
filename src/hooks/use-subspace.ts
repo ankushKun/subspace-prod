@@ -254,6 +254,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                 set({ profile })
                             }
                             set({ profiles: { ...get().profiles, [targetUserId]: profile } })
+                            // a possibility that this was a migrated profile and even tho is exists, dmProcess wont exist,
+                            // meaning user has not yet initialised their profile, so throw and error here to trigger profile creation
+                            if (!profile.dmProcess) {
+                                throw new Error("dm process not found, initialise profile first")
+                            }
                         }
                     } catch (e) {
                         // Only show creating profile dialog if this is our own profile
@@ -296,7 +301,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             }
                         } else {
                             // For other users' profiles, just throw the error
-                            throw e
                         }
                     }
 
@@ -829,7 +833,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         userId,
                         ...memberData
                     }))
-                    console.log("membersData", members)
 
                     set({
                         servers: {

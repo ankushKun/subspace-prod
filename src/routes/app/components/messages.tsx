@@ -85,7 +85,7 @@ import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-import alien from "@/assets/subspace/alien-green.svg"
+import alien from "@/assets/subspace/alien-black.svg"
 import ProfilePopover from "./profile-popover"
 import type { Server } from "@subspace-protocol/sdk";
 import { useWallet } from "@/hooks/use-wallet";
@@ -222,7 +222,7 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
 
     return (
         <div className={cn(
-            "relative rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0",
+            "relative rounded-md overflow-hidden bg-gradient-to-br from-primary/30 to-primary/15 flex-shrink-0",
             sizeClasses[size]
         )}>
             {profile?.pfp || profile?.primaryLogo ? (
@@ -236,7 +236,7 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
                     <img
                         src={alien}
                         alt="Default avatar"
-                        className="w-6 h-6 object-contain opacity-30"
+                        className="w-6 h-6 object-contain opacity-70"
                     />
                 </div>
             )}
