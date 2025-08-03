@@ -82,6 +82,7 @@
     "sonner": "^2.0.6",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.11",
+    "usehooks-ts": "^3.1.1",
     "vaul": "^1.1.2",
     "vite-plugin-node-polyfills": "^0.24.0",
     "vite-plugin-open-graph": "^2.0.6",

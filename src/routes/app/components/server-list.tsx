@@ -23,6 +23,7 @@ import { useGlobalState } from "@/hooks/use-global-state";
 import { useNavigate } from "react-router";
 import { usePWA } from "@/hooks/use-pwa";
 import { Constants } from "@/lib/constants";
+import { useSessionStorage } from "usehooks-ts";
 import alien from "@/assets/subspace/alien-black.svg"
 import alienGreen from "@/assets/subspace/alien-green.svg"
 
@@ -1228,6 +1229,7 @@ export default function ServerList({ className, onServerJoined }: {
     const { activeServerId } = useGlobalState()
     const navigate = useNavigate()
     const { connected, address, wanderInstance } = useWallet()
+    const [_, setShowPfpPrompt] = useSessionStorage("show-pfp-prompt", true, { initializeWithValue: true })
 
     // Get servers from profile's joined list
     const displayServers = connected && address && profile?.serversJoined
@@ -1299,7 +1301,10 @@ export default function ServerList({ className, onServerJoined }: {
             {/* Home Button */}
             <HomeButton
                 isActive={!activeServerId}
-                onClick={() => navigate("/app")}
+                onClick={() => {
+                    setTimeout(() => { setShowPfpPrompt(true) }, 250)
+                    navigate("/app")
+                }}
                 unreadCount={0}
             />
 

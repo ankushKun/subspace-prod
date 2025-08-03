@@ -15,7 +15,7 @@ import alien from "@/assets/subspace/alien-black.svg"
 import LoginDialog from "@/components/login-dialog"
 import { Link, useNavigate } from "react-router"
 import { toast } from "sonner"
-
+import { useLocalStorage, useSessionStorage } from "usehooks-ts"
 
 function SettingsButton(props: React.ComponentProps<typeof Button>) {
     const navigate = useNavigate()
@@ -50,6 +50,8 @@ export default function Profile({ className }: { className?: string }) {
     const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const pfpPromptFileInputRef = useRef<HTMLInputElement>(null)
+    const [showPfpPrompt, setShowPfpPrompt] = useSessionStorage("show-pfp-prompt", true, { initializeWithValue: true })
+
 
     // Check if user needs PFP prompt
     useEffect(() => {
@@ -59,8 +61,9 @@ export default function Profile({ className }: { className?: string }) {
         const DEFAULT_PFP = "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A"
         const needsPfpPrompt = (!profile.pfp || profile.pfp === DEFAULT_PFP) && !profile.primaryLogo
 
-        if (needsPfpPrompt) {
+        if (needsPfpPrompt && showPfpPrompt) {
             setPfpPromptOpen(true)
+            setShowPfpPrompt(false)
         }
     }, [profile, isCreatingProfile, isLoadingProfile])
 

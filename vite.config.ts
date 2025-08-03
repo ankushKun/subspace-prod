@@ -44,7 +44,9 @@ export default defineConfig({
         enabled: process.env.NODE_ENV === "development"
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 30 * 1024 * 1024, // 25MB
+        maximumFileSizeToCacheInBytes: 30 * 1024 * 1024, // 30MB
+        globPatterns: ['index.html', 'manifest.json'],
+        runtimeCaching: [{ urlPattern: "arweave.net", handler: "CacheFirst" }]
       },
       manifest: {
         name: 'Subspace Chat',
