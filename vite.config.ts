@@ -45,7 +45,7 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 30 * 1024 * 1024, // 30MB
-        globPatterns: ['index.html', 'manifest.json'],
+        globPatterns: ['index.html', 'manifest.json', '*.ttf', '*.otf'],
         runtimeCaching: [{ urlPattern: "arweave.net", handler: "CacheFirst" }]
       },
       manifest: {
