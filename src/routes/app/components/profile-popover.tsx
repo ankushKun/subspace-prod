@@ -79,6 +79,7 @@ export default function ProfilePopover({
             badges.push({
                 logo: Constants.WanderTiers[profile.wndrTier.tier]?.Icon,
                 hoverText: `${Constants.WanderTiers[profile.wndrTier.tier]?.Label} Tier`,
+                children: <img src={`https://arweave.net/${Constants.WanderTiers[profile.wndrTier.tier]?.TextIcon}`} className="w-full h-full object-left object-cover" />,
                 link: "https://www.wander.app/wndr"
             })
         }
@@ -402,6 +403,7 @@ export default function ProfilePopover({
                                                 key={index}
                                                 logo={badge.logo}
                                                 hoverText={badge.hoverText}
+                                                children={badge.children}
                                                 link={badge.link}
                                             />
                                         ))}
@@ -417,6 +419,7 @@ export default function ProfilePopover({
                                                             key={index + 5}
                                                             logo={badge.logo}
                                                             hoverText={badge.hoverText}
+                                                            children={badge.children}
                                                             link={badge.link}
                                                         />
                                                     ))}

@@ -229,7 +229,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             // ✅ IMMEDIATE UPDATE: Set basic profile data right away
                             // const basicProfile = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
 
-                            // ✅ PRESERVE existing primary name/logo ONLY if they have actual values
+                            // ✅ PRESERVE existing primary name/logo/wndrTier ONLY if they have actual values
                             const cachedProfile = get().profiles[targetUserId]
                             if (cachedProfile) {
                                 // Only preserve if cached values are not empty
@@ -244,10 +244,16 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                 } else {
                                     profile.primaryLogo = ""
                                 }
+
+                                // ✅ PRESERVE wndrTier if it exists in cached profile
+                                if (cachedProfile.wndrTier) {
+                                    profile.wndrTier = cachedProfile.wndrTier
+                                }
                             } else {
                                 // Initialize with empty values for new profiles
                                 profile.primaryName = ""
                                 profile.primaryLogo = ""
+                                // wndrTier will be undefined for new profiles, which is fine
                             }
 
 
@@ -306,11 +312,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     }
 
                     if (profile) {
-                        // ✅ IMMEDIATE UPDATE: Set basic profile with placeholders for primary name/logo
+                        // ✅ IMMEDIATE UPDATE: Set basic profile with placeholders for primary name/logo and preserved wndrTier
                         const basicProfile = {
                             ...profile,
                             primaryName: profile.primaryName || "",
-                            primaryLogo: profile.primaryLogo || ""
+                            primaryLogo: profile.primaryLogo || "",
+                            wndrTier: profile.wndrTier || null
                         } as ExtendedProfile
 
                         if (!userId) {

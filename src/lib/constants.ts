@@ -57,11 +57,11 @@ export class Constants {
     };
 
     static readonly WanderTiers = {
-        1: { Icon: "kC43Lz81oB5TgV2q_ZltFsEsxCDsMlh4Qq4FTpfPk2Y", Label: "Prime" },
-        2: { Icon: "Yg5GsfEBo5QxcB8Ibs1rEOs_jdizSbhrIk-yzESKC2s", Label: "Edge" },
-        3: { Icon: "_3OAjbRwSnf99Mbko4Pgx00Z5SNjWUKO5fDRLrRqIm0", Label: "Reserve" },
-        4: { Icon: "hj-mPoYd1Uk8JR6pLI46pg7aAN4_rOdK0WnSGRR-zzI", Label: "Select" },
-        5: { Icon: "w1kEyfGsZgE1omIwtvtIXkOxGPaUrGmQRl_bjYmL0p8", Label: "Core" },
+        1: { Icon: "Wkqi7dy73Yaw16g-kfpH2ZmzH8Di8J0M51M03OMt8yM", Label: "Prime", TextIcon: "cKsvUhHZmAq9MWMDtRkc40q4TViifVmAn0N46QknBNw" },
+        2: { Icon: "R6_RzYzzwaxXGwCO6_lRK1IXJy8cQcMeqfBIIBAyLXo", Label: "Edge", TextIcon: "D7Ryj60DeH1DtNwKG-bNJRs5GLR4jV04gX89LD8INxE" },
+        3: { Icon: "-9ihkAq8F8qqI-lB4PLjRzw_T2l2fbiao9def8BPHgQ", Label: "Reserve", TextIcon: "evHRTgPlXg9y4bvqfzUP7MN2eNTphIa9Qn8StkLl4Kc" },
+        4: { Icon: "fl4ClA4y4XOGH5HKDMRFeFRf8N3d2hKR1PjoL93DdyY", Label: "Select", TextIcon: "FSmzoChL3Xl6KQdCBHyMt__nSRMYVrZWrojsyzUPleo" },
+        5: { Icon: "hlbO16i54G1WEUcVXeLRweKJ9Y3oqADGJ5iITpA_pa4", Label: "Core", TextIcon: "HkUyxz7U7-7zzZaQ_2fhUX0Ol3_2vpqZ3ZioVJSgYOc" },
     };
 
     static readonly Icons = {
