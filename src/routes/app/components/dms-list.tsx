@@ -50,7 +50,6 @@ export default function DmsList({ className }: { className?: string }) {
         const query = searchQuery.toLowerCase()
         return acceptedFriends.filter(friend =>
             friend.profile?.primaryName?.toLowerCase().includes(query) ||
-            friend.profile?.displayName?.toLowerCase().includes(query) ||
             friend.userId?.toLowerCase().includes(query)
         )
     }, [acceptedFriends, searchQuery])
@@ -63,14 +62,6 @@ export default function DmsList({ className }: { className?: string }) {
         }
         setPreviousAddress(address || "")
     }, [address])
-
-    // Load friends on component mount, clear when disconnected, refresh on address change
-    useEffect(() => {
-        if (profile && address && connected) {
-            console.log(`📧 Loading friends for address: ${address}`)
-            subspaceActions.friends.getFriends()
-        }
-    }, [profile, address, connected])
 
     const selectFriend = (friendId: string) => {
         actions.setActiveFriendId?.(friendId)
@@ -248,7 +239,7 @@ export default function DmsList({ className }: { className?: string }) {
 
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-medium text-foreground truncate">
-                                                    {friend.profile?.primaryName || friend.profile?.displayName || `${friend.userId.substring(0, 8)}...`}
+                                                    {friend.profile?.primaryName || `${friend.userId.substring(0, 8)}...`}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground truncate">
                                                     wants to be friends
@@ -307,7 +298,7 @@ export default function DmsList({ className }: { className?: string }) {
 
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-medium text-foreground truncate">
-                                                    {friend.profile?.primaryName || friend.profile?.displayName || `${friend.userId.substring(0, 8)}...`}
+                                                    {friend.profile?.primaryName || `${friend.userId.substring(0, 8)}...`}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground truncate">
                                                     request sent
@@ -383,7 +374,7 @@ export default function DmsList({ className }: { className?: string }) {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between">
                                                 <div className="font-medium text-foreground truncate">
-                                                    {friend.profile?.primaryName || friend.profile?.displayName || `${friend.userId.substring(0, 8)}...`}
+                                                    {friend.profile?.primaryName || `${friend.userId.substring(0, 8)}...`}
                                                 </div>
                                                 {lastMessage && (
                                                     <div className="text-xs text-muted-foreground/60 flex-shrink-0 ml-2">

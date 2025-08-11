@@ -225,9 +225,9 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
             "relative rounded-md overflow-hidden bg-gradient-to-br from-primary/30 to-primary/15 flex-shrink-0",
             sizeClasses[size]
         )}>
-            {profile?.pfp || profile?.primaryLogo ? (
+            {profile?.pfp ? (
                 <img
-                    src={`https://arweave.net/${profile.pfp || profile.primaryLogo}`}
+                    src={`https://arweave.net/${profile.pfp}`}
                     alt={authorId}
                     className="w-full h-full object-cover"
                 />
@@ -1267,7 +1267,10 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             return;
         }
 
-        const filteredChannels = server.channels
+        const serverChannelsList = Array.isArray((server as any)?.channels)
+            ? (server as any).channels
+            : Object.values((server as any)?.channels || {})
+        const filteredChannels = (serverChannelsList as any[])
             .filter((channel: any) => {
                 const lowerQuery = query.toLowerCase();
                 return channel.name.toLowerCase().includes(lowerQuery);
@@ -1302,7 +1305,10 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         index: number,
         focused: boolean
     ) => {
-        const channel = servers[activeServerId]?.channels?.find((c: any) => c.channelId.toString() === suggestion.id)
+        const channelList = Array.isArray((servers[activeServerId] as any)?.channels)
+            ? (servers[activeServerId] as any).channels
+            : Object.values((servers[activeServerId] as any)?.channels || {})
+        const channel = (channelList as any[])?.find((c: any) => c.channelId.toString() === suggestion.id)
         const isCurrentChannel = activeChannelId === suggestion.id
 
         return (
@@ -1621,7 +1627,10 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                 trigger="#"
                                 markup="#[__display__](__id__)"
                                 displayTransform={(id) => {
-                                    const channel = servers[activeServerId]?.channels?.find((c: any) => c.channelId.toString() === id)
+                                    const channelList = Array.isArray((servers[activeServerId] as any)?.channels)
+                                        ? (servers[activeServerId] as any).channels
+                                        : Object.values((servers[activeServerId] as any)?.channels || {})
+                                    const channel = (channelList as any[])?.find((c: any) => c.channelId.toString() === id)
                                     return `#${channel?.name || id}`
                                 }}
                                 appendSpaceOnAdd
@@ -1831,7 +1840,10 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     const { shouldUseOverlays } = useMobileContext();
 
     const server = servers[activeServerId];
-    const channel = server?.channels.find(c => c.channelId == activeChannelId);
+    const serverChannelsList = Array.isArray((server as any)?.channels)
+        ? (server as any).channels
+        : Object.values((server as any)?.channels || {})
+    const channel = (serverChannelsList as any[]).find((c: any) => c.channelId == activeChannelId);
     const messages = (messagesState[activeServerId]?.[activeChannelId]) || {}; // messageId:Message
 
     // State
@@ -2194,7 +2206,12 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                         Channel "{activeChannelId}" not found in server "{server.name}"
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
-                        Available channels: {server.channels?.map(c => c.name).join(', ') || 'None'}
+                        Available channels: {(() => {
+                            const list = Array.isArray((server as any)?.channels)
+                                ? (server as any).channels
+                                : Object.values((server as any)?.channels || {})
+                            return (list as any[]).map((c: any) => c.name).join(', ') || 'None'
+                        })()}
                     </p>
                 </div>
             </div>

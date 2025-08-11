@@ -1231,15 +1231,15 @@ export default function ServerList({ className, onServerJoined }: {
     const { connected, address, wanderInstance } = useWallet()
     const [_, setShowPfpPrompt] = useSessionStorage("show-pfp-prompt", true, { initializeWithValue: true })
 
-    // Get servers from profile's joined list
+    // Get servers from profile's joined list (now a KV map)
     const displayServers = connected && address && profile?.serversJoined
-        ? (profile.serversJoined || [])
-            .map(server => {
-                // Handle both string and object server identifiers
-                const serverId = typeof server === 'string' ? server : (server as any).serverId
-                if (!serverId) return null
-
-                // Get the server from the servers state
+        ? Object.keys(profile.serversJoined)
+            .sort((a, b) => {
+                const aOrder = profile.serversJoined[a]?.orderId ?? 0
+                const bOrder = profile.serversJoined[b]?.orderId ?? 0
+                return aOrder - bOrder
+            })
+            .map((serverId) => {
                 const serverInstance = servers[serverId]
                 return serverInstance || null
             })
@@ -1248,9 +1248,7 @@ export default function ServerList({ className, onServerJoined }: {
 
     // Get expected server IDs from profile
     const expectedServerIds = connected && address && profile?.serversJoined
-        ? (profile.serversJoined || []).map(server =>
-            typeof server === 'string' ? server : (server as any).serverId
-        ).filter(Boolean)
+        ? Object.keys(profile.serversJoined)
         : []
 
     // Calculate servers that are expected but not yet loaded

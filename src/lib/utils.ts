@@ -12,35 +12,11 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
 }
 
-export function shortenAddress(address: string) {
-    return address.slice(0, 5) + "..." + address.slice(-5)
-}
-
-export async function getBothNameAndLogo(address: string): Promise<{ primaryName: string, primaryLogo: string }> {
-    let primaryName = ""
-    let primaryLogo = ""
-    try {
-        const res = await getPrimaryName(address)
-        if (res.processId && res.primaryName) {
-            primaryName = res.primaryName
-            primaryLogo = await getPrimaryLogo(res.processId)
-        }
-    } catch (e) {
-        console.warn("No primary name found for address:", address)
-    }
-    return { primaryName, primaryLogo }
-}
-
-export async function getPrimaryName(address: string): Promise<{ primaryName: string, processId: string }> {
-    const ario = ARIO.mainnet()
-    const res = await ario.getPrimaryName({ address })
-    return { primaryName: res.name, processId: res.processId }
-}
-
-export async function getPrimaryLogo(ANTprocessId: string): Promise<string> {
-    const ant = ANT.init({ processId: ANTprocessId })
-    const logoRes = await ant.getLogo()
-    return logoRes
+export function shortenAddress(address?: string | null) {
+    if (!address || typeof address !== "string") return "";
+    const safe = String(address);
+    if (safe.length <= 10) return safe;
+    return safe.slice(0, 5) + "..." + safe.slice(-5);
 }
 
 export async function runGQLQuery(query: string) {
@@ -115,50 +91,5 @@ export async function uploadFileTurbo(file: File, jwk?: JWKInterface, customSign
     } catch (error) {
         console.error("Failed to upload file to Turbo:", error)
         return undefined
-    }
-}
-
-export type WanderTierInfo = {
-    balance: string;
-    progress: number;
-    rank: number;
-    snapshotTimestamp: number;
-    tier: number;
-    totalHolders: number;
-}
-
-export async function getWanderTierInfo(walletAddress: string): Promise<WanderTierInfo | null> {
-    try {
-        const dryrunRes = await dryrun({
-            Owner: walletAddress,
-            process: "rkAezEIgacJZ_dVuZHOKJR8WKpSDqLGfgPJrs_Es7CA",
-            tags: [{ name: "Action", value: "Get-Wallet-Info" }]
-        });
-
-        const message = dryrunRes.Messages?.[0];
-
-        if (!message?.Data) {
-            console.warn(`No message data returned for wallet: ${walletAddress}`);
-            return null;
-        }
-
-        let data;
-        try {
-            data = JSON.parse(message.Data);
-        } catch (parseError) {
-            console.warn(`Failed to parse tier data for wallet: ${walletAddress}`, parseError);
-            return null;
-        }
-
-        if (data?.tier === undefined || data?.tier === null) {
-            console.warn(`No tier data found for wallet: ${walletAddress}`);
-            return null;
-        }
-
-        const tierInfo: WanderTierInfo = { ...data };
-        return tierInfo;
-    } catch (error) {
-        console.warn(`Failed to fetch tier info for wallet: ${walletAddress}`, error);
-        return null;
     }
 }

@@ -62,14 +62,10 @@ export default function ServerUpdate() {
     const handleRefreshSources = async () => {
         setIsRefreshingSources(true)
         try {
-            const success = await subspaceActions.servers.refreshSources()
-            if (success) {
-                await loadSources()
-                setLastRefreshTime(new Date())
-                toast.success("Sources refreshed successfully")
-            } else {
-                toast.error("Failed to refresh sources")
-            }
+            await subspaceActions.servers.refreshSources()
+            await loadSources()
+            setLastRefreshTime(new Date())
+            toast.success("Sources refreshed successfully")
         } catch (error) {
             console.error("Failed to refresh sources:", error)
             toast.error("Failed to refresh sources")

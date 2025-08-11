@@ -59,7 +59,7 @@ export default function Profile({ className }: { className?: string }) {
         if (!profile || isCreatingProfile || isLoadingProfile) return
 
         const DEFAULT_PFP = "Sie_26dvgyok0PZD_-iQAFOhOd5YxDTkczOLoqTTL_A"
-        const needsPfpPrompt = (!profile.pfp || profile.pfp === DEFAULT_PFP) && !profile.primaryLogo
+        const needsPfpPrompt = (!profile.pfp || profile.pfp === DEFAULT_PFP)
 
         if (needsPfpPrompt && showPfpPrompt) {
             setPfpPromptOpen(true)
@@ -132,12 +132,9 @@ export default function Profile({ className }: { className?: string }) {
             // Auto-select active server if available
             const { activeServerId } = useGlobalState.getState()
             if (activeServerId && servers[activeServerId]) {
-                // Check if active server is in the joined servers list
-                const joinedServers = profile?.serversJoined || []
-                const isActiveServerJoined = joinedServers.some(server => {
-                    const serverIdToCheck = typeof server === 'string' ? server : (server as any).serverId
-                    return serverIdToCheck === activeServerId
-                })
+                // Check if active server is in the joined servers map
+                const joinedServers = profile?.serversJoined || {}
+                const isActiveServerJoined = Boolean(joinedServers[activeServerId])
 
                 if (isActiveServerJoined) {
                     setSelectedServerId(activeServerId)
@@ -178,18 +175,13 @@ export default function Profile({ className }: { className?: string }) {
     const profileProxy = {
         userId: profile?.userId || address || "",
         userIdShort: shortenAddress(profile?.userId || address || ""),
-        pfp: profile?.pfp || profile?.primaryLogo || "",
+        pfp: profile?.pfp || "",
         primaryName: profile?.primaryName || ""
     }
 
     // Get real servers data
-    const joinedServers = profile?.serversJoined || []
-    const availableServers = Object.entries(servers).filter(([serverId]) =>
-        joinedServers.some(server => {
-            const serverIdToCheck = typeof server === 'string' ? server : (server as any).serverId
-            return serverIdToCheck === serverId
-        })
-    )
+    const joinedServers = profile?.serversJoined || {}
+    const availableServers = Object.entries(servers).filter(([serverId]) => Boolean(joinedServers[serverId]))
 
     const getDisplayName = () => {
         // Priority 1: Server nickname (if in an active server)
@@ -323,7 +315,7 @@ export default function Profile({ className }: { className?: string }) {
                             toast.success("Profile picture updated successfully")
 
                             // Force refresh to get the latest data from the server
-                            await actions.profile.refresh()
+                            await actions.profile.get(profile.userId)
 
                             // Clear the file selection and preview
                             setProfilePicFile(null)
@@ -410,7 +402,7 @@ export default function Profile({ className }: { className?: string }) {
                     toast.success("Profile picture updated successfully")
 
                     // Force refresh to get the latest data from the server
-                    await actions.profile.refresh()
+                    await actions.profile.get(profile.userId)
 
                     // Close the prompt
                     setPfpPromptOpen(false)
@@ -945,7 +937,7 @@ export default function Profile({ className }: { className?: string }) {
                                                         <SelectItem key={serverId} value={serverId} className="text-primary hover:bg-primary/10">
                                                             <div className="flex items-center gap-2">
                                                                 <div className="w-2 h-2 bg-primary rounded-full" />
-                                                                {server.name}
+                                                                {server?.name || "?"}
                                                             </div>
                                                         </SelectItem>
                                                     ))}

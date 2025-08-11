@@ -194,8 +194,12 @@ export default function ProfilePopover({
             return []
         }
 
+        // Normalize to string IDs for robust comparison
+        const userRoleIds: string[] = (member.roles as any[]).map((r: any) => String(r))
+
         // Filter server roles to get only the ones assigned to this user (match server-roles.tsx logic)
-        const userRoles = Object.values(server.roles).filter((role: any) => member.roles.includes(role.roleId))
+        const userRoles = Object.values(server.roles)
+            .filter((role: any) => userRoleIds.includes(String(role.roleId)))
             .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Sort by orderId/position descending like server-roles.tsx
 
         return userRoles
@@ -377,17 +381,11 @@ export default function ProfilePopover({
                             <div className="relative mb-3 flex items-start gap-2 max-w-full">
                                 <div className={cn(
                                     "w-16 h-16 min-w-16 rounded-sm overflow-clip border-2 border-background shadow-lg flex items-center justify-center",
-                                    (profile.pfp || profile.primaryLogo) ? "bg-transparent" : "bg-primary/20"
+                                    profile.pfp ? "bg-transparent" : "bg-primary/20"
                                 )}>
                                     {profile.pfp ? (
                                         <img
                                             src={`https://arweave.net/${profile.pfp}`}
-                                            alt={displayName}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : profile.primaryLogo ? (
-                                        <img
-                                            src={`https://arweave.net/${profile.primaryLogo}`}
                                             alt={displayName}
                                             className="w-full h-full object-cover"
                                         />

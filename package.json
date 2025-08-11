@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "install:all": "bash ./scripts/install.sh",
+    "build:lib": "bash ./scripts/build-lib.sh",
     "dev": "bash ./scripts/dev.sh",
     "build:all": "bash ./scripts/build.sh",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 tsc -b && NODE_OPTIONS=--max-old-space-size=8192 vite build",

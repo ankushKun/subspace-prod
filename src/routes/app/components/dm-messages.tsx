@@ -177,9 +177,9 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
             "relative rounded-md overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0",
             sizeClasses[size]
         )}>
-            {profile?.pfp || profile?.primaryLogo ? (
+            {profile?.pfp ? (
                 <img
-                    src={`https://arweave.net/${profile.pfp || profile.primaryLogo}`}
+                    src={`https://arweave.net/${profile.pfp}`}
                     alt={authorId}
                     className="w-full h-full object-cover"
                 />

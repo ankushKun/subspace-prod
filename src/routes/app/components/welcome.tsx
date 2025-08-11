@@ -113,8 +113,8 @@ function AppWelcome({ connected, className }: { connected: boolean; className?: 
 
 // Server-specific welcome component
 function ServerWelcome({ server, className }: { server: any; className?: string }) {
-    // Get actual member count from loaded members array, fallback to server.memberCount
-    const actualMemberCount = server.members?.length || server.memberCount || 0
+    // Use server.memberCount directly; no fallback to members array length
+    const actualMemberCount = server.memberCount || 0
 
     return (
         <div className={cn("flex flex-col items-center justify-center min-h-screen w-full text-center relative overflow-hidden bg-background", className)}>
@@ -167,7 +167,12 @@ function ServerWelcome({ server, className }: { server: any; className?: string 
                             <Hash className="w-5 h-5 text-primary" />
                         </div>
                         <div className="flex items-center justify-center gap-2">
-                            <div className="text-xl font-bold text-primary">{server.channels?.length || 0}</div>
+                            <div className="text-xl font-bold text-primary">{(() => {
+                                const list = Array.isArray((server as any)?.channels)
+                                    ? (server as any).channels
+                                    : Object.values((server as any)?.channels || {})
+                                return list.length
+                            })()}</div>
                             <div className="text-base text-muted-foreground">Channels</div>
                         </div>
                     </div>

@@ -122,22 +122,30 @@ export default function ServerChannels() {
         }
 
         // Convert and sort categories by order
-        const sortedCategories: ExtendedCategory[] = [...server.categories]
+        const serverCategories = Array.isArray((server as any).categories)
+            ? (server as any).categories as Category[]
+            : Object.values((server as any).categories || {}) as Category[]
+
+        const serverChannels = Array.isArray((server as any).channels)
+            ? (server as any).channels as Channel[]
+            : Object.values((server as any).channels || {}) as Channel[]
+
+        const sortedCategories: ExtendedCategory[] = [...serverCategories]
             .sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
             .map(cat => ({
                 ...cat,
-                channelCount: server.channels.filter(ch => ch.categoryId?.toString() === cat.categoryId.toString()).length
+                channelCount: serverChannels.filter(ch => ch.categoryId?.toString() === cat.categoryId.toString()).length
             }))
 
         // Convert channels
-        const processedChannels: ExtendedChannel[] = server.channels.map(channel => ({
+        const processedChannels: ExtendedChannel[] = serverChannels.map(channel => ({
             ...channel,
             private: false // TODO: Add private channel support when available in SDK
         }))
 
         // Get uncategorized channels
         const uncategorized = processedChannels
-            .filter(channel => !channel.categoryId || !server.categories.find(cat => cat.categoryId.toString() === channel.categoryId?.toString()))
+            .filter(channel => !channel.categoryId || !serverCategories.find(cat => cat.categoryId.toString() === channel.categoryId?.toString()))
             .sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
 
         return {

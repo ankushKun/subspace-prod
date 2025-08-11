@@ -17,11 +17,7 @@ import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
 import ServerWelcomeDialog from "@/components/server-welcome-dialog"
 
-// Mobile components
-import MobileSplitView from "./components/mobile-split-view"
-import MobileChannelsView from "./components/mobile-channels-view"
-import MobileMessagesView from "./components/mobile-messages-view"
-import MobileMemberSheet from "./components/mobile-member-sheet"
+import DataLoader from "./data-loader"
 
 export default function App() {
     const { serverId, channelId, friendId } = useParams()
@@ -66,12 +62,13 @@ export default function App() {
 
     // If profile updates fetch servers
     useEffect(() => {
-        if (profile) {
-            for (const server of profile.serversJoined) {
-                subspaceActions.servers.get(server.serverId).catch(console.error)
+        if (profile?.serversJoined) {
+            const serverIds = Object.keys(profile.serversJoined)
+            for (const serverId of serverIds) {
+                subspaceActions.servers.get(serverId).catch(console.error)
             }
         }
-    }, [profile])
+    }, [profile?.serversJoined])
 
     // Auto-collapse member list on mobile
     useEffect(() => {
@@ -115,7 +112,6 @@ export default function App() {
 
             if (!subspace) return
             subspaceActions.init()
-            subspaceActions.profile.refresh()
         } else if (!connected || !address) {
             // Navigate away from specific routes when wallet disconnects
             if (serverId || channelId || friendId) {
@@ -349,11 +345,15 @@ export default function App() {
         if (serverId) {
             server = servers[serverId]?.name || "Subspace"
             if (channelId) {
-                return `#${servers[serverId]?.channels.find(c => c.channelId == channelId)?.name} | ${server}`
+                const channelList = Array.isArray((servers[serverId] as any)?.channels)
+                    ? (servers[serverId] as any).channels
+                    : Object.values((servers[serverId] as any)?.channels || {})
+                const ch: any = channelList.find((c: any) => c.channelId == channelId)
+                return `#${ch?.name || ''} | ${server}`
             }
             return server
         } else if (friendId) {
-            const friendName = profiles[friendId]?.displayName || profiles[friendId]?.primaryName || friendId.substring(0, 4) + "..." + friendId.substring(friendId.length - 4)
+            const friendName = profiles[friendId]?.primaryName || friendId.substring(0, 4) + "..." + friendId.substring(friendId.length - 4)
             return `${friendName} | Subspace`
         }
         return "Subspace"
@@ -361,82 +361,49 @@ export default function App() {
 
     return (
         <>
+            {subspace && <DataLoader />}
             <title>{title}</title>
 
-            {/* Mobile Layout */}
-            {shouldUseOverlays ? (
-                <div className="h-screen w-screen overflow-hidden">
-                    {/* Mobile Navigation Stack */}
-                    {(() => {
-                        const currentView = getMobileView()
-
-                        switch (currentView) {
-                            case 'messages':
-                                return (
-                                    <MobileMessagesView
-                                        onToggleMemberList={handleToggleMemberList}
-                                        showMemberList={showMemberSheet}
-                                    />
-                                )
-                            case 'channels':
-                                return <MobileChannelsView />
-                            case 'home':
-                            default:
-                                return <MobileSplitView />
-                        }
-                    })()}
-
-                    {/* Mobile Member Sheet - only show for server channels */}
-                    {(serverId && channelId) && (
-                        <MobileMemberSheet
-                            isOpen={showMemberSheet}
-                            onClose={() => setShowMemberSheet(false)}
-                        />
-                    )}
-                </div>
-            ) : (
-                /* Desktop Layout - Original */
-                <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
-                    <ServerList className="w-20 min-w-20 max-w-20 !overflow-x-visible overflow-y-scroll border-r h-full" />
-                    <div className="flex flex-col h-full items-start justify-start">
-                        <div className="grow h-full border-r border-b rounded-br-xl">
-                            {serverId ? (
-                                <ChannelList className="w-80 min-w-80 h-full" />
-                            ) : (
-                                <DmsList className="w-80 min-w-80 h-full" />
-                            )}
-                        </div>
-                        <Profile className="w-full h-fit p-2" />
+            <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">
+                <ServerList className="w-20 min-w-20 max-w-20 !overflow-x-visible overflow-y-scroll border-r h-full" />
+                <div className="flex flex-col h-full items-start justify-start">
+                    <div className="grow h-full border-r border-b rounded-br-xl">
+                        {serverId ? (
+                            <ChannelList className="w-80 min-w-80 h-full" />
+                        ) : (
+                            <DmsList className="w-80 min-w-80 h-full" />
+                        )}
                     </div>
-                    {/* Main content area */}
-                    {(serverId && channelId) ? (
-                        <Messages
-                            ref={messagesRef}
-                            className="grow border-r h-full"
-                            onToggleMemberList={handleToggleMemberList}
-                            showMemberList={showMemberList}
-                        />
-                    ) : friendId ? (
-                        <DMMessages ref={dmMessagesRef} className="grow border-r h-full" />
-                    ) : (
-                        <Welcome className="grow h-full" />
-                    )}
-                    {/* Right sidebar - show member list for servers, hide for DMs */}
-                    {(serverId && channelId) && (
-                        <MemberList
-                            className="border-r h-full transition-all duration-300 ease-in-out"
-                            style={{
-                                width: showMemberList ? '320px' : '0px',
-                                minWidth: showMemberList ? '320px' : '0px',
-                                maxWidth: showMemberList ? '320px' : '0px',
-                                overflow: 'hidden',
-                                opacity: showMemberList ? 1 : 0
-                            }}
-                            isVisible={showMemberList}
-                        />
-                    )}
+                    <Profile className="w-full h-fit p-2" />
                 </div>
-            )}
+                {/* Main content area */}
+                {(serverId && channelId) ? (
+                    <Messages
+                        ref={messagesRef}
+                        className="grow border-r h-full"
+                        onToggleMemberList={handleToggleMemberList}
+                        showMemberList={showMemberList}
+                    />
+                ) : friendId ? (
+                    <DMMessages ref={dmMessagesRef} className="grow border-r h-full" />
+                ) : (
+                    <Welcome className="grow h-full" />
+                )}
+                {/* Right sidebar - show member list for servers, hide for DMs */}
+                {(serverId && channelId) && (
+                    <MemberList
+                        className="border-r h-full transition-all duration-300 ease-in-out"
+                        style={{
+                            width: showMemberList ? '320px' : '0px',
+                            minWidth: showMemberList ? '320px' : '0px',
+                            maxWidth: showMemberList ? '320px' : '0px',
+                            overflow: 'hidden',
+                            opacity: showMemberList ? 1 : 0
+                        }}
+                        isVisible={showMemberList}
+                    />
+                )}
+            </div>
 
             {/* Profile Creation Dialog */}
             <ProfileCreationDialog />

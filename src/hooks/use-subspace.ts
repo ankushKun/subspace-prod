@@ -15,7 +15,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
 import { useWallet } from "./use-wallet";
 import { useGlobalState } from "./use-global-state";
-import { getPrimaryName, getPrimaryLogo, getWanderTierInfo, type WanderTierInfo } from "@/lib/utils";
 import { Constants as WebConstants } from "@/lib/constants";
 
 // Helper function to get CU URL from localStorage
@@ -29,7 +28,6 @@ export function setCuUrl(url: string): void {
     localStorage.setItem('subspace-cu-url', url);
 }
 
-type ExtendedProfile = Profile & { primaryName: string, primaryLogo: string, wndrTier?: WanderTierInfo }
 
 interface CreateServerParams {
     name: string;
@@ -38,7 +36,7 @@ interface CreateServerParams {
 }
 
 export interface ExtendedFriend extends Friend {
-    profile?: ExtendedProfile;
+    profile?: Profile;
     lastMessageTime?: number;
     unreadCount?: number;
 }
@@ -53,8 +51,8 @@ interface DMConversation {
 
 interface SubspaceState {
     subspace: Subspace | null
-    profile: ExtendedProfile | null
-    profiles: Record<string, ExtendedProfile>
+    profile: Profile | null
+    profiles: Record<string, Profile>
     servers: Record<string, Server>
     messages: Record<string, Record<string, Record<string, any>>>  // serverId -> channelId -> messageId -> message
     // Friends and DMs state
@@ -72,10 +70,9 @@ interface SubspaceState {
     actions: {
         init: () => void
         profile: {
-            get: (userId?: string) => Promise<ExtendedProfile | null>
-            getBulk: (userIds: string[]) => Promise<ExtendedProfile[]>
+            get: (userId?: string) => Promise<Profile | null>
+            getBulk: (userIds: string[]) => Promise<Profile[]>
             getBulkPrimaryNames: (userIds: string[]) => Promise<void>
-            refresh: (silent?: boolean) => Promise<ExtendedProfile | null>
             updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
         }
         servers: {
@@ -109,7 +106,7 @@ interface SubspaceState {
             editMessage: (serverId: string, channelId: string, messageId: string, content: string) => Promise<boolean>
             deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
             updateServerCode: (serverId: string) => Promise<boolean>
-            refreshSources: () => Promise<boolean>
+            refreshSources: () => Promise<void>
             getSources: () => any | null
         }
         friends: {
@@ -180,18 +177,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 const subspace = getSubspace(signer, owner)
                 set({ subspace })
-
-                // set state from profiles cache and then get the latest profile
-                const cachedProfile = get().profiles[owner]
-                if (cachedProfile) {
-                    set({ profile: cachedProfile as ExtendedProfile })
-                    // Still refresh in background but don't show loading state
-                    get().actions.profile.refresh(true)
-                } else {
-                    // Set loading state immediately when starting profile fetch
-                    set({ profile: null, isLoadingProfile: true })
-                    get().actions.profile.get()
-                }
             } catch (error) {
                 console.error("Failed to initialize Subspace:", error)
                 // Don't throw here, just log the error
@@ -213,264 +198,29 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const targetUserId = userId || walletAddress
 
                 try {
-                    let profile: ExtendedProfile | null = null
-
-                    // ✅ ADDED: Mark this profile as being loaded
-                    const currentLoadingProfiles = new Set(get().loadingProfiles)
-                    currentLoadingProfiles.add(targetUserId)
-                    set({
-                        isLoadingProfile: true,
-                        loadingProfiles: currentLoadingProfiles
-                    })
-
-                    try {
-                        profile = await subspace.user.getProfile(targetUserId) as ExtendedProfile
-                        if (profile) {
-                            // ✅ IMMEDIATE UPDATE: Set basic profile data right away
-                            // const basicProfile = { ...profile, primaryName: "", primaryLogo: "" } as ExtendedProfile
-
-                            // ✅ PRESERVE existing primary name/logo/wndrTier ONLY if they have actual values
-                            const cachedProfile = get().profiles[targetUserId]
-                            if (cachedProfile) {
-                                // Only preserve if cached values are not empty
-                                if (cachedProfile.primaryName && cachedProfile.primaryName !== "") {
-                                    profile.primaryName = cachedProfile.primaryName
-                                } else {
-                                    profile.primaryName = ""
-                                }
-
-                                if (cachedProfile.primaryLogo && cachedProfile.primaryLogo !== "") {
-                                    profile.primaryLogo = cachedProfile.primaryLogo
-                                } else {
-                                    profile.primaryLogo = ""
-                                }
-
-                                // ✅ PRESERVE wndrTier if it exists in cached profile
-                                if (cachedProfile.wndrTier) {
-                                    profile.wndrTier = cachedProfile.wndrTier
-                                }
-                            } else {
-                                // Initialize with empty values for new profiles
-                                profile.primaryName = ""
-                                profile.primaryLogo = ""
-                                // wndrTier will be undefined for new profiles, which is fine
-                            }
-
-
-                            if (!userId) {
-                                set({ profile })
-                            }
-                            set({ profiles: { ...get().profiles, [targetUserId]: profile } })
-                            // a possibility that this was a migrated profile and even tho is exists, dmProcess wont exist,
-                            // meaning user has not yet initialised their profile, so throw and error here to trigger profile creation
-                            if (!profile.dmProcess) {
-                                throw new Error("dm process not found, initialise profile first")
-                            }
-                        }
-                    } catch (e) {
-                        // Only show creating profile dialog if this is our own profile
-                        // and we don't already have a profile in the store
-                        if (!userId && !get().profile) {
-                            // For WAuth connections, make sure the wallet is properly loaded before creating profile
-                            const walletState = useWallet.getState()
-                            if (walletState.connectionStrategy === 'wauth') {
-                                try {
-                                    // Check if WAuth wallet is loaded by trying to get it
-                                    const wallet = await walletState.wauthInstance?.getWallet()
-                                    if (!wallet) {
-                                        console.log("[hooks/use-subspace] WAuth wallet not loaded yet, skipping profile creation")
-                                        return null
-                                    }
-                                } catch (walletError) {
-                                    console.log("[hooks/use-subspace] WAuth wallet not ready yet, skipping profile creation:", walletError)
-                                    return null
-                                }
-                            }
-
-                            set({ isCreatingProfile: true })
-
-                            try {
-                                // create their profile
-                                const profileId = await subspace.user.createProfile()
-                                try {
-                                    profile = await subspace.user.getProfile(profileId) as ExtendedProfile
-                                } catch (e) {
-                                    console.error("Failed to get profile:", e)
-                                    throw e
-                                }
-                            } catch (error) {
-                                console.error("Failed to create profile:", error)
-                                throw error
-                            } finally {
-                                set({ isCreatingProfile: false })
-                                // If profile was created successfully, refresh the page
-                                window.location.reload()
-                            }
-                        } else {
-                            // For other users' profiles, just throw the error
+                    const profile = await subspace.user.getProfile(targetUserId)
+                    if (profile) {
+                        set({ profile })
+                        set({ profiles: { ...get().profiles, [targetUserId]: profile } })
+                        // a possibility that this was a migrated profile and even tho is exists, dmProcess wont exist,
+                        // meaning user has not yet initialised their profile, so throw and error here to trigger profile creation
+                        if (!profile.dmProcess) {
+                            throw new Error("dm process not found, initialise profile first")
                         }
                     }
-
-                    if (profile) {
-                        // ✅ IMMEDIATE UPDATE: Set basic profile with placeholders for primary name/logo and preserved wndrTier
-                        const basicProfile = {
-                            ...profile,
-                            primaryName: profile.primaryName || "",
-                            primaryLogo: profile.primaryLogo || "",
-                            wndrTier: profile.wndrTier || null
-                        } as ExtendedProfile
-
-                        if (!userId) {
-                            set((state) => ({
-                                profile: { ...state.profile, ...basicProfile }
-                            }))
-                        }
-                        set((state) => ({
-                            profiles: {
-                                ...state.profiles,
-                                [targetUserId]: basicProfile // Use complete profile object
-                            }
-                        }))
-
-                        // ✅ WAIT FOR COMPLETE PROFILE: Fetch primary name and logo before returning
-                        let currentProfile = basicProfile
-                        try {
-                            // First, get the primary name using utility function
-                            const nameRes = await getPrimaryName(profile.userId || targetUserId)
-
-                            if (nameRes?.primaryName) {
-                                currentProfile = {
-                                    ...currentProfile,
-                                    primaryName: nameRes.primaryName
-                                } as ExtendedProfile
-
-                                if (!userId) {
-                                    set((state) => ({
-                                        profile: { ...state.profile, ...currentProfile }
-                                    }))
-                                }
-                                set((state) => ({
-                                    profiles: {
-                                        ...state.profiles,
-                                        [targetUserId]: currentProfile
-                                    }
-                                }))
-
-                                // Then, get the logo if we have a processId using utility function
-                                if (nameRes.processId) {
-                                    try {
-                                        const logoRes = await getPrimaryLogo(nameRes.processId)
-
-                                        if (logoRes) {
-                                            currentProfile = {
-                                                ...currentProfile,
-                                                primaryLogo: logoRes
-                                            } as ExtendedProfile
-
-                                            if (!userId) {
-                                                set((state) => ({
-                                                    profile: { ...state.profile, ...currentProfile }
-                                                }))
-                                            }
-                                            set((state) => ({
-                                                profiles: {
-                                                    ...state.profiles,
-                                                    [targetUserId]: currentProfile
-                                                }
-                                            }))
-                                        } else {
-                                            console.log(`[hooks/use-subspace] ⚠️ No logo found for process ${nameRes.processId}`)
-                                        }
-                                    } catch (logoError) {
-                                        console.error(`[hooks/use-subspace] ❌ Failed to fetch logo for process ${nameRes.processId}:`, logoError)
-                                    }
-                                } else {
-                                    console.log(`[hooks/use-subspace] ⚠️ No processId found for ${targetUserId}, skipping logo fetch`)
-                                }
-                            } else {
-                                console.log(`[hooks/use-subspace] ⚠️ No primary name found for ${targetUserId}`)
-                            }
-                        } catch (nameError) {
-                            console.error(`[hooks/use-subspace] ❌ Failed to fetch primary name for ${targetUserId}:`, nameError)
-                        }
-
-                        // ✅ ADD TIER INFO: Fetch tier info and add to complete profile
-                        let finalProfile = currentProfile
-                        try {
-                            const tierInfo = await getWanderTierInfo(profile.userId || targetUserId)
-                            // ✅ CREATE NEW OBJECT: Don't mutate existing object
-                            finalProfile = {
-                                ...currentProfile,
-                                wndrTier: tierInfo
-                            } as ExtendedProfile
-
-                            // ✅ SAFE STATE UPDATE: Build on latest state and preserve existing data
-                            if (!userId) {
-                                set((state) => ({
-                                    profile: { ...state.profile, ...finalProfile }
-                                }))
-                            }
-                            set((state) => ({
-                                profiles: {
-                                    ...state.profiles,
-                                    [targetUserId]: finalProfile  // Use complete profile, don't merge
-                                }
-                            }))
-                        } catch (e) {
-                            console.error("Failed to get Wander tier info:", e)
-                            // ✅ CREATE NEW OBJECT: Don't mutate existing object
-                            finalProfile = {
-                                ...currentProfile,
-                                wndrTier: null
-                            } as ExtendedProfile
-
-                            // ✅ SAFE STATE UPDATE: Build on latest state and preserve existing data
-                            if (!userId) {
-                                set((state) => ({
-                                    profile: { ...state.profile, ...finalProfile }
-                                }))
-                            }
-                            set((state) => ({
-                                profiles: {
-                                    ...state.profiles,
-                                    [targetUserId]: finalProfile  // Use complete profile, don't merge
-                                }
-                            }))
-
-                            console.log(`[hooks/use-subspace] ✅ FINAL profile (no tier) updated for ${targetUserId}: name="${finalProfile.primaryName || 'EMPTY'}", logo="${finalProfile.primaryLogo ? finalProfile.primaryLogo.slice(0, 20) + '...' : 'EMPTY'}", pfp="${finalProfile.pfp ? finalProfile.pfp.slice(0, 20) + '...' : 'EMPTY'}"`);
-                        }
-
-                        // Final return logic
-                        if (userId) {
-                            // For other users: return the enhanced profile
-                            return finalProfile
-                        } else {
-                            // For current user: ensure final state is set and load servers
-                            set((state) => ({
-                                profile: { ...state.profile, ...finalProfile },
-                                profiles: {
-                                    ...state.profiles,
-                                    [profile.userId]: finalProfile  // Use complete profile, don't merge
-                                }
-                            }))
-
-                            return finalProfile
+                } catch (e) {
+                    // Only show creating profile dialog if this is our own profile
+                    // and we don't already have a profile in the store
+                    if (targetUserId === walletAddress) {
+                        const profileId = await subspace.user.createProfile()
+                        if (profileId) {
+                            const profile = await subspace.user.getProfile(profileId)
+                            return profile
                         }
                     } else {
-                        console.error("[hooks/use-subspace] Failed to get profile")
-                        set({ profile: null })
+                        throw e
                     }
-                } catch (error) {
-                    console.error("[hooks/use-subspace] Error in profile.get:", error)
-                    throw error
-                } finally {
-                    // ✅ ADDED: Clear loading state for this profile
-                    const currentLoadingProfiles = new Set(get().loadingProfiles)
-                    currentLoadingProfiles.delete(targetUserId)
-                    set({
-                        isLoadingProfile: false,
-                        loadingProfiles: currentLoadingProfiles
-                    })
+
                 }
             },
             getBulk: async (userIds: string[]) => {
@@ -480,10 +230,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 const profiles = await subspace.user.getBulkProfiles(userIds)
                 if (profiles) {
-                    const profilesKV = profiles.reduce((acc: Record<string, ExtendedProfile>, profile: Profile) => {
-                        acc[profile.userId] = profile as ExtendedProfile
+                    const profilesKV = profiles.reduce((acc: Record<string, Profile>, profile: Profile) => {
+                        acc[profile.userId] = profile as Profile
                         return acc
-                    }, {} as Record<string, ExtendedProfile>)
+                    }, {} as Record<string, Profile>)
 
                     // merge profiles values with any existing data from the state (primaryName, primaryLogo)
 
@@ -499,7 +249,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                     set({ profiles: { ...get().profiles, ...profilesKV } })
                 }
-                return profiles as ExtendedProfile[]
+                return profiles as Profile[]
             },
             getBulkPrimaryNames: async (userIds: string[]) => {
                 const subspace = get().subspace
@@ -515,30 +265,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
 
 
-            },
-            refresh: async (silent: boolean = false) => {
-                // Force refresh the current user's profile
-                const walletAddress = useWallet.getState().address
-                if (!walletAddress) {
-                    console.error("[hooks/use-subspace] No wallet address available for profile refresh")
-                    return null
-                }
-
-                try {
-                    // If silent refresh, don't show loading states
-                    if (!silent) {
-                        set({ isLoadingProfile: true })
-                    }
-                    const refreshedProfile = await get().actions.profile.get()
-                    return refreshedProfile
-                } catch (error) {
-                    console.error("[hooks/use-subspace] Failed to refresh profile:", error)
-                    return null
-                } finally {
-                    if (!silent) {
-                        set({ isLoadingProfile: false })
-                    }
-                }
             },
             updateProfile: async (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => {
                 const subspace = get().subspace
@@ -597,14 +323,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // join the server and wait for completion
                 await get().actions.servers.join(serverId)
-
-                // Refresh profile to update the joined servers list
-                try {
-                    await get().actions.profile.refresh()
-                } catch (error) {
-                    console.error("[hooks/use-subspace] Failed to refresh profile after creating server:", error)
-                }
-
                 return server
             },
             update: async (serverId: string, params: { name?: string; logo?: string; description?: string }) => {
@@ -792,13 +510,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         } catch (error) {
                             console.error(`Successfully joined server ${serverId} but failed to fetch server details:`, error)
                         }
-
-                        // Refresh profile to update the joined servers list
-                        try {
-                            await get().actions.profile.refresh()
-                        } catch (error) {
-                            console.error("Failed to refresh profile after joining server:", error)
-                        }
                     }
                     return success
                 } catch (error) {
@@ -824,13 +535,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         if (globalState.activeServerId === serverId) {
                             globalState.actions.setActiveServerId("")
                             globalState.actions.setActiveChannelId("")
-                        }
-
-                        // Refresh profile to update the joined servers list
-                        try {
-                            await get().actions.profile.refresh()
-                        } catch (error) {
-                            console.error("Failed to refresh profile after leaving server:", error)
                         }
                     }
                     return success
@@ -932,6 +636,40 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 try {
                     const member = await subspace.server.getMember(serverId, userId)
+                    if (member) {
+                        // Merge into server cache so UI sees the update
+                        const servers = get().servers
+                        const server = servers[serverId]
+                        if (server) {
+                            const existingMembers: any = (server as any).members
+                            let updatedMembers: any
+                            if (Array.isArray(existingMembers)) {
+                                let replaced = false
+                                updatedMembers = existingMembers.map((m: any) => {
+                                    if (m.userId === userId) {
+                                        replaced = true
+                                        return { ...m, ...member }
+                                    }
+                                    return m
+                                })
+                                if (!replaced) updatedMembers = [...updatedMembers, member]
+                            } else if (existingMembers && typeof existingMembers === 'object') {
+                                updatedMembers = { ...existingMembers, [userId]: { ...(existingMembers?.[userId] || {}), ...member } }
+                            } else {
+                                updatedMembers = [member]
+                            }
+
+                            set({
+                                servers: {
+                                    ...servers,
+                                    [serverId]: {
+                                        ...server,
+                                        members: updatedMembers
+                                    }
+                                }
+                            })
+                        }
+                    }
                     return member
                 } catch (error) {
                     console.error("Failed to get member:", error)
@@ -1141,17 +879,20 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     if (response?.messages) {
                         // Process messages to ensure proper data types and sort by timestamp (oldest first)
                         const processedMessages = response.messages
-                            .map((rawMessage: any) => ({
-                                messageId: rawMessage.messageId,
-                                content: rawMessage.content,
-                                authorId: rawMessage.authorId,
-                                timestamp: Number(rawMessage.timestamp),
-                                edited: Boolean(rawMessage.edited),
-                                attachments: rawMessage.attachments || "[]",
-                                replyTo: rawMessage.replyTo,
-                                messageTxId: rawMessage.messageTxId,
-                                replyToMessage: null // Will be populated below
-                            } as any))
+                            .map((rawMessage: any) => {
+                                const authorId = rawMessage.authorId ?? rawMessage.senderId;
+                                return ({
+                                    messageId: rawMessage.messageId,
+                                    content: rawMessage.content,
+                                    authorId,
+                                    timestamp: Number(rawMessage.timestamp),
+                                    edited: Boolean(rawMessage.edited),
+                                    attachments: rawMessage.attachments || "[]",
+                                    replyTo: rawMessage.replyTo,
+                                    messageTxId: rawMessage.messageTxId,
+                                    replyToMessage: null // Will be populated below
+                                } as any)
+                            })
                             .sort((a: any, b: any) => a.timestamp - b.timestamp)
 
                         // Get current cached messages to help populate replyToMessage
@@ -1227,6 +968,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     const message = await subspace.server.getMessage(serverId, messageId)
                     if (message) {
+                        // Normalize to always have authorId for UI components
+                        (message as any).authorId = (message as any).authorId ?? (message as any).senderId
                         // Get current cached messages to help populate replyToMessage
                         const currentMessages = get().messages
                         const serverMessages = currentMessages[serverId] || {}
@@ -1242,7 +985,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                                     const fetchedReplyMessage = await subspace.server.getMessage(String(serverId), String(message.replyTo))
                                     console.log("fetchedReplyMessage", fetchedReplyMessage)
                                     if (fetchedReplyMessage) {
-                                        replyToMessage = fetchedReplyMessage
+                                        // Normalize reply message as well
+                                        replyToMessage = {
+                                            ...fetchedReplyMessage,
+                                            authorId: (fetchedReplyMessage as any).authorId ?? (fetchedReplyMessage as any).senderId
+                                        }
                                         // Cache the fetched message
                                         channelMessages[message.replyTo] = fetchedReplyMessage
                                     }
@@ -1278,6 +1025,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             sendMessage: async (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => {
                 const subspace = get().subspace
                 if (!subspace) return false
+
+                console.log("🔧 SDK DEBUG: sendMessage", serverId, params)
 
                 try {
                     const success = await subspace.server.sendMessage(serverId, params)
@@ -1399,15 +1148,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             },
             refreshSources: async () => {
                 const subspace = get().subspace
-                if (!subspace) return false
+                if (!subspace) return
 
                 try {
-                    // Type assertion to access connectionManager
-                    const sources = await subspace.connectionManager.refreshSources()
-                    return !!sources
+                    await subspace.connectionManager.refreshSources()
                 } catch (error) {
                     console.error("Failed to refresh sources:", error)
-                    return false
                 }
             },
             getSources: () => {
@@ -1547,7 +1293,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     const success = await subspace.user.sendFriendRequest(userId)
                     if (success) {
                         // Refresh profile to update friends list
-                        await get().actions.profile.refresh()
                         await get().actions.friends.getFriends()
                     }
                     return success
@@ -1564,7 +1309,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     const success = await subspace.user.acceptFriendRequest(userId)
                     if (success) {
                         // Refresh profile to update friends list
-                        await get().actions.profile.refresh()
                         await get().actions.friends.getFriends()
                     }
                     return success
@@ -1581,7 +1325,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     const success = await subspace.user.rejectFriendRequest(userId)
                     if (success) {
                         // Refresh profile to update friends list
-                        await get().actions.profile.refresh()
                         await get().actions.friends.getFriends()
                     }
                     return success
@@ -1608,7 +1351,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         set({ dmConversations: remainingConvos })
 
                         // Refresh profile to update friends list
-                        await get().actions.profile.refresh()
                         await get().actions.friends.getFriends()
                     }
                     return success
@@ -1619,7 +1361,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             },
             refreshFriends: async () => {
                 try {
-                    await get().actions.profile.refresh()
                     await get().actions.friends.getFriends()
                 } catch (error) {
                     console.error("Failed to refresh friends:", error)
@@ -1942,7 +1683,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         //         loadNextServer(0);
         //     }
         // }
-    }
+    },
 }), {
     name: "subspace",
     storage: createJSONStorage(() => localStorage),

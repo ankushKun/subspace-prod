@@ -80,7 +80,7 @@ export default function ServerMembers() {
 
             return {
                 ...member,
-                displayName: profile?.displayName || profile?.primaryName || member.nickname || null,
+                displayName: profile?.primaryName || member.nickname || null,
                 avatar: profile?.pfp,
                 joinedAt: member.joinedAt || "Unknown"
             } as ExtendedMember

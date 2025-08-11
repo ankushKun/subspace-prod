@@ -58,19 +58,29 @@ export default function ChannelList({ className }: { className?: string }) {
             return { categories: [] as Category[], categorizedChannels: new Map(), uncategorizedChannels: [] as Channel[] }
         }
 
+        const serverCategories = Array.isArray((server as any).categories)
+            ? (server as any).categories as Category[]
+            : Object.values((server as any).categories || {}) as Category[]
 
+        const serverChannels = Array.isArray((server as any).channels)
+            ? (server as any).channels as Channel[]
+            : Object.values((server as any).channels || {}) as Channel[]
 
-        // Sort categories by order
-        const sortedCategories = [...server.categories].sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
+        // Sort categories by order and drop invalid entries
+        const sortedCategories = [...serverCategories]
+            .filter((cat) => !!cat && cat.categoryId !== undefined && cat.categoryId !== null)
+            .sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
 
         // Create map of category ID to channels
         const channelsByCategory = new Map<string, Channel[]>()
-        const categoryIds = new Set(sortedCategories.map(cat => cat.categoryId.toString()))
+        const categoryIds = new Set(sortedCategories.map(cat => String((cat as any).categoryId)))
 
         // Categorize channels
-        for (const channel of server.channels) {
-            if (channel.categoryId && categoryIds.has(channel.categoryId.toString())) {
-                const categoryIdStr = channel.categoryId.toString()
+        for (const channel of serverChannels) {
+            const cid = (channel as any)?.categoryId
+            const cidStr = cid !== undefined && cid !== null ? String(cid) : null
+            if (cidStr && categoryIds.has(cidStr)) {
+                const categoryIdStr = cidStr
                 if (!channelsByCategory.has(categoryIdStr)) {
                     channelsByCategory.set(categoryIdStr, [])
                 }
@@ -87,8 +97,12 @@ export default function ChannelList({ className }: { className?: string }) {
         }
 
         // Get uncategorized channels
-        const uncategorized = server.channels
-            .filter(channel => !channel.categoryId || !categoryIds.has(channel.categoryId.toString()))
+        const uncategorized = serverChannels
+            .filter(channel => {
+                const cid = (channel as any)?.categoryId
+                const cidStr = cid !== undefined && cid !== null ? String(cid) : null
+                return !cidStr || !categoryIds.has(cidStr)
+            })
             .sort((a, b) => (a.orderId || 0) - (b.orderId || 0))
 
         return {
@@ -100,8 +114,15 @@ export default function ChannelList({ className }: { className?: string }) {
 
     // Initialize expanded categories when server changes
     useEffect(() => {
-        if (server?.categories) {
-            setExpandedCategories(new Set(server.categories.map(cat => cat.categoryId.toString())))
+        const serverCategories = Array.isArray((server as any)?.categories)
+            ? (server as any).categories as Category[]
+            : Object.values((server as any)?.categories || {}) as Category[]
+        if (serverCategories) {
+            setExpandedCategories(new Set(
+                serverCategories
+                    .filter((cat) => !!cat && cat.categoryId !== undefined && cat.categoryId !== null)
+                    .map(cat => String((cat as any).categoryId))
+            ))
         }
     }, [server?.categories])
 
@@ -125,7 +146,7 @@ export default function ChannelList({ className }: { className?: string }) {
     const isChannelActive = (channel: Channel): boolean => {
         if (!activeChannelId) return false;
 
-        // Handle both string and number channel IDs for compatibility
+        // Only support string channel IDs
         const isActive = channel.channelId.toString() === activeChannelId ||
             (typeof channel.channelId === 'string' && channel.channelId === activeChannelId) ||
             (typeof channel.channelId === 'number' && channel.channelId === parseInt(activeChannelId));
@@ -135,16 +156,19 @@ export default function ChannelList({ className }: { className?: string }) {
 
     // Auto-redirect to first channel if current channel is not found
     useEffect(() => {
-        if (server && server.channels && server.channels.length > 0 && activeChannelId) {
+        const serverChannels = Array.isArray((server as any)?.channels)
+            ? (server as any).channels as Channel[]
+            : Object.values((server as any)?.channels || {}) as Channel[]
+        if (server && serverChannels && serverChannels.length > 0 && activeChannelId) {
             // Check if current activeChannelId exists in server channels
-            const channelExists = server.channels.some(c =>
+            const channelExists = serverChannels.some(c =>
                 c.channelId.toString() === activeChannelId ||
                 (typeof c.channelId === 'string' && c.channelId === activeChannelId) ||
                 (typeof c.channelId === 'number' && c.channelId === parseInt(activeChannelId))
             );
 
             if (!channelExists) {
-                const firstChannel = server.channels[0];
+                const firstChannel = serverChannels[0];
                 if (firstChannel) {
                     selectChannel(firstChannel.channelId);
                 }
@@ -353,7 +377,7 @@ export default function ChannelList({ className }: { className?: string }) {
                                 const success = await actions.servers.leave(activeServerId);
                                 if (success) {
                                     // Explicitly refresh the user's profile to update joined servers list
-                                    await actions.profile.refresh();
+                                    await actions.profile.get(useWallet.getState().address);
                                     toast.success("Left server successfully");
                                     navigate("/app");
                                 } else {
