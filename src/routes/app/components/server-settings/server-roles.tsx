@@ -44,6 +44,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from "@/lib/utils"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
@@ -127,12 +128,16 @@ export default function ServerRoles() {
         if (!server || !server.roles) return []
 
         const serverMembers = (server as any)?.members || []
+        const roleMemberMapping: Record<string, Record<string, boolean>> = (server as any)?.roleMemberMapping || {}
 
         const result = Object.values(server.roles).map(role => {
-            // Count members with this role
-            const memberCount = serverMembers.filter((member: any) =>
-                member.roles && member.roles.includes(parseInt(role.roleId))
-            ).length
+            // Prefer fast counts from roleMemberMapping if available
+            const mappingForRole = roleMemberMapping?.[role.roleId?.toString?.() ?? String(role.roleId)]
+            const memberCount = mappingForRole
+                ? Object.keys(mappingForRole).length
+                : serverMembers.filter((member: any) =>
+                    member.roles && (member.roles as any[]).some((rid: any) => String(rid) === String(role.roleId))
+                ).length
 
             return {
                 ...role,
@@ -143,6 +148,23 @@ export default function ServerRoles() {
 
         return result
     }, [server])
+
+    // Compute list of members for selected role using roleMemberMapping
+    const membersForSelectedRole = useMemo(() => {
+        if (!server || !selectedRole) return []
+        const mapping: Record<string, Record<string, boolean>> = (server as any)?.roleMemberMapping || {}
+        const userIdSet = mapping?.[selectedRole.roleId?.toString?.() ?? String(selectedRole.roleId)] || {}
+        const memberIds = Object.keys(userIdSet)
+
+        // Prefer server.members if available; otherwise return basic list with ids
+        const serverMembers = (server as any)?.members || []
+        if (Array.isArray(serverMembers) && serverMembers.length > 0) {
+            const memberMap: Record<string, any> = {}
+            for (const m of serverMembers) memberMap[m.userId] = m
+            return memberIds.map((id) => memberMap[id] || { userId: id })
+        }
+        return memberIds.map((id) => ({ userId: id }))
+    }, [server, selectedRole])
 
     // Check if user has permission to manage roles
     const canManageRoles = useMemo(() => {
@@ -604,7 +626,7 @@ export default function ServerRoles() {
                         {/* Card glow effect */}
                         <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
 
-                        <CardHeader className="pb-4 relative z-10">
+                        <CardHeader className="relative z-10">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
@@ -802,13 +824,13 @@ export default function ServerRoles() {
                         </DialogContent>
                     </Dialog>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 flex-1 min-h-0">
                         {/* Role List */}
-                        <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative z-10 flex flex-col overflow-scroll">
+                        <Card className="border-primary/10 shadow-md bg-card/30 relative z-10 flex flex-col overflow-scroll col-span-1 p-3 md:p-4">
                             {/* Card glow effect */}
                             <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
 
-                            <CardHeader className="relative z-10 pb-4 flex-shrink-0">
+                            {/* <CardHeader className="relative z-10 pb-4 flex-shrink-0">
                                 <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
                                     <Users className="w-4 h-4 text-primary/40" />
                                     Server Roles
@@ -816,13 +838,13 @@ export default function ServerRoles() {
                                 <p className="text-xs text-primary/50 mt-1">
                                     {roles.length} total roles • Click to configure
                                 </p>
-                            </CardHeader>
+                            </CardHeader> */}
                             <CardContent className="relative z-10 flex-1 min-h-0 p-0">
                                 <SortableContext
                                     items={roles.map(role => `role-${role.roleId}`)}
                                     strategy={verticalListSortingStrategy}
                                 >
-                                    <div className="space-y-2 py-1 px-8">
+                                    <div className="space-y-1.5">
                                         {roles.map((role) => (
                                             <SortableRole
                                                 key={role.roleId}
@@ -843,486 +865,206 @@ export default function ServerRoles() {
                             </CardContent>
                         </Card>
 
-                        {/* Role Permissions */}
-                        <Card className="border-primary/10 shadow-md backdrop-blur-sm bg-card/30 relative z-10 flex flex-col overflow-scroll">
-                            {/* Card glow effect */}
-                            <div className="absolute inset-0 from-primary/2 via-transparent to-primary/2 rounded-lg pointer-events-none" />
-
-                            <CardHeader className="relative z-10 pb-4 flex-shrink-0">
-                                <CardTitle className="font-freecam text-sm uppercase tracking-wide text-primary/70 flex items-center gap-2">
-                                    <Settings className="w-4 h-4 text-primary/40" />
-                                    {selectedRole ? `${selectedRole.name} Settings` : "Role Configuration"}
-                                </CardTitle>
-                                <p className="text-xs text-primary/50 mt-1">
-                                    {selectedRole ? "Permissions and appearance settings" : "Select a role to configure"}
-                                </p>
-                            </CardHeader>
-                            <CardContent className="relative z-10 flex-1 min-h-0">
-                                {selectedRole ? (
-                                    <div className="space-y-4 pb-4">
-                                        {/* Role Name and Save/Discard Buttons */}
-                                        {!selectedRole.isDefault && (
-                                            <div className="space-y-3 p-4 bg-primary/5 rounded-lg border border-primary/20">
-                                                <div className="flex items-center justify-between">
-                                                    <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
-                                                        Role Settings
-                                                    </h3>
-                                                    {hasUnsavedChanges && (
-                                                        <div className="flex items-center gap-2">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={discardRoleChanges}
-                                                                disabled={isUpdating}
-                                                                className="text-xs h-7"
-                                                            >
-                                                                Discard
-                                                            </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={saveRoleChanges}
-                                                                disabled={isUpdating}
-                                                                className="text-xs h-7 bg-primary hover:bg-primary/90 text-black"
-                                                            >
-                                                                {isUpdating ? (
-                                                                    <>
-                                                                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                                                        Saving...
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <Save className="w-3 h-3 mr-1" />
-                                                                        Save Changes
-                                                                    </>
-                                                                )}
-                                                            </Button>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <Label className="text-xs text-primary/80">Role Name</Label>
-                                                        <Input
-                                                            value={editedRole.name ?? selectedRole.name}
-                                                            onChange={(e) => updateLocalRoleProperty('name', e.target.value)}
-                                                            placeholder="Enter role name"
-                                                            className="text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50"
-                                                            maxLength={50}
-                                                            disabled={isUpdating}
-                                                        />
-                                                        <p className="text-xs text-primary/60 mt-1">
-                                                            {(editedRole.name ?? selectedRole.name).length}/50 characters
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {hasUnsavedChanges && (
-                                                    <div className="text-xs text-amber-600 bg-amber-50/10 border border-amber-200/50 rounded p-2 flex items-center gap-2">
-                                                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                                                        You have unsaved changes
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                        {selectedRole.isDefault ? (
-                                            <div className="space-y-4">
-                                                <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                                                    <p className="text-sm text-blue-500 text-center mb-4">
-                                                        The @everyone role permissions cannot be modified, but you can change its color.
-                                                        This role is automatically assigned to all server members.
-                                                    </p>
-
-                                                    <div className="space-y-4">
-                                                        <div>
-                                                            <Label className="text-primary">Role Color</Label>
-                                                            <div className="flex items-center gap-3 mt-2">
-                                                                {/* Default Color */}
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <button
-                                                                        className={cn(
-                                                                            "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                                            (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === roleColors[0]
-                                                                                ? "border-primary ring-2 ring-primary/50 scale-105"
-                                                                                : "border-primary/30 hover:border-primary/60"
-                                                                        )}
-                                                                        style={{ backgroundColor: roleColors[0] }}
-                                                                        onClick={() => updateLocalRoleProperty('color', roleColors[0])}
-                                                                        disabled={isUpdating}
-                                                                    />
-                                                                    <span className="text-xs text-primary/60">Default</span>
-                                                                </div>
-
-                                                                {/* Custom Color */}
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <div className="relative">
-                                                                        <button
-                                                                            className={cn(
-                                                                                "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
-                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
-                                                                                    ? "border-primary ring-2 ring-primary/50 scale-105"
-                                                                                    : "border-primary/30 hover:border-primary/60 border-dashed"
-                                                                            )}
-                                                                            style={{
-                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
-                                                                                    ? formatHexColor(selectedRoleHexColor)
-                                                                                    : "transparent"
-                                                                            }}
-                                                                            onClick={() => {
-                                                                                // Focus the hex input when clicked
-                                                                                const hexInput = document.getElementById('everyone-role-hex-input') as HTMLInputElement
-                                                                                if (hexInput) hexInput.focus()
-                                                                            }}
-                                                                            disabled={isUpdating}
-                                                                        >
-                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) ? (
-                                                                                <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
-                                                                            ) : null}
-                                                                        </button>
-                                                                    </div>
-                                                                    <span className="text-xs text-primary/60">Custom</span>
-                                                                </div>
-
-                                                                {/* Color Patches Grid */}
-                                                                <div className="flex-1">
-                                                                    <div className="grid grid-cols-4 gap-2">
-                                                                        {roleColors.slice(1).map((color) => (
-                                                                            <button
-                                                                                key={color}
-                                                                                className={cn(
-                                                                                    "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110",
-                                                                                    (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === color
-                                                                                        ? "border-primary ring-2 ring-primary/50 scale-105"
-                                                                                        : "border-primary/30 hover:border-primary/60"
-                                                                                )}
-                                                                                style={{ backgroundColor: color }}
-                                                                                onClick={() => updateLocalRoleProperty('color', color)}
-                                                                                disabled={isUpdating}
-                                                                            />
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div>
-                                                            <Label className="font-ocr text-primary">Custom Hex Color</Label>
-                                                            <div className="flex gap-2 mt-2">
-                                                                <div className="flex-1 flex gap-2">
-                                                                    <Input
-                                                                        id="everyone-role-hex-input"
-                                                                        value={selectedRoleHexColor}
-                                                                        onChange={(e) => setSelectedRoleHexColor(e.target.value)}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter' && selectedRoleHexColor.trim()) {
-                                                                                handleHexColorUpdate(selectedRole, selectedRoleHexColor)
-                                                                            }
-                                                                        }}
-                                                                        placeholder="#FF5733"
-                                                                        className="font-mono text-sm bg-background/80 border-primary/30 focus:border-primary focus:ring-primary/20"
-                                                                        disabled={isUpdating}
-                                                                    />
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => handleHexColorUpdate(selectedRole, selectedRoleHexColor)}
-                                                                        disabled={isUpdating || !selectedRoleHexColor.trim()}
-                                                                        className="font-ocr"
-                                                                    >
-                                                                        Apply
-                                                                    </Button>
-                                                                </div>
-                                                                <div
-                                                                    className="w-10 h-10 rounded border-2 border-primary/30"
-                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) }}
-                                                                />
-                                                            </div>
-                                                            <p className="text-xs text-primary/60 mt-1 font-ocr">
-                                                                Enter a hex color (e.g., #FF5733 or #F73)
-                                                            </p>
-                                                        </div>
-
-                                                        {/* Save/Discard buttons for @everyone role */}
-                                                        {hasUnsavedChanges && (
-                                                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-primary/20">
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={discardRoleChanges}
-                                                                    disabled={isUpdating}
-                                                                    className="text-xs h-7"
-                                                                >
-                                                                    Discard
-                                                                </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={saveRoleChanges}
-                                                                    disabled={isUpdating}
-                                                                    className="text-xs h-7 bg-primary hover:bg-primary/90 text-black"
-                                                                >
-                                                                    {isUpdating ? (
-                                                                        <>
-                                                                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                                                            Saving...
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <Save className="w-3 h-3 mr-1" />
-                                                                            Save Changes
-                                                                        </>
-                                                                    )}
-                                                                </Button>
-                                                            </div>
-                                                        )}
-
-                                                        {hasUnsavedChanges && (
-                                                            <div className="text-xs text-amber-600 bg-amber-50/10 border border-amber-200/50 rounded p-2 flex items-center gap-2">
-                                                                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                                                                You have unsaved changes
-                                                            </div>
-                                                        )}
-
-                                                        {isUpdating && (
-                                                            <div className="flex items-center justify-center gap-2 text-primary/60">
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                                <span className="text-sm font-ocr">Updating color...</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="text-xs font-freecam font-medium text-primary/60 uppercase tracking-wider">
-                                                            Default Permissions (Read-Only)
-                                                        </h3>
-                                                        <Separator className="flex-1 bg-primary/20" />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        {(PermissionDefinitions.filter(perm =>
-                                                            PermissionHelpers.hasPermission(selectedRole.permissions || 0, perm.value)
-                                                        ) as any).map((permission: any) => (
-                                                            <div
-                                                                key={permission.id}
-                                                                className="flex items-center justify-between p-3 rounded-lg border border-primary/20 bg-background/30 opacity-75"
-                                                            >
-                                                                <div className="space-y-1 flex-1">
-                                                                    <Label className="font-ocr font-medium text-foreground">
-                                                                        {permission.name}
-                                                                    </Label>
-                                                                    <p className="text-sm text-primary/60 font-ocr">
-                                                                        {permission.description}
-                                                                    </p>
-                                                                </div>
-                                                                <Switch
-                                                                    checked={true}
-                                                                    disabled={true}
-                                                                />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                {/* Color Management Section for Regular Roles */}
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
-                                                            Role Color
-                                                        </h3>
-                                                        <Separator className="flex-1 bg-primary/20" />
-                                                    </div>
-
-                                                    <div className="space-y-4">
-                                                        <div>
-                                                            <Label className="font-ocr text-primary text-sm">Role Color</Label>
-                                                            <div className="flex items-center gap-3 mt-2">
-                                                                {/* Default Color */}
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <button
-                                                                        className={cn(
-                                                                            "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                                            (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === roleColors[0]
-                                                                                ? "border-primary ring-2 ring-primary/50 scale-105"
-                                                                                : "border-primary/30 hover:border-primary/60"
-                                                                        )}
-                                                                        style={{ backgroundColor: roleColors[0] }}
-                                                                        onClick={() => updateLocalRoleProperty('color', roleColors[0])}
-                                                                        disabled={isUpdating}
-                                                                    />
-                                                                    <span className="text-xs text-primary/60">Default</span>
-                                                                </div>
-
-                                                                {/* Custom Color */}
-                                                                <div className="flex flex-col items-center gap-1">
-                                                                    <div className="relative">
-                                                                        <button
-                                                                            className={cn(
-                                                                                "w-10 h-10 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm flex items-center justify-center",
-                                                                                selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
-                                                                                    ? "border-primary ring-2 ring-primary/50 scale-105"
-                                                                                    : "border-primary/30 hover:border-primary/60 border-dashed"
-                                                                            )}
-                                                                            style={{
-                                                                                backgroundColor: selectedRoleHexColor && isValidHexColor(selectedRoleHexColor) && !roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
-                                                                                    ? formatHexColor(selectedRoleHexColor)
-                                                                                    : "transparent"
-                                                                            }}
-                                                                            onClick={() => {
-                                                                                // Focus the hex input when clicked
-                                                                                const hexInput = document.getElementById('regular-role-hex-input') as HTMLInputElement
-                                                                                if (hexInput) hexInput.focus()
-                                                                            }}
-                                                                            disabled={isUpdating}
-                                                                        >
-                                                                            {!selectedRoleHexColor || !isValidHexColor(selectedRoleHexColor) || roleColors.includes(editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) ? (
-                                                                                <div className="w-6 h-6 bg-gradient-to-br from-red-400 via-yellow-400 via-green-400 via-blue-400 to-purple-400 rounded opacity-60" />
-                                                                            ) : null}
-                                                                        </button>
-                                                                    </div>
-                                                                    <span className="text-xs text-primary/60">Custom</span>
-                                                                </div>
-
-                                                                {/* Color Patches Grid */}
-                                                                <div className="flex-1">
-                                                                    <div className="grid grid-cols-4 gap-2">
-                                                                        {roleColors.slice(1).map((color) => (
-                                                                            <button
-                                                                                key={color}
-                                                                                className={cn(
-                                                                                    "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
-                                                                                    (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === color
-                                                                                        ? "border-primary ring-2 ring-primary/50 scale-105"
-                                                                                        : "border-primary/30 hover:border-primary/60"
-                                                                                )}
-                                                                                style={{ backgroundColor: color }}
-                                                                                onClick={() => updateLocalRoleProperty('color', color)}
-                                                                                disabled={isUpdating}
-                                                                            />
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div>
-                                                            <Label className="font-ocr text-primary text-sm">Custom Hex Color</Label>
-                                                            <div className="flex gap-2 mt-2">
-                                                                <div className="flex-1 flex gap-2">
-                                                                    <Input
-                                                                        id="regular-role-hex-input"
-                                                                        value={selectedRoleHexColor}
-                                                                        onChange={(e) => setSelectedRoleHexColor(e.target.value)}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter' && selectedRoleHexColor.trim()) {
-                                                                                handleHexColorUpdate(selectedRole, selectedRoleHexColor)
-                                                                            }
-                                                                        }}
-                                                                        placeholder="#FF5733"
-                                                                        className="font-mono text-sm bg-background/80 border-primary/30 focus:border-primary focus:ring-primary/20"
-                                                                        disabled={isUpdating}
-                                                                    />
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => handleHexColorUpdate(selectedRole, selectedRoleHexColor)}
-                                                                        disabled={isUpdating || !selectedRoleHexColor.trim()}
-                                                                        className="font-ocr"
-                                                                    >
-                                                                        Apply
-                                                                    </Button>
-                                                                </div>
-                                                                <div
-                                                                    className="w-8 h-8 rounded border-2 border-primary/30"
-                                                                    style={{ backgroundColor: isValidHexColor(selectedRoleHexColor) ? formatHexColor(selectedRoleHexColor) : (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) }}
-                                                                />
-                                                            </div>
-                                                            <p className="text-xs text-primary/60 mt-1 font-ocr">
-                                                                Enter a hex color (e.g., #FF5733 or #F73)
-                                                            </p>
-                                                        </div>
-
-                                                        {isUpdating && (
-                                                            <div className="flex items-center justify-center gap-2 text-primary/60">
-                                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                                <span className="text-sm font-ocr">Updating color...</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Permissions Section */}
-                                                {Object.entries(permissionsByCategory).map(([category, permissions]) => (
-                                                    <div key={category} className="space-y-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
-                                                                {category} Permissions
-                                                            </h3>
-                                                            <Separator className="flex-1 bg-primary/20" />
-                                                        </div>
-                                                        <div className="space-y-2">
-                                                            {permissions.map((permission) => {
-                                                                const currentPermissions = editedRole.permissions ?? selectedRole.permissions ?? 0
-                                                                const hasPermission = PermissionHelpers.hasPermission(
-                                                                    currentPermissions,
-                                                                    permission.value
-                                                                )
-                                                                const isAdminOverride = PermissionHelpers.hasPermission(
-                                                                    currentPermissions,
-                                                                    Permissions.ADMINISTRATOR
-                                                                ) && permission.value !== Permissions.ADMINISTRATOR
-
-                                                                return (
-                                                                    <div
-                                                                        key={permission.id}
-                                                                        className="flex items-center justify-between p-3 rounded-lg border border-primary/20 bg-background/50"
-                                                                    >
-                                                                        <div className="space-y-1 flex-1">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <Label className="font-ocr font-medium text-foreground">
-                                                                                    {permission.name}
-                                                                                </Label>
-                                                                                {isAdminOverride && (
-                                                                                    <Badge variant="secondary" className="text-xs font-ocr bg-yellow-500/10 text-yellow-500 border-yellow-500/30">
-                                                                                        via admin
-                                                                                    </Badge>
-                                                                                )}
-                                                                            </div>
-                                                                            <p className="text-sm text-primary/60 font-ocr">
-                                                                                {permission.description}
-                                                                            </p>
-                                                                        </div>
-                                                                        <Switch
-                                                                            checked={hasPermission || isAdminOverride}
-                                                                            disabled={isUpdating || isAdminOverride}
-                                                                            onCheckedChange={() => togglePermission(permission.value)}
-                                                                        />
-                                                                    </div>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                                }
-                                            </>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="flex-1 flex items-center justify-center">
-                                        <div className="text-center space-y-3">
+                        <Card className="border-primary/10 shadow-md bg-card/30 col-span-3 relative z-10 flex flex-col overflow-scroll p-0">
+                            <CardContent className="relative z-10 flex-1 min-h-0 p-4 md:p-6">
+                                {!selectedRole ? (
+                                    <div className="flex-1 flex items-center justify-center p-6">
+                                        <div className="text-center space-y-2">
                                             <Settings className="w-8 h-8 mx-auto text-primary/30" />
                                             <div>
-                                                <h4 className="font-freecam text-xs uppercase tracking-wide text-primary/60">
-                                                    No Role Selected
-                                                </h4>
-                                                <p className="text-xs text-primary/40 font-ocr mt-1">
-                                                    Click a role to configure permissions
-                                                </p>
+                                                <h4 className="font-freecam text-xs uppercase tracking-wide text-primary/60">No Role Selected</h4>
+                                                <p className="text-xs text-muted-foreground mt-1">Click a role to configure</p>
                                             </div>
                                         </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        {/* Global Settings */}
+                                        <div className="space-y-4">
+                                            {!selectedRole.isDefault && (
+                                                <div className="space-y-3 p-4 md:p-5 bg-card/50 rounded-lg border border-border">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">Role Settings</h3>
+                                                        {hasUnsavedChanges && (
+                                                            <div className="flex items-center gap-2">
+                                                                <Button size="sm" variant="outline" onClick={discardRoleChanges} disabled={isUpdating} className="text-xs h-7">Discard</Button>
+                                                                <Button size="sm" onClick={saveRoleChanges} disabled={isUpdating} className="text-xs h-7 bg-primary hover:bg-primary/90 text-black">
+                                                                    {isUpdating ? (<><Loader2 className="w-3 h-3 mr-1 animate-spin" />Saving...</>) : (<><Save className="w-3 h-3 mr-1" />Save Changes</>)}
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-xs text-primary/80">Role Name</Label>
+                                                        <Input value={editedRole.name ?? selectedRole.name} onChange={(e) => updateLocalRoleProperty('name', e.target.value)} placeholder="Enter role name" className="text-sm mt-1 border-primary/30 focus:border-primary/50 bg-background/50" maxLength={50} disabled={isUpdating} />
+                                                        <p className="text-xs text-primary/60 mt-1">{(editedRole.name ?? selectedRole.name).length}/50 characters</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Color */}
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">Role Color</h3>
+                                                    <Separator className="flex-1 bg-primary/20" />
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-2">
+                                                        {roleColors.map((color) => (
+                                                            <button
+                                                                key={color}
+                                                                className={cn(
+                                                                    "w-8 h-8 rounded-lg border-2 transition-all duration-200 hover:scale-110 shadow-sm",
+                                                                    (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR) === color
+                                                                        ? "border-primary ring-2 ring-primary/50 scale-105"
+                                                                        : "border-primary/30 hover:border-primary/60"
+                                                                )}
+                                                                style={{ backgroundColor: color }}
+                                                                onClick={() => updateLocalRoleProperty('color', color)}
+                                                                disabled={isUpdating}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    {selectedRole.isDefault && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            The @everyone role permissions cannot be modified, but you can change its color.
+                                                        </p>
+                                                    )}
+                                                    {/* Custom Hex Color */}
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs text-primary/80">Custom Hex Color</Label>
+                                                        <div className="flex items-center gap-2">
+                                                            <Input
+                                                                id="role-hex-input"
+                                                                value={selectedRoleHexColor}
+                                                                onChange={(e) => setSelectedRoleHexColor(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && selectedRoleHexColor.trim()) {
+                                                                        handleHexColorUpdate(selectedRole, selectedRoleHexColor)
+                                                                    }
+                                                                }}
+                                                                placeholder="#FF5733"
+                                                                className="font-mono text-xs bg-background/80 border-primary/30 focus:border-primary/50"
+                                                                disabled={isUpdating}
+                                                            />
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleHexColorUpdate(selectedRole, selectedRoleHexColor)}
+                                                                disabled={isUpdating || !selectedRoleHexColor.trim()}
+                                                                className="text-xs"
+                                                            >
+                                                                Apply
+                                                            </Button>
+                                                            <div
+                                                                className="w-8 h-8 rounded border-2 border-primary/30"
+                                                                style={{
+                                                                    backgroundColor: isValidHexColor(selectedRoleHexColor)
+                                                                        ? formatHexColor(selectedRoleHexColor)
+                                                                        : (editedRole.color ?? selectedRole.color ?? Constants.DEFAULT_ROLE_COLOR)
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">Enter a hex color (e.g., #FF5733 or #F73)</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Tabs below settings */}
+                                        <Tabs defaultValue="permissions" className="gap-0">
+                                            <TabsList className="rounded-none w-full bg-transparent">
+                                                <TabsTrigger value="permissions" className="px-4 py-2">Permissions</TabsTrigger>
+                                                <TabsTrigger value="members" className="rounded-tr-lg px-4 py-2">Members</TabsTrigger>
+                                            </TabsList>
+                                            <div className="border-t pt-4">
+                                                <TabsContent value="permissions">
+                                                    {selectedRole.isDefault ? (
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <h3 className="text-xs font-freecam font-medium text-primary/60 uppercase tracking-wider">Default Permissions (Read-Only)</h3>
+                                                                <Separator className="flex-1 bg-primary/20" />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                {(PermissionDefinitions.filter(perm => PermissionHelpers.hasPermission(selectedRole.permissions || 0, perm.value)) as any).map((permission: any) => (
+                                                                    <div key={permission.id} className="flex items-center justify-between p-3 rounded-lg border border-primary/20 bg-background/30 opacity-75">
+                                                                        <div className="space-y-1 flex-1">
+                                                                            <Label className="text-xs font-medium text-foreground">{permission.name}</Label>
+                                                                            <p className="text-xs text-muted-foreground">{permission.description}</p>
+                                                                        </div>
+                                                                        <Switch checked={true} disabled={true} />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-3">
+                                                            {Object.entries(permissionsByCategory).map(([category, permissions]) => (
+                                                                <div key={category} className="space-y-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">{category} Permissions</h3>
+                                                                        <Separator className="flex-1 bg-primary/20" />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        {permissions.map((permission) => {
+                                                                            const currentPermissions = editedRole.permissions ?? selectedRole.permissions ?? 0
+                                                                            const hasPermission = PermissionHelpers.hasPermission(currentPermissions, permission.value)
+                                                                            const isAdminOverride = PermissionHelpers.hasPermission(currentPermissions, Permissions.ADMINISTRATOR) && permission.value !== Permissions.ADMINISTRATOR
+                                                                            return (
+                                                                                <div key={permission.id} className="flex items-center justify-between p-3 rounded-lg border border-primary/20 bg-background/50">
+                                                                                    <div className="space-y-1 flex-1">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Label className="text-xs font-medium text-foreground">{permission.name}</Label>
+                                                                                            {isAdminOverride && (
+                                                                                                <Badge variant="secondary" className="text-[10px] bg-yellow-500/10 text-yellow-600 border-yellow-500/30">via admin</Badge>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <p className="text-xs text-muted-foreground">{permission.description}</p>
+                                                                                    </div>
+                                                                                    <Switch checked={hasPermission || isAdminOverride} disabled={isUpdating || isAdminOverride} onCheckedChange={() => togglePermission(permission.value)} />
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </TabsContent>
+                                                <TabsContent value="members">
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <h3 className="text-xs font-freecam font-medium text-primary uppercase tracking-wider">
+                                                                Members with this role
+                                                            </h3>
+                                                            <Separator className="flex-1 bg-primary/20" />
+                                                            <Badge variant="secondary" className="text-xs">
+                                                                {membersForSelectedRole.length}
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            {membersForSelectedRole.length === 0 ? (
+                                                                <p className="text-xs text-primary/50">No members have this role yet.</p>
+                                                            ) : (
+                                                                membersForSelectedRole.map((m: any) => (
+                                                                    <div key={m.userId} className="flex items-center justify-between p-2 rounded border border-primary/20 bg-background/50">
+                                                                        <div className="text-xs">
+                                                                            {m.profile?.primaryName || m.profile?.displayName || m.userId}
+                                                                        </div>
+                                                                        <Badge variant="outline" className="text-[10px]">{m.userId.slice(0, 6)}…</Badge>
+                                                                    </div>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </TabsContent>
+                                            </div>
+                                        </Tabs>
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
+
+                        {/* Role content moved into tabs above */}
                     </div>
                 </div>
             </DndContext>
@@ -1378,7 +1120,7 @@ function SortableRole({
             ref={setNodeRef}
             style={style}
             className={cn(
-                "flex items-center relative justify-between p-4 rounded-lg border cursor-pointer transition-all duration-200 group hover:shadow-sm",
+                "flex items-center relative justify-between p-0 min-h-10 rounded-lg border cursor-pointer transition-all duration-200 group hover:shadow-sm",
                 isUpdating
                     ? "border-blue-400/50 bg-blue-500/5"
                     : isRecentlySuccessful
@@ -1399,7 +1141,7 @@ function SortableRole({
                 )} />
             )}
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
                 <div
                     {...attributes}
                     {...listeners}
@@ -1417,7 +1159,7 @@ function SortableRole({
                 {/* Role Color Indicator */}
                 <div className="relative">
                     <div
-                        className="w-6 h-6 rounded-full border border-white/20"
+                        className="w-4 h-4 rounded-full border border-white/20"
                         style={{ backgroundColor: role.color || Constants.DEFAULT_ROLE_COLOR }}
                     />
                     {role.isDefault && (
@@ -1430,7 +1172,6 @@ function SortableRole({
                 {/* Role Info Section */}
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
-                        <Icon className="w-4 h-4 text-primary/50" />
                         <span className="font-semibold text-foreground text-sm">{role.name}</span>
                         {isUpdating && (
                             <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
@@ -1447,9 +1188,9 @@ function SortableRole({
                 </div>
 
                 {/* Member Count Badge */}
-                <Badge variant="secondary" className="text-xs">
-                    {role.memberCount || 0} {(role.memberCount || 0) === 1 ? 'member' : 'members'}
-                </Badge>
+                {/* <Badge variant="secondary" className="text-xs">
+                    {role.memberCount || 0} <Users className="w-3 h-3" />
+                </Badge> */}
             </div>
 
             {/* Right Side Actions */}
