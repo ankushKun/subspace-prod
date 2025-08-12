@@ -25,52 +25,44 @@ export default function App() {
     const navigate = useNavigate()
     const { connected, address } = useWallet()
     const { actions: stateActions } = useGlobalState()
-    const { actions: subspaceActions, subspace, profile, servers, profiles, isCreatingProfile } = useSubspace()
+    const { subspace, profile, servers, profiles, isCreatingProfile } = useSubspace()
 
-    // Mobile context
+    // Mobile context: derive layout decisions (overlays, touch sizes)
     const { isMobile, shouldUseOverlays, shouldUseTouchSizes } = useMobileContext()
 
-    // State for nickname setting dialog
+    // Nickname dialog tracks which server to prompt for a nickname on join
     const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false)
     const [nicknameDialogServerId, setNicknameDialogServerId] = useState<string | null>(null)
     const [nicknameDialogServerName, setNicknameDialogServerName] = useState<string>("")
 
-    // State for welcome dialog
+    // Welcome dialog appears after joining a server via invite
     const [welcomeDialogOpen, setWelcomeDialogOpen] = useState(false)
     const [welcomeServerName, setWelcomeServerName] = useState<string>("")
     const [welcomeMemberCount, setWelcomeMemberCount] = useState<number>(0)
     const [welcomeServerLogo, setWelcomeServerLogo] = useState<string | undefined>(undefined)
     const [pendingWelcomeServerId, setPendingWelcomeServerId] = useState<string | null>(null)
 
-    // State to track servers where user clicked "Skip for now"
+    // Servers where the user chose to skip the nickname prompt for this session
     const [skippedServers, setSkippedServers] = useState<Set<string>>(new Set())
 
-    // Ref to track the previous server ID to detect actual server changes
+    // Detect actual server changes to avoid re-triggering one-time effects
     const previousServerIdRef = useRef<string | undefined>(undefined)
-    // Ref to track the previous address to detect address changes (wallet switches)
+    // Detect wallet switches to reset route state to a safe default
     const previousAddressRef = useRef<string | undefined>(undefined)
 
-    // Refs for Messages and DMMessages components to access their input focus methods
+    // Allow programmatic focus of the message composers from this page
     const messagesRef = useRef<MessagesRef>(null)
     const dmMessagesRef = useRef<DMMessagesRef>(null)
 
-    // State for member list visibility
+    // Member list sidebar (desktop) visibility
     const [showMemberList, setShowMemberList] = useState(!isMobile)
 
-    // Mobile member sheet state
+    // Member list as a sheet on mobile overlays
     const [showMemberSheet, setShowMemberSheet] = useState(false)
 
-    // If profile updates fetch servers
-    useEffect(() => {
-        if (profile?.serversJoined) {
-            const serverIds = Object.keys(profile.serversJoined)
-            for (const serverId of serverIds) {
-                subspaceActions.servers.get(serverId).catch(console.error)
-            }
-        }
-    }, [profile?.serversJoined])
+    // Server and DM data hydration is centralized in `DataLoader` (background)
 
-    // Auto-collapse member list on mobile
+    // On mobile, show members as an overlay instead of a fixed sidebar
     useEffect(() => {
         if (shouldUseOverlays) {
             setShowMemberList(false)
@@ -79,7 +71,7 @@ export default function App() {
         }
     }, [shouldUseOverlays])
 
-    // Toggle member list handler
+    // Toggle member list: switches between sidebar (desktop) and sheet (mobile)
     const handleToggleMemberList = () => {
         if (shouldUseOverlays) {
             // On mobile, show the member sheet instead
@@ -90,7 +82,7 @@ export default function App() {
         }
     }
 
-    // Get current mobile view based on URL state
+    // Mobile view selection derived from route state
     const getMobileView = () => {
         if (friendId) return 'messages' // DM conversation
         if (serverId && channelId) return 'messages' // Channel conversation
@@ -102,18 +94,15 @@ export default function App() {
         const previousAddress = previousAddressRef.current
 
         if (address && connected) {
-            // Check if address changed (wallet switch) - navigate away from specific routes
+            // On wallet switch, navigate away from deep routes to avoid stale context
             if (previousAddress && previousAddress !== address) {
                 console.log(`📧 Address changed from ${previousAddress} to ${address}, navigating to app root`)
                 if (serverId || channelId || friendId) {
                     navigate("/app")
                 }
             }
-
-            if (!subspace) return
-            subspaceActions.init()
         } else if (!connected || !address) {
-            // Navigate away from specific routes when wallet disconnects
+            // On disconnect, avoid showing server/channel/DM routes
             if (serverId || channelId || friendId) {
                 navigate("/app")
             }
@@ -129,13 +118,13 @@ export default function App() {
         stateActions.setActiveChannelId(channelId || "")
         stateActions.setActiveFriendId(friendId || "")
 
-        // Only clear skipped servers when the server ID actually changes
+        // Reset the "skipped nickname" cache when switching servers
         if (previousServerIdRef.current !== serverId) {
             setSkippedServers(new Set())
             previousServerIdRef.current = serverId
         }
 
-        // Beautiful navigation logging
+        // Structured navigation logs for easier debugging during development
         console.groupCollapsed(
             '%c🎯 Navigation Update',
             'color: #9C27B0; font-weight: bold; font-size: 12px;'
@@ -145,29 +134,15 @@ export default function App() {
         console.log('%cFriend ID:', 'color: #FF9800; font-weight: bold;', friendId || 'None');
         console.groupEnd();
 
-        // update server and members
-        if (serverId) {
-            subspaceActions.servers.get(serverId).then(() => {
-                subspaceActions.servers.getMembers(serverId).then((memberData) => {
-                    subspaceActions.profile.getBulk(memberData.map((member: any) => member.userId)).then((profiles) => {
-                        subspaceActions.profile.getBulkPrimaryNames(memberData.map((member: any) => member.userId))
-                    })
-                })
-            })
-        }
-
-        // Load DM conversation when friendId changes
-        if (friendId) {
-            subspaceActions.dms.getConversation(friendId).catch(console.error)
-        }
+        // Actual fetching is handled by DataLoader
     }, [serverId, channelId, friendId, subspace])
 
-    // Handle welcome popup from URL parameters
+    // Handle welcome popup via URL parameter set by invite acceptance flow
     useEffect(() => {
         const welcome = searchParams.get('welcome')
 
         if (welcome === 'true' && serverId) {
-            // Get server data from loaded servers
+            // Read server data from state; if missing, defer via pending id
             const currentServer = servers[serverId]
 
             if (currentServer) {
@@ -175,17 +150,17 @@ export default function App() {
                 setWelcomeMemberCount(currentServer.members?.length || currentServer.memberCount || 0)
                 setWelcomeServerLogo(currentServer.logo ? `https://arweave.net/${currentServer.logo}` : undefined)
                 setWelcomeDialogOpen(true)
-                setPendingWelcomeServerId(null) // Clear pending state
+                setPendingWelcomeServerId(null) // clear pending state
 
-                // Remove welcome parameter from URL without triggering navigation
+                // Remove welcome param without navigation to keep history clean
                 const newSearchParams = new URLSearchParams(searchParams)
                 newSearchParams.delete('welcome')
                 setSearchParams(newSearchParams, { replace: true })
             } else {
-                // Server data isn't loaded yet, mark it as pending
+                // Mark pending and clean the URL until data loads
                 setPendingWelcomeServerId(serverId)
 
-                // Remove welcome parameter from URL without triggering navigation
+                // Remove welcome param without navigation to keep history clean
                 const newSearchParams = new URLSearchParams(searchParams)
                 newSearchParams.delete('welcome')
                 setSearchParams(newSearchParams, { replace: true })
@@ -193,7 +168,7 @@ export default function App() {
         }
     }, [searchParams, serverId, servers, setSearchParams])
 
-    // Show welcome popup when server data loads if it was pending
+    // When pending server data becomes available, show the welcome dialog
     useEffect(() => {
         if (pendingWelcomeServerId && servers[pendingWelcomeServerId]) {
             const currentServer = servers[pendingWelcomeServerId]
@@ -202,16 +177,13 @@ export default function App() {
             setWelcomeMemberCount(currentServer.members?.length || currentServer.memberCount || 0)
             setWelcomeServerLogo(currentServer.logo ? `https://arweave.net/${currentServer.logo}` : undefined)
             setWelcomeDialogOpen(true)
-            setPendingWelcomeServerId(null) // Clear pending state
+            setPendingWelcomeServerId(null) // clear pending state
         }
     }, [pendingWelcomeServerId, servers])
 
-    // Check if user needs nickname prompt when server changes
+    // Prompt for nickname when user has no global name and no server nickname
     useEffect(() => {
-        // Don't show nickname prompt if:
-        // - No profile or profile is being created
-        // - No active server
-        // - No wallet address
+        // Do not show when missing prerequisites
         if (!profile || isCreatingProfile || !serverId || !address) {
             // Force close dialog if conditions aren't met
             if (nicknameDialogOpen) {
@@ -223,7 +195,7 @@ export default function App() {
         // Check if user has a primary name
         const hasPrimaryName = profile.primaryName && profile.primaryName.trim() !== ""
 
-        // If user has a primary name, force close dialog and don't show it
+        // If user has a primary name, there is no need to prompt for nickname
         if (hasPrimaryName) {
             if (nicknameDialogOpen) {
                 handleNicknameDialogClose()
@@ -247,7 +219,7 @@ export default function App() {
             }
         }
 
-        // If user has a server nickname, force close the dialog
+        // If a server nickname exists, avoid showing the dialog
         if (hasServerNickname) {
             if (nicknameDialogOpen) {
                 handleNicknameDialogClose()
@@ -258,7 +230,7 @@ export default function App() {
         // Check if user has skipped this server before
         const hasSkippedServer = skippedServers.has(serverId)
 
-        // If user has skipped this server, don't show the dialog
+        // Respect the user's decision to skip for this server
         if (hasSkippedServer) {
             if (nicknameDialogOpen) {
                 handleNicknameDialogClose()
@@ -266,8 +238,7 @@ export default function App() {
             return
         }
 
-        // Show nickname dialog only if user doesn't have primary name and no server nickname
-        // and dialog isn't already open for this server and hasn't been skipped
+        // Show only when required and not already shown for this server
         if (!nicknameDialogOpen || nicknameDialogServerId !== serverId) {
             setNicknameDialogServerId(serverId)
             setNicknameDialogServerName(currentServer?.name || "")
@@ -275,7 +246,7 @@ export default function App() {
         }
     }, [profile, isCreatingProfile, serverId, address, servers, nicknameDialogOpen, nicknameDialogServerId, skippedServers])
 
-    // Global keydown listener to autofocus message input when user starts typing
+    // Global keydown: when not focused in an input, route keystrokes to the active composer
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             // Ignore if any modifier keys are pressed
@@ -283,7 +254,7 @@ export default function App() {
                 return
             }
 
-            // Ignore special keys
+            // Ignore navigation/function keys
             const ignoredKeys = [
                 'Tab', 'Escape', 'Enter', 'Backspace', 'Delete',
                 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
@@ -295,7 +266,7 @@ export default function App() {
                 return
             }
 
-            // Check if any input, textarea, or contenteditable element is currently focused
+            // Skip when the user is already typing in any input/editor
             const activeElement = document.activeElement
             const isInputFocused = activeElement && (
                 activeElement.tagName === 'INPUT' ||
@@ -309,7 +280,7 @@ export default function App() {
                 return
             }
 
-            // Only focus if we're in a chat view (not on welcome screen)
+            // Redirect to the right composer based on route
             if (serverId && channelId && messagesRef.current) {
                 // Focus the server channel message input
                 messagesRef.current.focusInput?.()
@@ -335,7 +306,7 @@ export default function App() {
     }
 
     const handleNicknameDialogSkip = (serverId: string) => {
-        // Add the server to the skipped list
+        // Remember skip for this session only
         setSkippedServers(prev => new Set([...prev, serverId]))
         handleNicknameDialogClose()
     }
@@ -361,7 +332,7 @@ export default function App() {
 
     return (
         <>
-            {subspace && <DataLoader />}
+            <DataLoader />
             <title>{title}</title>
 
             <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">

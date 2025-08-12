@@ -95,7 +95,7 @@ export default defineConfig({
         description: "Subspace is a communication app built on a permanent, censorship resistant and open network. It allows you to chat in online communities without the fear of censorship.",
       }
     }),
-    null
+    process.env.NODE_ENV === "development" ? null : vitePWA
   ],
   resolve: {
     alias: {

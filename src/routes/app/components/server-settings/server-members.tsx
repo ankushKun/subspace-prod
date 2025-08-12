@@ -645,7 +645,13 @@ export default function ServerMembers() {
                                                         {/* Avatar Section */}
                                                         <div className="relative flex-shrink-0">
                                                             <Avatar className="w-12 h-12 lg:w-14 lg:h-14 ring-2 ring-primary/20 group-hover:ring-primary/30 transition-all duration-300">
-                                                                <AvatarImage src={member.avatar} />
+                                                                <AvatarImage src={(() => {
+                                                                    const pfp = member.avatar
+                                                                    const primaryLogo = (profiles as any)?.[member.userId]?.primaryLogo
+                                                                    const pick = pfp || primaryLogo
+                                                                    if (!pick) return undefined
+                                                                    return String(pick).startsWith('http') ? String(pick) : `https://arweave.net/${pick}`
+                                                                })()} />
                                                                 <AvatarFallback className="bg-primary/10 text-primary font-freecam text-lg">
                                                                     {getDisplayName(member)[0].toUpperCase()}
                                                                 </AvatarFallback>

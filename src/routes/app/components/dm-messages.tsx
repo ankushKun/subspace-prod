@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
 import { useMobileContext } from "@/hooks/use-mobile";
+import { useWallet } from "@/hooks/use-wallet";
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,9 @@ import {
     Clock,
     Edit,
     FileIcon, FileQuestion, LinkIcon, Eye,
-    ArrowBigDownDash
+    ArrowBigDownDash,
+    ExternalLink,
+    Shield
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -78,6 +81,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Mention, MentionsInput } from "react-mentions";
 import Markdown from "react-markdown";
+import { mdComponents } from "@/lib/md-components";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
@@ -87,21 +91,23 @@ import alien from "@/assets/subspace/alien-green.svg"
 import ProfilePopover from "./profile-popover"
 import type { DMMessage } from "@subspace-protocol/sdk";
 
-// Helper function to shorten addresses
+// Compact long wallet addresses for readability in tight UI areas
 const shortenAddress = (address: string) => {
     if (!address) return '';
     if (address.length <= 10) return address;
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
-// Helper function to get display name
+// Resolve a human-friendly display name for a userId.
+// Priority: profile primaryName → shortened address.
 const getDisplayName = (userId: string, profiles: Record<string, any>) => {
     const profile = profiles[userId]
     if (profile?.primaryName) return profile.primaryName
     return shortenAddress(userId)
 };
 
-// Enhanced DM Header Component
+// DM header: shows the peer’s identity and a minimal navigation control.
+// Kept intentionally minimal to maximize space for messages.
 const DMHeader = ({ friendId, friendProfile }: {
     friendId: string;
     friendProfile?: any;
@@ -113,7 +119,7 @@ const DMHeader = ({ friendId, friendProfile }: {
 
     return (
         <div className="flex items-center justify-between px-4 py-3 pr-2 border-b border-border/50 bg-background/80 backdrop-blur-sm relative z-10">
-            {/* Left side - Friend info */}
+            {/* Friend identity with profile popover */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
                 <ProfilePopover userId={friendId} side="bottom" align="start">
                     <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
@@ -144,7 +150,7 @@ const DMHeader = ({ friendId, friendProfile }: {
                 </ProfilePopover>
             </div>
 
-            {/* Right side - Action buttons */}
+            {/* Context actions for the DM view (kept lean) */}
             <div className="flex items-center justify-center gap-1 h-full">
                 <div className="w-px h-6 bg-border/50 mx-1" />
 
@@ -162,7 +168,7 @@ const DMHeader = ({ friendId, friendProfile }: {
     )
 }
 
-// Enhanced Message Avatar Component (reused from messages.tsx)
+// Memoized avatar to avoid re-rendering on unrelated state changes.
 const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?: "sm" | "md" | "lg" }) => {
     const profile = useSubspace((state) => state.profiles[authorId])
 
@@ -198,7 +204,7 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
 
 MessageAvatar.displayName = "MessageAvatar"
 
-// Enhanced Message Timestamp Component (reused from messages.tsx)
+// Compact timestamp with rich title tooltip for exact date-time.
 const MessageTimestamp = memo(({ timestamp, showDate = false, className, ...props }: { timestamp: number, showDate?: boolean } & React.HTMLAttributes<HTMLSpanElement>) => {
     const date = new Date(timestamp)
 
@@ -230,7 +236,8 @@ const MessageTimestamp = memo(({ timestamp, showDate = false, className, ...prop
 
 MessageTimestamp.displayName = "MessageTimestamp"
 
-// Enhanced Message Actions Component
+// Hover actions for a single DM. Only the author can edit/delete (client-side UX guard).
+// Server enforces permissions; this simply avoids showing impossible actions.
 const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     message: DMMessage;
     onReply?: () => void;
@@ -239,7 +246,7 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
 }) => {
     const { profile } = useSubspace()
 
-    // Check if current user can edit/delete (only message author)
+    // Show edit/delete only to the author (avoid confusing non-actionable controls)
     const canEdit = message.senderId === profile?.userId
     const canDelete = message.senderId === profile?.userId
 
@@ -275,12 +282,12 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     )
 }
 
-// Enhanced Message Content Component (simplified for DMs)
+// Renders message content and attachments. Avoids <img> in Markdown for safety.
 const MessageContent = memo(({ content, attachments }: {
     content: string;
     attachments?: string | string[];
 }) => {
-    // Parse attachments if they exist
+    // Parse attachments lazily; tolerate invalid JSON by falling back to an empty list.
     const parsedAttachments = useMemo(() => {
         if (!attachments) return []
         try {
@@ -290,12 +297,12 @@ const MessageContent = memo(({ content, attachments }: {
         }
     }, [attachments])
 
-    // emoji only or multiple emojis up to 10
+    // If the message is emoji-only (<=10), render larger for expressive emphasis.
     const isEmojiOnly = /^\p{Emoji}{1,10}$/u.test(content)
 
     return (
         <div className="">
-            {/* Message text */}
+            {/* Text content (Markdown-rendered, images disallowed) */}
             {content && (
                 <div className={cn(
                     "text-sm whitespace-pre-wrap break-words max-w-[80vw] text-left md:max-w-full text-foreground leading-relaxed",
@@ -306,13 +313,14 @@ const MessageContent = memo(({ content, attachments }: {
                         remarkPlugins={[remarkGfm, remarkBreaks]}
                         rehypePlugins={[rehypeKatex]}
                         disallowedElements={["img"]}
+                        components={mdComponents}
                     >
                         {content}
                     </Markdown>
                 </div>
             )}
 
-            {/* Attachments */}
+            {/* Inline attachments; images open in a lightweight dialog viewer */}
             {parsedAttachments.length > 0 && (
                 <div className="space-y-2">
                     {parsedAttachments.map((attachment: string, index: number) => (
@@ -374,7 +382,7 @@ const MessageContent = memo(({ content, attachments }: {
 
 MessageContent.displayName = "MessageContent"
 
-// Date Divider Component (reused from messages.tsx)
+// Day separator to reduce visual noise and help temporal orientation.
 const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
     const formatDate = (ts: number) => {
         const date = new Date(ts)
@@ -411,7 +419,7 @@ const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
 
 DateDivider.displayName = "DateDivider"
 
-// Enhanced Empty DM State
+// Empty state shown when no conversation is selected or loaded.
 const EmptyDMState = memo(({ friendName }: { friendName?: string }) => {
     return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8 relative">
@@ -484,7 +492,7 @@ const DMMessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwn
             onMouseLeave={() => setIsHovered(false)}
         >
             <div className="flex gap-2">
-                {/* Avatar or timestamp spacer */}
+                {/* Avatar when starting a block; otherwise a hoverable timestamp spacer */}
                 <div className="w-12 flex-shrink-0 flex justify-center cursor-pointer h-fit">
                     {showAvatar ? (
                         <ProfilePopover userId={message.senderId} side="right" align="start">
@@ -509,7 +517,7 @@ const DMMessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwn
                                 </span>
                             </ProfilePopover>
                             <MessageTimestamp timestamp={message.timestamp} showDate={new Date(message.timestamp).toDateString() !== new Date().toDateString()} />
-                            {/* Note: DMMessage doesn't have edited field in current type, but we can add it later */}
+                            {/* DM types currently lack an edited flag; consider adding when server supports edits */}
                         </div>
                     )}
 
@@ -520,7 +528,7 @@ const DMMessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwn
                 </div>
             </div>
 
-            {/* Message actions */}
+            {/* Hover-revealed controls to keep the layout clean */}
             {isHovered && (
                 <MessageActions
                     message={message}
@@ -535,7 +543,7 @@ const DMMessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwn
 
 DMMessageItem.displayName = "DMMessageItem"
 
-// Simple DM Input Component
+// DM input: exposes focus helpers to parent and optimizes for desktop typing flow.
 interface DMMessageInputRef {
     focus: () => void;
     blur: () => void;
@@ -560,10 +568,11 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
     const fileInputRef = useRef<HTMLInputElement>(null)
     const isMobile = useIsMobile()
 
-    // Expose focus and blur methods to parent component
+    // Imperative focus API so parent views can capture keystrokes and focus this input.
     React.useImperativeHandle(ref, () => ({
         focus: () => {
             if (isMobile) return
+            // Delay allows the DOM to settle before focusing to avoid scroll jank
             setTimeout(() => {
                 textareaRef.current?.focus()
             }, 100)
@@ -571,7 +580,7 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
         focusAndInsertText: (text: string) => {
             if (isMobile) return
             setTimeout(() => {
-                // Add the text to the current message
+                // Append text at the end to support quick reply shortcuts
                 setMessage(prev => prev + text)
                 textareaRef.current?.focus()
             }, 50)
@@ -582,13 +591,13 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
     }))
 
     const handleSend = async () => {
-        if ((!message.trim() && attachments.length === 0) || isSending) return
+        if ((!message.trim() && attachments.length === 0) || isSending) return // no-ops for empty or in-flight
 
         setIsSending(true)
         try {
             await onSendMessage(message.trim(), attachments)
-            setMessage("") // Clear input after sending
-            setAttachments([]) // Clear attachments
+            setMessage("") // Reset input after sending
+            setAttachments([]) // Reset attachments
         } catch (error) {
             console.error("Error sending message:", error)
             toast.error("Failed to send message")
@@ -619,36 +628,38 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
 
     return (
         <div className="backdrop-blur-sm">
-            {/* Attachments preview */}
-            {attachments.length > 0 && (
-                <div className="mx-4 mb-3 p-2 border border-border rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Paperclip className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">
-                            {attachments.length} attachment{attachments.length > 1 ? 's' : ''}
-                        </span>
+            {/* Pending attachments preview (pre-upload) */}
+            {
+                attachments.length > 0 && (
+                    <div className="mx-4 mb-3 p-2 border border-border rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Paperclip className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                                {attachments.length} attachment{attachments.length > 1 ? 's' : ''}
+                            </span>
+                        </div>
+                        <div className="space-y-1">
+                            {attachments.map((attachment, index) => (
+                                <div key={index} className="flex items-center gap-2 text-xs">
+                                    <FileIcon className="w-3 h-3 text-muted-foreground" />
+                                    <span className="truncate flex-1">{attachment}</span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-4 w-4 p-0"
+                                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className="space-y-1">
-                        {attachments.map((attachment, index) => (
-                            <div key={index} className="flex items-center gap-2 text-xs">
-                                <FileIcon className="w-3 h-3 text-muted-foreground" />
-                                <span className="truncate flex-1">{attachment}</span>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-4 w-4 p-0"
-                                    onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
-                                >
-                                    <Trash2 className="w-3 h-3" />
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                )
+            }
 
-            {/* Message Input */}
+            {/* Core input row: upload, textarea, send */}
             <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="p-4">
                 <div className="flex items-end border gap-0.5 rounded p-0.5">
                     {/* File upload button */}
@@ -693,7 +704,7 @@ const DMMessageInput = React.forwardRef<DMMessageInputRef, DMMessageInputProps>(
                     </Button>
                 </div>
 
-                {/* Hidden file input */}
+                {/* Hidden file input triggers OS file picker */}
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -727,12 +738,10 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
     className?: string;
 }>(({ className }, ref) => {
     const { activeFriendId } = useGlobalState();
-    const { friends, dmConversations, profile, profiles, actions, subspace } = useSubspace();
+    const { friends, dmConversations, profile, profiles, actions, subspace, loadingDMs } = useSubspace();
     const { shouldUseOverlays } = useMobileContext();
 
-    // State
-    const [messages, setMessages] = useState<DMMessage[]>([]);
-    const [loading, setLoading] = useState(false);
+    // Messages are read directly from the store (see workspace rule: UI reads state directly)
     const [replyingTo, setReplyingTo] = useState<DMMessage | null>(null);
     const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
 
@@ -740,9 +749,8 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<DMMessageInputRef>(null);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Expose focusInput method to parent component
+    // Allow parent page to focus or prefill this input on global keystrokes
     React.useImperativeHandle(ref, () => ({
         focusInput: () => {
             inputRef.current?.focus();
@@ -752,14 +760,19 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
         }
     }));
 
-    // State for scroll position tracking
+    // Track whether the viewport is near the bottom to control auto-scroll behavior
     const [isAtBottom, setIsAtBottom] = useState(true);
 
     // Get current friend and conversation
     const friend = activeFriendId ? friends[activeFriendId] : null;
     const conversation = activeFriendId ? dmConversations[activeFriendId] : null;
+    const messagesList = useMemo(() => {
+        const map = conversation?.messages || {};
+        return Object.values(map).sort((a: DMMessage, b: DMMessage) => a.timestamp - b.timestamp);
+    }, [conversation?.messages]);
+    const isLoading = !!(activeFriendId && loadingDMs.has(activeFriendId));
 
-    // Helper function to check if two timestamps are on the same day
+    // Grouping helper to determine when to show date dividers
     const isSameDay = (timestamp1: number, timestamp2: number) => {
         const date1 = new Date(timestamp1)
         const date2 = new Date(timestamp2)
@@ -768,66 +781,37 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
             date1.getDate() === date2.getDate()
     }
 
-    // Load messages when friend changes
+    // When the active DM changes, reset scroll and focus input.
+    // Actual fetching is centralized inside DataLoader.
     useEffect(() => {
         if (!activeFriendId) {
-            setMessages([]);
             setIsAtBottom(true);
             return;
         }
 
-        // Reset scroll position when switching conversations
+        // Reset scroll state when switching conversations
         setIsAtBottom(true);
 
-        // Autofocus the message input when friend changes
+        // Nudge focus to the input for faster typing
         setTimeout(() => {
             inputRef.current?.focus();
         }, 150);
 
-        // Load messages for this conversation
-        setMessages([]);
-        loadMessages(true);
+        // Fetching is centralized in DataLoader
     }, [activeFriendId]);
 
-    // Load messages when subspace becomes available
-    useEffect(() => {
-        if (subspace && activeFriendId && messages.length === 0) {
-            loadMessages(true); // Show loading state
-        }
-    }, [subspace, activeFriendId]);
 
-    // Auto-refresh messages every 2 seconds when conversation is active
-    useEffect(() => {
-        // Clear any existing interval
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
 
-        // Only start auto-refresh if we have an active friend and subspace is ready
-        if (subspace && activeFriendId) {
-            intervalRef.current = setInterval(() => {
-                loadMessages(false); // Background refresh, no loading state
-            }, 2000);
-        }
+    // Fetching/polling is centralized in DataLoader
 
-        // Cleanup on unmount or friend change
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        };
-    }, [subspace, activeFriendId]);
-
-    // Scroll event listener to track if user is at bottom
+    // Observe scroll position to avoid fighting the user when they’re reading history
     useEffect(() => {
         const container = messagesContainerRef.current;
         if (!container) return;
 
         const handleScroll = () => {
             const { scrollTop, scrollHeight, clientHeight } = container;
-            const threshold = 100; // pixels from bottom
+            const threshold = 100; // consider "at bottom" within 100px to reduce jitter
             const atBottom = scrollHeight - scrollTop - clientHeight <= threshold;
             setIsAtBottom(atBottom);
         };
@@ -840,9 +824,9 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
         };
     }, []);
 
-    // Auto-scroll to bottom when new messages arrive (only if already at bottom)
+    // Auto-scroll only when the user is already near the bottom to prevent context loss
     useEffect(() => {
-        if (isAtBottom && messages.length > 0) {
+        if (isAtBottom && messagesList.length > 0) {
             const timeoutId = setTimeout(() => {
                 const container = messagesContainerRef.current;
                 if (container && isAtBottom) {
@@ -858,43 +842,9 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
 
             return () => clearTimeout(timeoutId);
         }
-    }, [messages]);
+    }, [messagesList]);
 
-    const loadMessages = async (showLoadingState: boolean = true) => {
-        if (!activeFriendId || !subspace) return;
-
-        if (showLoadingState) {
-            setLoading(true);
-        }
-
-        try {
-            const messages = await actions.dms.getMessages(activeFriendId, 50);
-
-            if (messages && messages.length > 0) {
-                setMessages(messages);
-
-                // Scroll to bottom on initial load
-                if (showLoadingState) {
-                    setTimeout(() => {
-                        scrollToBottom();
-                        setTimeout(() => setIsAtBottom(true), 100);
-                    }, 100);
-                }
-            } else {
-                setMessages([]);
-            }
-        } catch (error) {
-            console.error("Failed to load DM messages:", error);
-            if (showLoadingState) {
-                toast.error("Failed to load messages");
-            }
-            setMessages([]);
-        } finally {
-            if (showLoadingState) {
-                setLoading(false);
-            }
-        }
-    };
+    // Loading and refreshing are centralized in DataLoader
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -911,7 +861,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
 
             if (success) {
                 setReplyingTo(null);
-                // Always scroll to bottom when user sends a message
+                // Scroll to bottom after sending so the user sees their message immediately
                 setTimeout(() => {
                     scrollToBottom();
                     setTimeout(() => setIsAtBottom(true), 100);
@@ -950,8 +900,6 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
         try {
             const success = await actions.dms.deleteMessage(activeFriendId, messageId);
             if (success) {
-                // Remove message from local state
-                setMessages(prev => prev.filter(m => m.id !== messageId));
                 toast.success("Message deleted");
             } else {
                 toast.error("Failed to delete message");
@@ -963,7 +911,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
     };
 
     const handleReply = (messageId: string) => {
-        const message = messages.find(m => m.id === messageId);
+        const message = messagesList.find(m => m.id === messageId);
         if (message) {
             setReplyingTo(message);
             setEditingMessage(null);
@@ -977,7 +925,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
         inputRef.current?.focus();
     };
 
-    // Check if no friend is selected
+    // Empty shell when no friend is selected
     if (!activeFriendId) {
         return (
             <div className={cn(
@@ -990,7 +938,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
         );
     }
 
-    // Show initialization state when subspace is not ready
+    // Show connection initialization status instead of rendering an empty timeline
     if (!subspace) {
         return (
             <div className={cn(
@@ -1016,7 +964,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
             "bg-gradient-to-b from-background via-background/98 to-background/95",
             className
         )}>
-            {/* DM Header - Hidden on mobile since we use MobileHeader */}
+            {/* DM Header - Hidden on mobile (a dedicated MobileHeader exists) */}
             {!shouldUseOverlays && (
                 <DMHeader
                     friendId={activeFriendId}
@@ -1024,12 +972,12 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
                 />
             )}
 
-            {/* Messages container */}
+            {/* Scrollable message timeline */}
             <div
                 ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40 relative"
             >
-                {loading && messages.length === 0 ? (
+                {isLoading && messagesList.length === 0 ? (
                     <div className="pt-6 mb-0.5">
                         {Array.from({ length: 15 }, (_, index) => (
                             <div key={`skeleton-${index}`} className="group relative hover:bg-accent/30 transition-colors duration-150 pt-3 pb-1 px-4">
@@ -1052,24 +1000,24 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
                         ))}
                         <div ref={messagesEndRef} />
                     </div>
-                ) : messages.length === 0 ? (
+                ) : messagesList.length === 0 ? (
                     <EmptyDMState friendName={getDisplayName(activeFriendId, profiles)} />
                 ) : (
                     <div className="pt-6">
-                        {messages.map((message, index) => {
-                            const prevMessage = messages[index - 1]
+                        {messagesList.map((message, index) => {
+                            const prevMessage = messagesList[index - 1]
                             const shouldShowDateDivider = index === 0 || (prevMessage && !isSameDay(prevMessage.timestamp, message.timestamp))
-                            const shouldShowAvatar = index === 0 || shouldShowDateDivider || messages[index - 1]?.senderId !== message.senderId
-                            const isGrouped = index > 0 && !shouldShowDateDivider && messages[index - 1]?.senderId === message.senderId
+                            const shouldShowAvatar = index === 0 || shouldShowDateDivider || messagesList[index - 1]?.senderId !== message.senderId
+                            const isGrouped = index > 0 && !shouldShowDateDivider && messagesList[index - 1]?.senderId === message.senderId
 
                             return (
                                 <React.Fragment key={message.id}>
-                                    {/* Date divider */}
+                                    {/* Insert a date divider when the calendar day changes */}
                                     {shouldShowDateDivider && (
                                         <DateDivider timestamp={message.timestamp} />
                                     )}
 
-                                    {/* Message */}
+                                    {/* Individual message */}
                                     <div data-message-id={message.id}>
                                         <DMMessageItem
                                             message={message}
@@ -1089,8 +1037,8 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
                     </div>
                 )}
 
-                {/* Scroll to bottom button */}
-                {!isAtBottom && messages.length > 0 && (
+                {/* Quick jump to the latest messages when the user has scrolled up */}
+                {!isAtBottom && messagesList.length > 0 && (
                     <div className="fixed bottom-20 mx-auto w-12 z-10">
                         <TooltipProvider>
                             <Tooltip>
@@ -1116,7 +1064,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
                 )}
             </div>
 
-            {/* Message Input */}
+            {/* Composer */}
             <DMMessageInput
                 ref={inputRef}
                 onSendMessage={sendMessage}

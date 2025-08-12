@@ -80,6 +80,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useMobileContext } from "@/hooks/use-mobile";
 import { Mention, MentionsInput } from "react-mentions";
 import Markdown from "react-markdown";
+import { mdComponents } from "@/lib/md-components";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeKatex from "rehype-katex";
@@ -105,31 +106,32 @@ interface Message {
     replyToMessage?: Message;
 }
 
-// Helper function to shorten addresses
+// Compact long wallet addresses to keep author lines visually tidy
 const shortenAddress = (address: string) => {
     if (!address) return '';
     if (address.length <= 10) return address;
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
-// Helper function to get display name with priority: server nickname → primary name → shortened address
+// Resolve a human-readable name for a user in the context of a server.
+// Priority: server nickname → profile primaryName → shortened address.
 const getDisplayName = (userId: string, profiles: Record<string, any>, activeServerId?: string, servers?: Record<string, any>) => {
-    // Priority 1: Server nickname (if in an active server)
+    // Priority 1: server-specific nickname
     if (activeServerId && servers?.[activeServerId]) {
         const server = servers[activeServerId]
         const member = server.members?.find((m: any) => m.userId === userId)
         if (member?.nickname) return member.nickname
     }
 
-    // Priority 2: Primary name
+    // Priority 2: global profile primaryName
     const profile = profiles[userId]
     if (profile?.primaryName) return profile.primaryName
 
-    // Priority 3: Shortened wallet address
+    // Priority 3: fallback to shortened address
     return shortenAddress(userId)
 };
 
-// Helper function to get user's highest priority role color
+// Pick the highest-priority role color for a user in the active server, if any.
 const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Record<string, Server>) => {
     if (!activeServerId || !servers?.[activeServerId]) return undefined
 
@@ -145,14 +147,14 @@ const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Rec
         .filter((role: any) => member.roles.includes(role.roleId))
         .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Higher orderId = higher priority
 
-    // Find the highest priority role that has a non-default color
+    // Select the first role in priority order that has a non-default color
     const defaultColor = Constants.DEFAULT_ROLE_COLOR
     const roleWithColor = memberRoles.find((role: any) => role.color && role.color !== defaultColor)
 
     return roleWithColor?.color || undefined
 };
 
-// Enhanced Channel Header Component
+// Channel header: shows channel identity and toggles the member list on larger screens.
 const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleMemberList, showMemberList }: {
     channelName?: string;
     channelDescription?: string;
@@ -166,7 +168,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
 
     return (
         <div className="flex items-center justify-between px-4 py-3 pr-2 border-b border-border/50 bg-background/80 backdrop-blur-sm relative z-10">
-            {/* Left side - Channel info */}
+            {/* Channel identity */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                     <Hash className="w-5 h-5 text-muted-foreground flex-shrink-0" />
@@ -185,7 +187,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
                 )}
             </div>
 
-            {/* Right side - Action buttons */}
+            {/* Actions (member list toggle for servers) */}
             <div className="flex items-center justify-center gap-1 h-full">
                 <div className="w-px h-6 bg-border/50 mx-1" />
 
@@ -210,7 +212,7 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
     )
 }
 
-// Enhanced Message Avatar Component
+// Memoized avatar to minimize re-renders when only message data changes.
 const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?: "sm" | "md" | "lg" }) => {
     const profile = useSubspace((state) => state.profiles[authorId])
 
@@ -246,7 +248,7 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
 
 MessageAvatar.displayName = "MessageAvatar"
 
-// Enhanced Message Timestamp Component
+// Small timestamp that shows full details on hover via title.
 const MessageTimestamp = memo(({ timestamp, showDate = false, className, ...props }: { timestamp: number, showDate?: boolean } & React.HTMLAttributes<HTMLSpanElement>) => {
     const date = new Date(timestamp)
 
@@ -280,7 +282,7 @@ const MessageTimestamp = memo(({ timestamp, showDate = false, className, ...prop
 
 MessageTimestamp.displayName = "MessageTimestamp"
 
-// Reply Preview Component
+// Compact preview of the message being replied to with quick jump support.
 const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: React.HTMLAttributes<HTMLDivElement> & {
     replyToMessage: Message['replyToMessage'];
     onJumpToMessage?: (messageId: string) => void;
@@ -304,7 +306,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
     const authorProfile = profiles[replyToMessage.authorId]
     const roleColor = getUserRoleColor(replyToMessage.authorId, activeServerId, servers)
 
-    // Truncate content for preview
+    // Trim content to keep the reply line succinct
     const previewContent = replyToMessage ? replyToMessage.content?.length > 50
         ? replyToMessage.content.substring(0, 50) + "..."
         : replyToMessage.content : "..."
@@ -319,7 +321,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
         >
             <CornerLeftDown className="w-3 h-3 text-muted-foreground/50 group-hover/reply:text-primary/70 mt-0.5 flex-shrink-0 transition-colors" />
             <div className="flex items-center gap-2 min-w-0 flex-1">
-                {/* Small avatar */}
+                {/* Tiny avatar for reply context */}
                 <ProfilePopover userId={replyToMessage.authorId} side="bottom" align="start">
                     <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
                         {authorProfile?.pfp ? (
@@ -336,7 +338,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
                     </div>
                 </ProfilePopover>
 
-                {/* Author name and content preview */}
+                {/* Author and preview snippet */}
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     <ProfilePopover userId={replyToMessage.authorId} side="bottom" align="start">
                         <span
@@ -368,7 +370,7 @@ interface MessageItemProps {
     onJumpToMessage?: (messageId: string) => void;
 }
 
-// Enhanced Message Actions Component
+// Hover actions for server messages. Only the author sees edit/delete to reduce noise.
 const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     message: Message;
     onReply?: () => void;
@@ -378,13 +380,13 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     const { profile } = useSubspace()
     const { shouldUseTouchSizes } = useMobileContext()
 
-    // Check if current user can edit (only message author)
+    // Author-only edit for clarity; server enforces actual permissions
     const canEdit = message.authorId === profile?.userId
 
-    // Check if current user can delete (message author for now)
+    // Author-only delete (UX); actual enforcement is server-side
     const canDelete = message.authorId === profile?.userId
 
-    // Use larger buttons on mobile/touch devices
+    // Larger hit targets on touch devices
     const buttonSize = shouldUseTouchSizes ? "h-10 w-10" : "h-8 w-8"
 
     function copyFingerprint() {
@@ -393,7 +395,7 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     }
 
     function handleDelete() {
-        // Show confirmation toast with action buttons
+        // Confirmation toast to prevent accidental destructive actions
         toast("Are you sure you want to delete this message?", {
             description: "This action cannot be undone.",
             action: {
@@ -444,7 +446,7 @@ const MessageActions = ({ message, onReply, onEdit, onDelete }: {
     )
 }
 
-// Enhanced Message Content Component
+// Render Markdown content and inline attachments. Images open in dialog; Markdown images are disabled.
 const MessageContent = memo(({ content, attachments, activeServerId, servers }: {
     content: string;
     attachments?: string | string[];
@@ -454,7 +456,7 @@ const MessageContent = memo(({ content, attachments, activeServerId, servers }: 
     const { actions } = useGlobalState();
     const navigate = useNavigate();
 
-    // Parse attachments if they exist
+    // Tolerant parsing: attachments may be stringified or already an array
     const parsedAttachments = useMemo(() => {
         if (!attachments) return []
         try {
@@ -464,228 +466,124 @@ const MessageContent = memo(({ content, attachments, activeServerId, servers }: 
         }
     }, [attachments])
 
-    // Process content and extract mentions locally for this message
+    // Extract mentions and encode placeholders so global Markdown renderer can attach behaviors
     const { processedContent, mentions } = useMemo(() => {
         const localMentions: { type: 'user' | 'channel'; display: string; id: string; }[] = [];
         let processedContent = content;
 
-        // Extract and store user mentions: @[Display Name](userId)
+        // User mentions in the new format: @[Display Name](userId)
         const userMentionRegex = /@\[([^\]]+)\]\(([A-Za-z0-9_-]+)\)/g;
         processedContent = processedContent.replace(userMentionRegex, (match, display, id) => {
-            const index = localMentions.length;
             localMentions.push({ type: 'user', display, id });
-            return `[${display}](#__user_mention_${index}__)`;
+            // Encode actual userId in the placeholder so the global markdown renderer can open ProfilePopover
+            return `[${display}](#__user_mention_${id}__)`;
         });
 
-        // Extract and store channel mentions: #[Display Name](channelId)
+        // Channel mentions in the new format: #[Display Name](channelId)
         const channelMentionRegex = /#\[([^\]]+)\]\(([0-9]+)\)/g;
         processedContent = processedContent.replace(channelMentionRegex, (match, display, id) => {
-            const index = localMentions.length;
             localMentions.push({ type: 'channel', display, id });
-            return `[${display}](#__channel_mention_${index}__)`;
+            // Encode actual channelId in the placeholder so the global markdown renderer can navigate
+            return `[${display}](#__channel_mention_${id}__)`;
         });
 
-        // Also handle the expected format for backward compatibility
+        // Backward compatibility for legacy formats: <@userId> and <#channelId>
         const expectedMentionRegex = /<@([A-Za-z0-9_-]+)>/g;
         const expectedChannelRegex = /<#([0-9]+)>/g;
 
         processedContent = processedContent.replace(expectedMentionRegex, (match, id) => {
-            const index = localMentions.length;
             localMentions.push({ type: 'user', display: id, id });
-            return `[${id}](#__user_mention_${index}__)`;
+            return `[${id}](#__user_mention_${id}__)`;
         });
 
         processedContent = processedContent.replace(expectedChannelRegex, (match, id) => {
-            const index = localMentions.length;
             localMentions.push({ type: 'channel', display: id, id });
-            return `[${id}](#__channel_mention_${index}__)`;
+            return `[${id}](#__channel_mention_${id}__)`;
         });
 
         return { processedContent, mentions: localMentions };
     }, [content]);
 
     // Markdown components for enhanced rendering
-    const mdComponents = useMemo(() => ({
-        // Links and mentions
-        a: ({ node, ...props }: any) => {
-            const href = props.href;
-            const children = props.children;
+    // const mdComponentsLocal = useMemo(() => ({
+    //     ...mdComponents,
+    //     // Links and mentions
+    //     a: ({ node, ...props }: any) => {
+    //         const href = props.href;
+    //         const children = props.children;
 
-            // Handle user mention placeholders
-            if (href?.startsWith('#__user_mention_')) {
-                const index = parseInt(href.replace('#__user_mention_', '').replace('__', ''));
-                const mention = mentions[index];
-                if (!mention) return <>{children}</>;
+    //         // Handle user mention placeholders
+    //         if (href?.startsWith('#__user_mention_')) {
+    //             const index = parseInt(href.replace('#__user_mention_', '').replace('__', ''));
+    //             const mention = mentions[index];
+    //             if (!mention) return <>{children}</>;
 
-                // Get role color for the mentioned user
-                const roleColor = getUserRoleColor(mention.id, activeServerId, servers);
+    //             // Get role color for the mentioned user
+    //             const roleColor = getUserRoleColor(mention.id, activeServerId, servers);
 
-                return (
-                    <ProfilePopover userId={mention.id} side="bottom" align="center">
-                        <span
-                            className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium hover:opacity-80 transition-all duration-150 rounded-sm cursor-pointer"
-                            style={{
-                                color: roleColor || 'hsl(var(--primary))',
-                                backgroundColor: roleColor ? `${roleColor}33` : 'hsl(var(--primary) / 0.2)'
-                            }}
-                        >
-                            @{mention.display}
-                        </span>
-                    </ProfilePopover>
-                );
-            }
+    //             return (
+    //                 <ProfilePopover userId={mention.id} side="bottom" align="center">
+    //                     <span
+    //                         className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium hover:opacity-80 transition-all duration-150 rounded-sm cursor-pointer"
+    //                         style={{
+    //                             color: roleColor || 'hsl(var(--primary))',
+    //                             backgroundColor: roleColor ? `${roleColor}33` : 'hsl(var(--primary) / 0.2)'
+    //                         }}
+    //                     >
+    //                         @{mention.display}
+    //                     </span>
+    //                 </ProfilePopover>
+    //             );
+    //         }
 
-            // Handle channel mention placeholders
-            if (href?.startsWith('#__channel_mention_')) {
-                const index = parseInt(href.replace('#__channel_mention_', '').replace('__', ''));
-                const mention = mentions[index];
-                if (!mention) return <>{children}</>;
+    //         // Handle channel mention placeholders
+    //         if (href?.startsWith('#__channel_mention_')) {
+    //             const index = parseInt(href.replace('#__channel_mention_', '').replace('__', ''));
+    //             const mention = mentions[index];
+    //             if (!mention) return <>{children}</>;
 
-                const handleChannelClick = (e: React.MouseEvent) => {
-                    e.preventDefault();
-                    // Get current server from global state
-                    const { activeServerId } = useGlobalState.getState();
-                    if (activeServerId) {
-                        // Navigate to the channel
-                        navigate(`/app/${activeServerId}/${mention.id}`);
-                    }
-                };
+    //             const handleChannelClick = (e: React.MouseEvent) => {
+    //                 e.preventDefault();
+    //                 // Get current server from global state
+    //                 const { activeServerId } = useGlobalState.getState();
+    //                 if (activeServerId) {
+    //                     // Navigate to the channel
+    //                     navigate(`/app/${activeServerId}/${mention.id}`);
+    //                 }
+    //             };
 
-                return (
-                    <span
-                        className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-150 rounded-sm cursor-pointer"
-                        onClick={handleChannelClick}
-                    >
-                        #{mention.display}
-                    </span>
-                );
-            }
+    //             return (
+    //                 <span
+    //                     className="inline-flex items-center px-1 py-0.5 mx-0.5 text-sm font-medium text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-150 rounded-sm cursor-pointer"
+    //                     onClick={handleChannelClick}
+    //                 >
+    //                     #{mention.display}
+    //                 </span>
+    //             );
+    //         }
 
-            // Handle server invite links
-            // example: https://subspace.ar.io/#/invite/[43-char-server-id]
-            if (href?.includes('subspace.ar.io/#/invite')) {
-                const serverId = href.split('/')[5]
-                return <InvitePreview serverId={serverId} href={href} />
+    //         // Handle server invite links
+    //         // example: https://subspace.ar.io/#/invite/[43-char-server-id]
+    //         if (href?.includes('subspace.ar.io/#/invite')) {
+    //             const serverId = href.split('/')[5]
+    //             return <InvitePreview serverId={serverId} href={href} />
 
-            }
+    //         }
 
-            // Handle regular links
-            return (
-                <a
-                    {...props}
-                    className="text-blue-500 hover:underline cursor-pointer transition-colors"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    {children}
-                </a>
-            );
-        },
+    //         // Handle regular links
+    //         const A = mdComponents.a as any;
+    //         return A ? <A {...props}>{children}</A> : (
+    //             <a {...props}>{children}</a>
+    //         );
+    //     },
+    // }), [mentions, navigate]);
 
-        // Text formatting
-        strong: ({ node, ...props }: any) => (
-            <strong className="font-bold text-foreground" {...props} />
-        ),
-        em: ({ node, ...props }: any) => (
-            <em className="italic text-foreground" {...props} />
-        ),
-        del: ({ node, ...props }: any) => (
-            <del className="line-through text-muted-foreground" {...props} />
-        ),
-
-        // Code blocks and inline code
-        code: ({ node, inline, ...props }: any) => (
-            inline ? (
-                <code
-                    className="bg-muted/50 border border-border/50 text-foreground px-1.5 py-0.5 rounded text-sm font-mono"
-                    {...props}
-                />
-            ) : (
-                <code
-                    className="block bg-muted/50 border border-border/50 text-foreground p-3 rounded-md text-sm font-mono whitespace-pre-wrap overflow-x-auto"
-                    {...props}
-                />
-            )
-        ),
-        pre: ({ node, ...props }: any) => (
-            <pre className="bg-muted/50 border border-border/50 text-foreground p-3 rounded-md text-sm font-mono whitespace-pre-wrap overflow-x-auto my-2" {...props} />
-        ),
-
-        // Headers
-        h1: ({ node, ...props }: any) => (
-            <h1 className="text-2xl font-bold text-foreground mb-2 mt-4 first:mt-0" {...props} />
-        ),
-        h2: ({ node, ...props }: any) => (
-            <h2 className="text-xl font-bold text-foreground mb-2 mt-3 first:mt-0" {...props} />
-        ),
-        h3: ({ node, ...props }: any) => (
-            <h3 className="text-lg font-semibold text-foreground mb-1 mt-2 first:mt-0" {...props} />
-        ),
-        h4: ({ node, ...props }: any) => (
-            <h4 className="text-base font-semibold text-foreground mb-1 mt-2 first:mt-0" {...props} />
-        ),
-        h5: ({ node, ...props }: any) => (
-            <h5 className="text-sm font-semibold text-foreground mb-1 mt-1 first:mt-0" {...props} />
-        ),
-        h6: ({ node, ...props }: any) => (
-            <h6 className="text-sm font-medium text-muted-foreground mb-1 mt-1 first:mt-0" {...props} />
-        ),
-
-        // Lists
-        ul: ({ node, ...props }: any) => (
-            <ul className="list-disc list-inside space-y-1 my-2 text-foreground ml-4" {...props} />
-        ),
-        ol: ({ node, ...props }: any) => (
-            <ol className="list-decimal list-inside space-y-1 my-2 text-foreground ml-4" {...props} />
-        ),
-        li: ({ node, ...props }: any) => (
-            <li className="text-foreground" {...props} />
-        ),
-
-        // Blockquotes
-        blockquote: ({ node, ...props }: any) => (
-            <blockquote className="border-l-4 border-muted-foreground/30 pl-4 py-2 my-2 bg-muted/30 text-muted-foreground italic rounded-r" {...props} />
-        ),
-
-        // Tables
-        table: ({ node, ...props }: any) => (
-            <div className="overflow-x-auto my-2">
-                <table className="min-w-full border border-border rounded-md" {...props} />
-            </div>
-        ),
-        thead: ({ node, ...props }: any) => (
-            <thead className="bg-muted/50" {...props} />
-        ),
-        tbody: ({ node, ...props }: any) => (
-            <tbody {...props} />
-        ),
-        tr: ({ node, ...props }: any) => (
-            <tr className="border-b border-border" {...props} />
-        ),
-        th: ({ node, ...props }: any) => (
-            <th className="px-3 py-2 text-left font-semibold text-foreground border-r border-border last:border-r-0" {...props} />
-        ),
-        td: ({ node, ...props }: any) => (
-            <td className="px-3 py-2 text-foreground border-r border-border last:border-r-0" {...props} />
-        ),
-
-        // Horizontal rule
-        hr: ({ node, ...props }: any) => (
-            <hr className="border-t border-border my-4" {...props} />
-        ),
-
-        // Paragraphs
-        p: ({ node, ...props }: any) => (
-            <p className="text-foreground leading-relaxed mb-2 last:mb-0" {...props} />
-        ),
-    }), [mentions, navigate]);
-
-    // emoji only or multiple emojis up to 10
+    // Emoji-only up to length 10: render larger for expressiveness
     const isEmojiOnly = /^\p{Emoji}{1,10}$/u.test(content)
 
     return (
         <div className="">
-            {/* Message text */}
+            {/* Message text (Markdown-rendered, images disallowed) */}
             {content && (
                 <div className={cn(
                     "text-sm whitespace-pre-wrap break-words max-w-[80vw] text-left md:max-w-full text-foreground leading-relaxed",
@@ -703,7 +601,7 @@ const MessageContent = memo(({ content, attachments, activeServerId, servers }: 
                 </div>
             )}
 
-            {/* Attachments */}
+            {/* Inline attachments; images open fullscreen in a dialog */}
             {parsedAttachments.length > 0 && (
                 <div className="space-y-2">
                     {parsedAttachments.map((attachment: string, index: number) => (
@@ -786,7 +684,7 @@ const MessageContent = memo(({ content, attachments, activeServerId, servers }: 
 
 MessageContent.displayName = "MessageContent"
 
-// Date Divider Component
+// Day separator to establish temporal grouping in long threads.
 const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
     const formatDate = (ts: number) => {
         const date = new Date(ts)
@@ -811,7 +709,7 @@ const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
 
     return (
         <div className="relative flex items-center justify-center py-1">
-            {/* Line */}
+            {/* Horizontal guide line */}
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
             {/* Date badge */}
@@ -826,11 +724,11 @@ const DateDivider = memo(({ timestamp }: { timestamp: number }) => {
 
 DateDivider.displayName = "DateDivider"
 
-// Enhanced Empty Channel State
+// Empty state for a new or empty channel.
 const EmptyChannelState = memo(({ channelName }: { channelName?: string }) => {
     return (
         <div className="flex flex-col items-center justify-center h-full text-center p-8 relative">
-            {/* Ambient background effects */}
+            {/* Decorative ambient background; no functional impact */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 {/* Primary glow */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
@@ -841,7 +739,7 @@ const EmptyChannelState = memo(({ channelName }: { channelName?: string }) => {
 
             {/* Content */}
             <div className="relative z-10 space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-700">
-                {/* Icon container with enhanced styling */}
+                {/* Icon with subtle glow */}
                 <div className="relative group">
                     {/* Icon glow */}
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-500 scale-110" />
@@ -859,7 +757,7 @@ const EmptyChannelState = memo(({ channelName }: { channelName?: string }) => {
                     </div>
                 </div>
 
-                {/* Welcome text with enhanced typography */}
+                {/* Welcome text */}
                 <div className="space-y-3">
                     <h3 className="text-2xl font-bold bg-gradient-to-br from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent leading-tight">
                         Welcome to #{channelName || 'this channel'}!
@@ -879,7 +777,7 @@ const EmptyChannelState = memo(({ channelName }: { channelName?: string }) => {
                     </div>
                 </div>
 
-                {/* Decorative elements */}
+                {/* Decorative separators */}
                 <div className="flex items-center justify-center space-x-3 opacity-30">
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary/60 to-primary/40 animate-pulse" />
                     <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-primary/40 to-primary/20 animate-pulse delay-150" />
@@ -897,7 +795,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
     const { profiles, servers } = useSubspace()
     const { activeServerId } = useGlobalState()
 
-    // Only highlight replies when both profile and reply author are properly loaded
+    // Highlight messages that reply to me for quick visual scanning
     const isMyReply = !!(profile?.userId && message.replyToMessage?.authorId && message.replyToMessage.authorId === profile.userId)
     const authorRoleColor = getUserRoleColor(message.authorId, activeServerId, servers)
 
@@ -912,7 +810,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
-            {/* Reply preview - show if this message is a reply */}
+            {/* Reply preview (jump on click) */}
             {message.replyTo && (
                 <div className="relative left-12 mb-1">
                     <ReplyPreview
@@ -924,7 +822,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
             )}
 
             <div className="flex gap-2">
-                {/* Avatar or timestamp spacer */}
+                {/* Avatar when starting a block; otherwise show a timestamp spacer */}
                 <div className="w-12 flex-shrink-0 flex justify-center cursor-pointer h-fit">
                     {showAvatar ? (
                         <ProfilePopover userId={message.authorId} side="right" align="start">
@@ -939,7 +837,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
                     )}
                 </div>
 
-                {/* Message content */}
+                {/* Message content block */}
                 <div className=" min-w-0">
                     {showAvatar && (
                         <div className="flex items-baseline gap-2 mb-1">
@@ -969,7 +867,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
                 </div>
             </div>
 
-            {/* Message actions */}
+            {/* Hover actions to keep UI uncluttered */}
             {isHovered && (
                 <MessageActions
                     message={message}
@@ -984,7 +882,7 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
 
 MessageItem.displayName = "MessageItem"
 
-// Enhanced Message Input with Mentions
+// Message input for channels: supports @user and #channel mentions, edit mode, and reply mode.
 interface MessageInputRef {
     focus: () => void;
     blur: () => void;
@@ -1028,7 +926,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const { profiles } = useSubspace()
     const { isMobile } = useMobileContext()
 
-    // Set message content when editing mode starts
+    // Synchronize input content with edit/reply state
     React.useEffect(() => {
         if (editingMessage) {
             setMessage(editingMessage.content)
@@ -1038,7 +936,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         }
     }, [editingMessage, replyingTo])
 
-    // Expose focus and blur methods to parent component
+    // Imperative focus API so the parent view can redirect keystrokes here
     React.useImperativeHandle(ref, () => ({
         focus: () => {
             if (isMobile) return
@@ -1072,14 +970,14 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             const textarea = mentionsContainer.querySelector('textarea')
             if (textarea) {
                 textarea.focus()
-                // Move cursor to end
+                // Move cursor to end for a natural continue-typing experience
                 const length = textarea.value.length
                 textarea.setSelectionRange(length, length)
             }
         }
     }
 
-    // Function to get members data for mentions
+    // Build a suggestion list for @mentions using server members and recent participants.
     const getMembersData = (query: string, callback: (data: any[]) => void) => {
         if (!activeServerId) {
             callback([])
@@ -1088,13 +986,13 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
         const serverMembers = servers[activeServerId]?.members || []
 
-        // Extract unique user IDs from messages in the current channel
+        // Use recent participants to surface likely targets
         const chatParticipants = new Set<string>()
         messagesInChannel.forEach(message => {
             chatParticipants.add(message.authorId)
         })
 
-        // Create a unified list of users
+        // Merge members and participants into a single map
         const allUsers = new Map<string, {
             id: string;
             display: string;
@@ -1113,7 +1011,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             })
         })
 
-        // Add chat participants who might not be in server members list
+        // Add chat participants who may not be listed as members (edge cache cases)
         chatParticipants.forEach(userId => {
             if (!allUsers.has(userId)) {
                 const displayName = getDisplayName(userId, profiles, activeServerId, servers)
@@ -1181,7 +1079,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         callback(filteredUsers)
     }
 
-    // Custom render function for member suggestions
+    // Render a rich item for user suggestions
     const renderMemberSuggestion = (
         suggestion: { id: string; display: string },
         search: string,
@@ -1206,7 +1104,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             >
                 <div className="relative">
                     <MessageAvatar authorId={suggestion.id} size="sm" />
-                    {/* Online indicator - you could add real online status here */}
+                    {/* Placeholder online indicator (real status could be wired later) */}
                     <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full opacity-80" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -1254,7 +1152,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         )
     }
 
-    // Function to get channels data for mentions
+    // Build #channel suggestions from the active server
     const getChannelsData = (query: string, callback: (data: any[]) => void) => {
         if (!activeServerId) {
             callback([]);
@@ -1297,7 +1195,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         callback(filteredChannels);
     };
 
-    // Custom render function for channel suggestions
+    // Render a rich item for channel suggestions
     const renderChannelSuggestion = (
         suggestion: { id: string; display: string },
         search: string,
@@ -1423,8 +1321,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         const files = e.target.files
         if (!files) return
 
-        // Handle file upload logic here
-        // This would need to be implemented based on your file upload system
+        // File upload to be implemented based on the storage pipeline
         toast.info("File upload not implemented yet")
     }
 
@@ -1479,7 +1376,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
             {/* Message Input */}
             <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="p-4">
-                {/* Attachments preview */}
+                {/* Pending attachments preview */}
                 {attachments.length > 0 && (
                     <div className="mb-3 p-2 border border-border rounded-lg bg-muted/30">
                         <div className="flex items-center gap-2 mb-2">
@@ -1855,7 +1752,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<MessageInputRef>(null);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Expose focusInput method to parent component
     React.useImperativeHandle(ref, () => ({
@@ -1896,29 +1792,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             date1.getDate() === date2.getDate()
     }
 
-    // Auto-refresh messages every 2 seconds when channel is active
-    useEffect(() => {
-        // Clear any existing interval
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-
-        // Only start auto-refresh if we have an active channel and subspace is ready
-        if (subspace && server && activeChannelId && channel) {
-            intervalRef.current = setInterval(() => {
-                loadMessages(false); // Background refresh, no loading state
-            }, 2000);
-        }
-
-        // Cleanup on unmount or channel change
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        };
-    }, [subspace, server, activeChannelId, channel]);
+    // Fetching/polling is centralized in DataLoader
 
     // Scroll event listener to track if user is at bottom
     useEffect(() => {
@@ -1973,45 +1847,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         }
     }, [replyingTo, editingMessage]);
 
-    const loadMessages = async (showLoadingState: boolean = true) => {
-        if (!server || !activeChannelId) return;
-
-        // Don't attempt to load if subspace is not ready yet
-        if (!subspace) {
-            return;
-        }
-
-        if (showLoadingState) {
-            setLoading(true);
-        }
-
-        try {
-            await actions.servers.getMessages(activeServerId, String(activeChannelId), 50);
-
-            if (messages && Object.keys(messages).length > 0) {
-                // Scroll to bottom on initial load
-                if (showLoadingState) {
-                    setTimeout(() => {
-                        scrollToBottom();
-                        setTimeout(() => setIsAtBottom(true), 100);
-                    }, 100);
-                }
-
-                // ✅ REMOVED: Profile loading is now centralized in member-list component
-                // Author profiles will be loaded when viewing the member list
-            } else {
-            }
-        } catch (error) {
-            console.error("Failed to load messages:", error);
-            if (showLoadingState) {
-                toast.error("Failed to load messages");
-            }
-        } finally {
-            if (showLoadingState) {
-                setLoading(false);
-            }
-        }
-    };
+    // Loading and refreshing are centralized in DataLoader
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -2224,7 +2060,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             "bg-gradient-to-b from-background via-background/98 to-background/95",
             className
         )}>
-            {/* Enhanced Channel Header - Hidden on mobile since we use MobileHeader */}
+            {/* Channel header - hidden on mobile because a dedicated MobileHeader is used there */}
             {!shouldUseOverlays && (
                 <ChannelHeader
                     channelName={channel.name}
@@ -2234,7 +2070,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 />
             )}
 
-            {/* Messages container */}
+            {/* Scrollable message timeline */}
             <div
                 key={`${activeServerId}-${activeChannelId}`}
                 ref={messagesContainerRef}
@@ -2268,7 +2104,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 ) : (
                     <div className="pt-6">
                         {(() => {
-                            // Convert messages object to sorted array by timestamp
+                            // Convert object map into a timestamp-sorted array
                             const messagesArray = Object.values(messages).sort((a, b) => a.timestamp - b.timestamp);
 
                             return messagesArray.map((message, index) => {
@@ -2279,12 +2115,12 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
                                 return (
                                     <React.Fragment key={message.messageId}>
-                                        {/* Date divider */}
+                                        {/* Insert date divider when day changes */}
                                         {shouldShowDateDivider && (
                                             <DateDivider timestamp={message.timestamp} />
                                         )}
 
-                                        {/* Message */}
+                                        {/* Individual message */}
                                         <div data-message-id={message.messageId}>
                                             <MessageItem
                                                 message={message}
@@ -2307,7 +2143,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                     </div>
                 )}
 
-                {/* Scroll to bottom button */}
+                {/* Quick jump to the latest messages when user has scrolled up */}
                 {!isAtBottom && Object.keys(messages).length > 0 && (
                     <div className="fixed bottom-20 mx-auto w-12 z-10">
                         <TooltipProvider>
@@ -2335,7 +2171,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 )}
             </div>
 
-            {/* Enhanced Input Area */}
+            {/* Composer with mentions */}
             <MessageInput
                 ref={inputRef}
                 onSendMessage={sendMessage}

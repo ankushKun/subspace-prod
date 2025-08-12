@@ -4,30 +4,33 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, AlertCircle, Users, Shield, Zap, CheckCircle, Loader2 } from "lucide-react"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
 import { Subspace } from "@subspace-protocol/sdk"
-import type { Server, Member } from "@subspace-protocol/sdk"
+import type { Server } from "@subspace-protocol/sdk"
 import { toast } from "sonner"
 import LoginDialog from "@/components/login-dialog"
 import alien from "@/assets/subspace/alien-black.svg"
 import { Constants } from "@/lib/constants"
 import { createSigner } from "@permaweb/aoconnect"
+import { useSubspace } from "@/hooks/use-subspace"
 
 export default function Invite() {
     const { invite } = useParams()
     const navigate = useNavigate()
     const { connected, address, jwk, wauthInstance, connectionStrategy } = useWallet()
+    const { servers } = useSubspace()
 
     const [serverInfo, setServerInfo] = useState<Server | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [isJoining, setIsJoining] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [hasJoined, setHasJoined] = useState(false)
+    const [isAlreadyMember, setIsAlreadyMember] = useState(false)
 
-    // Initialize Subspace instance
+    // Build a Subspace SDK instance using the current wallet context
     const getSubspaceInstance = async () => {
         const config = {
             CU_URL: Constants.CuEndpoints.ArnodeAsia,
             GATEWAY_URL: 'https://arweave.net',
-            owner: address || "0x69420" // Use a default address for read-only operations
+            owner: address || "0x69420" // default to a placeholder for read-only operations
         }
 
         if (connected && connectionStrategy) {
@@ -49,10 +52,9 @@ export default function Invite() {
         return new Subspace(config)
     }
 
-    // Check if user has already joined this server
-    const isAlreadyMember = connected && address && invite && serverInfo?.members?.some((member: Member) => member.userId === address)
+    // Membership is checked lazily via SDK and cached in local state
 
-    // Function to update meta tags dynamically
+    // Update social/meta tags to provide rich previews when sharing invite links
     const updateMetaTags = (serverInfo: Server | null) => {
         const title = serverInfo
             ? `Join ${serverInfo.name} - Subspace`
@@ -69,7 +71,7 @@ export default function Invite() {
         // Update document title
         document.title = title
 
-        // Update or create meta tags
+        // Helper to update or create meta tags
         const updateMetaTag = (property: string, content: string) => {
             let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement
             if (!meta) {
@@ -90,18 +92,18 @@ export default function Invite() {
             meta.setAttribute('content', content)
         }
 
-        // Update OpenGraph tags
+        // OpenGraph for social sites
         updateMetaTag('og:title', title)
         updateMetaTag('og:description', description)
         updateMetaTag('og:image', imageUrl)
         updateMetaTag('og:url', window.location.href)
 
-        // Update Twitter tags
+        // Twitter cards
         updateMetaTagName('twitter:title', title)
         updateMetaTagName('twitter:description', description)
         updateMetaTagName('twitter:image', imageUrl)
 
-        // Update standard meta description
+        // Standard meta description
         updateMetaTagName('description', description)
     }
 
@@ -119,6 +121,42 @@ export default function Invite() {
         // Update meta tags when server info changes
         updateMetaTags(serverInfo)
     }, [serverInfo])
+
+    // Check membership: prefer local state, fall back to on-demand SDK call
+    useEffect(() => {
+        const checkMembership = async () => {
+            if (!invite || !connected || !address) {
+                setIsAlreadyMember(false)
+                return
+            }
+            // 1) Check local cache from `useSubspace` state
+            const serverFromStore = servers?.[invite]
+            const members = (serverFromStore as any)?.members
+            if (Array.isArray(members)) {
+                const exists = members.some((m: any) => m?.userId === address)
+                if (exists) {
+                    setIsAlreadyMember(true)
+                    return
+                }
+            } else if (members && typeof members === 'object') {
+                if (members[address]) {
+                    setIsAlreadyMember(true)
+                    return
+                }
+            }
+
+            // 2) Not found in state, query via SDK
+            try {
+                const subspace = await getSubspaceInstance()
+                const member = await subspace.server.getMember(invite, address)
+                setIsAlreadyMember(!!member)
+            } catch (err) {
+                console.warn("[invite] Failed to check membership", err)
+                setIsAlreadyMember(false)
+            }
+        }
+        checkMembership()
+    }, [invite, connected, address, servers])
 
     const fetchServerInfo = async () => {
         if (!invite) return
@@ -158,11 +196,12 @@ export default function Invite() {
                 }
 
                 setHasJoined(true)
+                setIsAlreadyMember(true)
                 toast.success("Successfully joined the server!")
 
                 // Navigate to the server after a short delay
                 setTimeout(() => {
-                    // Navigate to the server with welcome parameter
+                    // Include welcome parameter; the app page will show a welcome dialog
                     navigate(`/app/${invite}?welcome=true`)
                 }, 1500)
             } else {

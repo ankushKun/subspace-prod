@@ -45,6 +45,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from "@/lib/utils"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
@@ -74,7 +75,7 @@ interface ExtendedRole extends Role {
 
 export default function ServerRoles() {
     const { activeServerId } = useGlobalState()
-    const { servers, actions: subspaceActions } = useSubspace()
+    const { servers, profiles, actions: subspaceActions } = useSubspace()
     const { address: walletAddress } = useWallet()
 
     // Get the current server
@@ -161,10 +162,15 @@ export default function ServerRoles() {
         if (Array.isArray(serverMembers) && serverMembers.length > 0) {
             const memberMap: Record<string, any> = {}
             for (const m of serverMembers) memberMap[m.userId] = m
-            return memberIds.map((id) => memberMap[id] || { userId: id })
+            return memberIds.map((id) => {
+                const existing = memberMap[id] || { userId: id }
+                const profile = profiles?.[id]
+                return profile ? { ...existing, profile } : existing
+            })
         }
-        return memberIds.map((id) => ({ userId: id }))
-    }, [server, selectedRole])
+        // Fallback: construct entries from ids and enrich with profiles where available
+        return memberIds.map((id) => ({ userId: id, profile: profiles?.[id] }))
+    }, [server, selectedRole, profiles])
 
     // Check if user has permission to manage roles
     const canManageRoles = useMemo(() => {
@@ -1045,14 +1051,31 @@ export default function ServerRoles() {
                                                             {membersForSelectedRole.length === 0 ? (
                                                                 <p className="text-xs text-primary/50">No members have this role yet.</p>
                                                             ) : (
-                                                                membersForSelectedRole.map((m: any) => (
-                                                                    <div key={m.userId} className="flex items-center justify-between p-2 rounded border border-primary/20 bg-background/50">
-                                                                        <div className="text-xs">
-                                                                            {m.profile?.primaryName || m.profile?.displayName || m.userId}
+                                                                membersForSelectedRole.map((m: any) => {
+                                                                    const displayName = m.nickname || m.profile?.primaryName || m.profile?.displayName || m.userId
+                                                                    const fallback = String(displayName || m.userId).charAt(0).toUpperCase()
+                                                                    return (
+                                                                        <div key={m.userId} className="flex items-center justify-between p-2 rounded border border-primary/20 bg-background/50">
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                <Avatar className="w-7 h-7">
+                                                                                    <AvatarImage src={(() => {
+                                                                                        const pick = m.profile?.pfp || m.profile?.primaryLogo
+                                                                                        if (!pick) return undefined
+                                                                                        return String(pick).startsWith('http') ? String(pick) : `https://arweave.net/${pick}`
+                                                                                    })()} />
+                                                                                    <AvatarFallback className="text-[10px]">{fallback}</AvatarFallback>
+                                                                                </Avatar>
+                                                                                <div className="flex flex-col min-w-0">
+                                                                                    <span className="text-xs font-medium truncate">{displayName}</span>
+                                                                                    {m.profile?.displayName && m.profile?.displayName !== displayName && (
+                                                                                        <span className="text-[10px] text-muted-foreground truncate">{m.profile.displayName}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <Badge variant="outline" className="text-[10px]">{m.userId.slice(0, 6)}…</Badge>
                                                                         </div>
-                                                                        <Badge variant="outline" className="text-[10px]">{m.userId.slice(0, 6)}…</Badge>
-                                                                    </div>
-                                                                ))
+                                                                    )
+                                                                })
                                                             )}
                                                         </div>
                                                     </div>
