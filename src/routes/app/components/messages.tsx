@@ -132,7 +132,7 @@ const getDisplayName = (userId: string, profiles: Record<string, any>, activeSer
     // Priority 1: server-specific nickname
     if (activeServerId && servers?.[activeServerId]) {
         const server = servers[activeServerId]
-        const member = server.members?.find((m: any) => m.userId === userId)
+        const member = server.members?.[userId]
         if (member?.nickname) return member.nickname
     }
 
@@ -149,7 +149,7 @@ const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Rec
     if (!activeServerId || !servers?.[activeServerId]) return undefined
 
     const server = servers[activeServerId]
-    const member = server.members?.find((m: any) => m.userId === userId)
+    const member = server.members?.[userId]
 
     if (!member?.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
         return undefined

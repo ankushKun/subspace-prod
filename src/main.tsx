@@ -33,6 +33,7 @@ import Invite from '@/routes/invite';
 import Developer from '@/routes/developer';
 import Bots from '@/routes/developer/bots';
 import BotSettings from './routes/developer/bot-settings';
+import AddBot from './routes/addbot';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -471,6 +472,7 @@ function Main() {
                         <Route path="/developer" element={<Developer />} />
                         <Route path="/developer/bots" element={<Bots />} />
                         <Route path="/developer/bots/:botId" element={<BotSettings />} />
+                        <Route path="/addbot/:botId" element={<AddBot />} />
                     </Routes>
                 </HashRouter>
             </ThemeProvider>

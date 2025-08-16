@@ -115,8 +115,8 @@ interface SubspaceState {
             deleteCategory: (serverId: string, categoryId: string) => Promise<boolean>
             join: (serverId: string) => Promise<boolean>
             leave: (serverId: string) => Promise<boolean>
-            getMembers: (serverId: string) => Promise<any[]>
-            refreshMembers: (serverId: string) => Promise<Member[]>
+            getMembers: (serverId: string) => Promise<Record<string, Member>>
+            refreshMembers: (serverId: string) => Promise<Record<string, Member>>
             refreshMemberProfiles: (serverId: string) => Promise<boolean>
             getMember: (serverId: string, userId: string) => Promise<Member | null>
             updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
@@ -494,9 +494,9 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     if (server) {
                         const stateServer = get().servers[serverId]
                         if (stateServer) {
-                            server.members = stateServer.members || []
+                            server.members = stateServer.members || {}
                         } else {
-                            server.members = []
+                            server.members = {}
                         }
                     }
 
@@ -508,7 +508,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     })
 
                     // Automatically fetch members if they don't exist and we're not already loading them
-                    if (server && (!server.members || server.members.length === 0)) {
+                    if (server && (!server.members || Object.keys(server.members).length === 0)) {
                         const currentLoadingMembers = new Set(get().loadingMembers)
                         if (!currentLoadingMembers.has(serverId)) {
                             currentLoadingMembers.add(serverId)
@@ -543,7 +543,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Get the created server
                 const server = await subspace.server.getServer(serverId)
-                server.members = []
+                server.members = {}
                 if (!server) throw new Error("Failed to retrieve created server")
 
                 set({ servers: { ...get().servers, [serverId]: server } })
@@ -770,22 +770,22 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return false
                 }
             },
-            getMembers: async (serverId: string): Promise<any[]> => {
+            getMembers: async (serverId: string): Promise<Record<string, Member>> => {
                 const subspace = get().subspace
-                if (!subspace) return []
+                if (!subspace) return {}
 
                 // Check if members are already being loaded for this server
                 const currentLoadingMembers = new Set(get().loadingMembers)
                 if (currentLoadingMembers.has(serverId)) {
                     console.log(`[hooks/use-subspace] Members already loading for server ${serverId}, skipping...`)
-                    return []
+                    return {}
                 }
 
                 // Get the server instance from current state, don't call servers.get to avoid recursion
                 const server = get().servers[serverId]
                 if (!server) {
                     console.error("Server not found for getMembers")
-                    return []
+                    return {}
                 }
 
                 // Mark as loading
@@ -794,10 +794,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 try {
                     const membersData = await subspace.server.getAllMembers(serverId)
-                    const members = Object.entries(membersData).map(([userId, memberData]) => ({
-                        userId,
-                        ...memberData
-                    }))
+                    const members = membersData
 
                     set({
                         servers: {
@@ -812,7 +809,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return members
                 } catch (e) {
                     console.log("error", e)
-                    return []
+                    return {}
                 } finally {
                     // Remove from loading state
                     const updatedLoadingMembers = new Set(get().loadingMembers)
@@ -826,14 +823,14 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             refreshMembersWithProfiles: async (serverId: string) => {
                 // First refresh members, then refresh their profiles
                 const members = await get().actions.servers.getMembers(serverId)
-                if (members && members.length > 0) {
+                if (members && Object.keys(members).length > 0) {
                     await get().actions.servers.refreshMemberProfiles(serverId)
                 }
                 return members
             },
             hasMembers: (serverId: string): boolean => {
                 const server = get().servers[serverId]
-                return !!(server?.members && server.members.length > 0)
+                return !!(server?.members && Object.keys(server.members).length > 0)
             },
             refreshMemberProfiles: async (serverId: string) => {
                 console.log(`[hooks/use-subspace] 🔄 Refreshing member profiles for server ${serverId}`)

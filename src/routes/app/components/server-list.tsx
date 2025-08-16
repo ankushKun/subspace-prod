@@ -1361,9 +1361,12 @@ export default function ServerList({ className, onServerJoined }: {
         if (!connected || !address || !activeServerId || !profile?.serversJoined) return
 
         const activeServer = servers[activeServerId]
-        if (activeServer && (!activeServer.members || activeServer.members.length === 0)) {
-            // Fetch members if they don't exist
-            actions.servers.getMembers(activeServerId)
+        if (activeServer && (!activeServer.members || Object.keys(activeServer.members || {}).length === 0)) {
+            // Fetch members if they don't exist or if empty
+            console.log('Fetching members for server:', activeServerId)
+            actions.servers.getMembers(activeServerId).catch(err => {
+                console.error('Failed to fetch server members:', err)
+            })
         }
     }, [connected, address, activeServerId, profile?.serversJoined, servers, actions.servers])
 
