@@ -1796,7 +1796,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         if (!activeServerId || !activeChannelId || !subspace || !server || !channel) {
             // Stop message fetching if conditions aren't met
             if (isMessageFetchingActive) {
-                console.log(`🔄 [Messages] Stopping message fetching - missing prerequisites`)
                 setIsMessageFetchingActive(false)
                 if (messageFetchIntervalRef.current) {
                     clearInterval(messageFetchIntervalRef.current)
@@ -1808,7 +1807,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
 
         // Start message fetching if not already active
         if (!isMessageFetchingActive) {
-            console.log(`🔄 [Messages] Starting message fetching for ${activeServerId}/${activeChannelId}`)
             setIsMessageFetchingActive(true)
             setLoading(true) // Show loading state for initial fetch
 
@@ -1837,17 +1835,14 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         if (!activeServerId || !activeChannelId || !subspace) return
 
         try {
-            console.log(`🔄 [Messages] Fetching messages for ${activeServerId}/${activeChannelId}`)
             await actions.servers.getMessages(activeServerId, activeChannelId, 50)
 
             // Mark initial load as complete
             if (!initialMessagesLoaded) {
                 setInitialMessagesLoaded(true)
                 setLoading(false)
-                console.log(`✅ [Messages] Initial messages loaded for ${activeServerId}/${activeChannelId}`)
             }
         } catch (error) {
-            console.warn(`❌ [Messages] Failed to fetch messages:`, error)
             // Still mark as loaded to avoid infinite loading state
             if (!initialMessagesLoaded) {
                 setInitialMessagesLoaded(true)
