@@ -425,7 +425,7 @@ function Main() {
     // Set up wallet disconnection listener
     useEffect(() => {
         const handleWalletDisconnected = () => {
-            console.log("🔌 Wallet disconnected, global state")
+            console.log("🔌 Wallet disconnected")
             globalStateActions.clear()
         }
 

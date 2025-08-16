@@ -57,7 +57,6 @@ export default function DmsList({ className }: { className?: string }) {
     // Detect address changes and clear active friend selection
     useEffect(() => {
         if (address && previousAddress && address !== previousAddress) {
-            console.log(`📧 Address changed in DMs list from ${previousAddress} to ${address}, clearing active friend`)
             actions.setActiveFriendId("")
         }
         setPreviousAddress(address || "")

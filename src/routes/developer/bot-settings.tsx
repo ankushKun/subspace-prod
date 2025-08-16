@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams, useNavigate } from "react-router"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { BotIcon, ArrowLeft, Trash2, Server, Upload } from "lucide-react"
+import { BotIcon, ArrowLeft, Trash2, Server, Upload, Loader2 } from "lucide-react"
+import { uploadFileTurbo } from "@/lib/utils"
+import { toast } from "sonner"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import type { Bot } from "@subspace-protocol/sdk"
 
@@ -19,6 +21,10 @@ export default function BotSettings() {
     const [error, setError] = useState<string | null>(null)
     const [isUpdating, setIsUpdating] = useState(false)
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
+    const [profilePicFile, setProfilePicFile] = useState<File | null>(null)
+    const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [formData, setFormData] = useState({
         name: "",
         description: "",
@@ -55,28 +61,82 @@ export default function BotSettings() {
         }
     }
 
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        // Validate file size (max 100KB)
+        if (file.size > 100 * 1024) {
+            toast.error("Profile picture must be less than 100KB")
+            return
+        }
+
+        // Validate file type
+        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+            toast.error("Please select a PNG or JPEG image file")
+            return
+        }
+
+        setProfilePicFile(file)
+
+        // Create preview
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            setProfilePicPreview(e.target?.result as string)
+        }
+        reader.readAsDataURL(file)
+    }
+
     const handleUpdateBot = async () => {
         if (!subspace || !botId || !bot) return
 
         setIsUpdating(true)
         setError(null)
         try {
+            let pfpId = bot.pfp
+
+            // Upload profile picture if changed
+            if (profilePicFile) {
+                try {
+                    setIsUploading(true)
+                    toast.loading("Uploading profile picture to Arweave...")
+
+                    const { wauthInstance, jwk } = useWallet.getState()
+                    const signer = wauthInstance?.getWauthSigner()
+                    pfpId = await uploadFileTurbo(profilePicFile, jwk, signer)
+
+                    if (!pfpId) {
+                        toast.dismiss()
+                        toast.error("Failed to upload profile picture")
+                        return
+                    }
+
+                    toast.dismiss()
+                    toast.success("Profile picture uploaded successfully")
+                } catch (error) {
+                    console.error("Error uploading profile picture:", error)
+                    toast.dismiss()
+                    toast.error("Failed to upload profile picture")
+                    return
+                } finally {
+                    setIsUploading(false)
+                }
+            }
+
             // Update bot details
             const success = await subspace.bot.updateBot(botId, {
                 name: formData.name.trim() || bot.name,
                 description: formData.description.trim() || bot.description,
-                pfp: formData.pfp.trim() || bot.pfp,
-                publicBot: bot.public
+                pfp: pfpId,
+                publicBot: true
             })
 
             if (success) {
                 await loadBot() // Reload bot data
-                console.log("Bot updated successfully")
             } else {
                 throw new Error("Failed to update bot")
             }
         } catch (error) {
-            console.error("Failed to update bot:", error)
             setError("Failed to update bot. Please try again.")
         } finally {
             setIsUpdating(false)
@@ -183,25 +243,40 @@ export default function BotSettings() {
                                 {/* Bot Avatar */}
                                 <div className="flex items-center gap-6 mb-8">
                                     <div className="flex flex-col items-center gap-2">
-                                        <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center overflow-hidden">
-                                            {bot.pfp ? (
+                                        <div
+                                            className="w-24 h-24 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center overflow-hidden relative group cursor-pointer"
+                                            onClick={() => !isUploading && fileInputRef.current?.click()}
+                                        >
+                                            {profilePicPreview ? (
+                                                <img src={profilePicPreview} alt="Preview" className="w-full h-full object-cover" />
+                                            ) : bot.pfp ? (
                                                 <img src={`https://arweave.net/${bot.pfp}`} alt={bot.name} className="w-full h-full object-cover" />
                                             ) : (
                                                 <BotIcon className="w-12 h-12 text-primary" />
                                             )}
+
+                                            {/* Upload overlay */}
+                                            <div className={`absolute inset-0 flex items-center justify-center bg-black/60 transition-opacity duration-200 ${isUploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                {isUploading ? (
+                                                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <Upload className="w-8 h-8 text-white" />
+                                                        <span className="text-xs text-white font-ocr">UPLOAD</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => {
-                                                // TODO: Implement image selector
-                                                alert("Image selector coming soon!")
-                                            }}
-                                        >
-                                            <Upload className="w-4 h-4 mr-2" />
-                                            Upload
-                                        </Button>
+
+                                        {/* Hidden file input */}
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/png,image/jpeg,image/jpg"
+                                            onChange={handleFileUpload}
+                                            className="hidden"
+                                            disabled={isUploading}
+                                        />
                                     </div>
 
                                     {/* Static Information Dashboard */}
@@ -228,7 +303,7 @@ export default function BotSettings() {
                                 </div>
 
                                 {/* Editable Bot Settings */}
-                                <div className="space-y-6 pl-32">
+                                <div className="space-y-6 pl-28">
                                     <div className="space-y-4">
                                         <div>
                                             <label className="text-sm font-medium mb-1.5 block">

@@ -94,7 +94,6 @@ export default function App() {
         if (address && connected) {
             // On wallet switch, navigate away from deep routes to avoid stale context
             if (previousAddress && previousAddress !== address) {
-                console.log(`📧 Address changed from ${previousAddress} to ${address}, navigating to app root`)
                 if (serverId || channelId || friendId) {
                     navigate("/app")
                 }

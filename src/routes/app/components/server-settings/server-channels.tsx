@@ -526,22 +526,11 @@ export default function ServerChannels() {
                 // Only move if channel is currently in a category (not already uncategorized)
                 const isCurrentlyInCategory = activeChannel.categoryId && activeChannel.categoryId.toString() !== ''
 
-                console.log('🎯 Category check:', {
-                    categoryId: activeChannel.categoryId,
-                    categoryIdString: activeChannel.categoryId?.toString(),
-                    isCurrentlyInCategory
-                })
-
                 if (isCurrentlyInCategory) {
                     try {
                         // Move to uncategorized (categoryId = null)
                         const newOrderId = uncategorizedChannels.length + 1
 
-                        console.log('📤 Sending update:', {
-                            channelId: activeChannelId,
-                            categoryId: null,
-                            orderId: newOrderId
-                        })
 
                         // Show loading state
                         setIsMovingChannel(activeChannelId)
@@ -552,8 +541,6 @@ export default function ServerChannels() {
                             categoryId: null,
                             orderId: newOrderId
                         })
-
-                        console.log('📥 Server response:', { success })
 
                         if (success) {
                             toast.success(`#${activeChannel.name} moved to uncategorized`)
@@ -572,10 +559,8 @@ export default function ServerChannels() {
                         toast.dismiss() // Dismiss any loading toasts
                     }
                 } else {
-                    console.log('❌ Channel is already uncategorized or invalid category')
                 }
             } else {
-                console.log('❌ Channel not found for ID:', activeChannelId)
             }
         }
         // Handle channel reordering within uncategorized (or moving from categorized to uncategorized position)

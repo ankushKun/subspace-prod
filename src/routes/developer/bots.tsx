@@ -81,7 +81,6 @@ export default function BotsPage() {
                 setNewBotName("")
                 setNewBotDescription("")
 
-                console.log("Bot created successfully:", botId)
             } else {
                 throw new Error("Failed to create bot")
             }
@@ -94,28 +93,26 @@ export default function BotsPage() {
         }
     }
 
-    const handleDeleteBot = async (botId: string) => {
-        if (!subspace) return
+    // const handleDeleteBot = async (botId: string) => {
+    //     if (!subspace) return
 
-        try {
-            const success = await subspace.bot.deleteBot(botId)
-            if (success) {
-                // Remove bot from local state
-                setMyBots(prevBots => prevBots.filter(bot => bot.process !== botId))
-                console.log("Bot deleted successfully")
-            }
-        } catch (error) {
-            console.error("Failed to delete bot:", error)
-        }
-    }
+    //     try {
+    //         const success = await subspace.bot.deleteBot(botId)
+    //         if (success) {
+    //             // Remove bot from local state
+    //             setMyBots(prevBots => prevBots.filter(bot => bot.process !== botId))
+    //         }
+    //     } catch (error) {
+    //     }
+    // }
 
     const renderBotCard = (bot: Bot) => (
         <Link to={`/developer/bots/${bot.process}`}>
             <Card
                 key={bot.process}
-                className="group border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/70 hover:-translate-y-2 transition-all duration-300 cursor-pointer p-6 relative"
+                className="group border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/70 hover:-translate-y-2 border hover:border-primary/30 transition-all duration-300 cursor-pointer p-3 relative"
             >
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                     <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center overflow-hidden">
                         {bot.pfp ? (
                             <img src={`https://arweave.net/${bot.pfp}`} alt={bot.name} className="w-full h-full object-cover" />
@@ -123,10 +120,11 @@ export default function BotsPage() {
                             <BotIcon className="w-8 h-8 text-primary" />
                         )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex flex-col min-w-0 h-full">
                         <h3 className="font-semibold text-foreground truncate text-base">
                             {bot.name}
                         </h3>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{bot.description}</p>
                         {/* <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                         {bot.botPublic ? "Public Bot" : "Private Bot"}
                     </p> */}
