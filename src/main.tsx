@@ -1,3 +1,13 @@
+// Override console methods to filter out React hydration warnings BEFORE any imports
+const skipErrors = [
+    "no wallets added",
+    "profile already exists",
+    "user cancelled the authrequest",
+    "profile not found",
+    "session password not available - please reconnect",
+    "removeChild"
+];
+
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { HashRouter, Route, Routes, useParams } from "react-router";
@@ -10,7 +20,7 @@ import { ConnectionStrategies, useWallet } from '@/hooks/use-wallet';
 import { useEffect, useState } from 'react';
 import { useCallback } from 'react';
 import { useGlobalState } from '@/hooks/use-global-state';
-import { useSubspace } from '@/hooks/use-subspace';
+import { useSubspace, useSubspaceWalletDisconnectHandler } from '@/hooks/use-subspace';
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
 import { PostHogProvider } from 'posthog-js/react';
@@ -28,15 +38,6 @@ interface ErrorBoundaryState {
     showDetails: boolean;
 }
 
-const skipErrors = [
-    "no wallets added",
-    "profile already exists",
-    "user cancelled the authrequest",
-    "profile not found",
-    "session password not available - please reconnect",
-    "removeChild"
-]
-
 class ErrorBoundary extends Component<{ children: ReactNode; onError?: (error: Error) => void }, ErrorBoundaryState> {
     constructor(props: { children: ReactNode; onError?: (error: Error) => void }) {
         super(props);
@@ -53,6 +54,29 @@ class ErrorBoundary extends Component<{ children: ReactNode; onError?: (error: E
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        // Check if this is a hydration error or other React-specific error
+        const isHydrationError = error.message.includes("hydration") ||
+            error.message.includes("In HTML") ||
+            error.message.includes("cannot be a descendant") ||
+            error.message.includes("validateDOMNesting");
+
+        // Check if this error should be skipped
+        const shouldSkip = skipErrors.some(skipError =>
+            error.message.toLowerCase().includes(skipError.toLowerCase())
+        );
+
+        if (shouldSkip) {
+            // Don't log anything for skipped errors
+            return;
+        }
+
+        // For hydration errors, we might want to handle them differently
+        if (isHydrationError) {
+            console.warn('Hydration error caught by Error Boundary:', error.message);
+            // You could choose to handle hydration errors differently here
+            // For now, we'll treat them like other errors but log them as warnings
+        }
+
         this.setState({
             error,
             errorInfo
@@ -202,13 +226,36 @@ let errorBoundaryRef: ErrorBoundary | null = null;
 
 // Global error handler for uncaught async errors
 const handleAsyncError = (error: Error) => {
+    // Check if this error should be skipped
+    const shouldSkip = skipErrors.some(skipError =>
+        error.message.toLowerCase().includes(skipError.toLowerCase())
+    );
+
+    if (shouldSkip) {
+        // Don't log anything for skipped errors
+        return;
+    }
+
+    // Check if this is a hydration error
+    const isHydrationError = error.message.includes("hydration") ||
+        error.message.includes("In HTML") ||
+        error.message.includes("cannot be a descendant") ||
+        error.message.includes("validateDOMNesting");
+
+    if (isHydrationError) {
+        console.warn('Hydration error caught globally:', error.message);
+        // For hydration errors, we might want to handle them differently
+        // You could choose to reload the page or show a specific message
+        return;
+    }
+
     console.error('Async error caught:', error);
     if (`${error}`.includes("password not available")) {
         // localStorage.removeItem("pocketbase_auth")
         // sessionStorage.removeItem("wauth_encrypted_password")
         // sessionStorage.removeItem("wauth_session_key")
     }
-    if (skipErrors.some(error => `${error}`.toLowerCase().includes(error))) return
+
     if (errorBoundaryRef) {
         errorBoundaryRef.setError(error);
     }
@@ -216,16 +263,42 @@ const handleAsyncError = (error: Error) => {
 
 // Set up global error handlers for unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
+    const errorMessage = event.reason?.message || event.reason || 'Unhandled promise rejection';
+
+    // Check if this error should be skipped
+    const shouldSkip = skipErrors.some(skipError =>
+        errorMessage.toLowerCase().includes(skipError.toLowerCase())
+    );
+
+    if (shouldSkip) {
+        // Don't log anything for skipped errors
+        event.preventDefault();
+        return;
+    }
+
     console.error('Unhandled promise rejection:', event.reason);
     event.preventDefault(); // Prevent the default browser error handling
-    if (skipErrors.some(error => `${event.reason}`.toLowerCase().includes(error))) return
-    handleAsyncError(new Error(event.reason?.message || event.reason || 'Unhandled promise rejection'));
+    handleAsyncError(new Error(errorMessage));
 });
+
+
 
 // Set up global error handler for uncaught errors
 window.addEventListener('error', (event) => {
-    console.error('Uncaught error:', event.error);
-    handleAsyncError(event.error || new Error(event.message));
+    const error = event.error || new Error(event.message);
+
+    // Check if this error should be skipped
+    const shouldSkip = skipErrors.some(skipError =>
+        error.message.toLowerCase().includes(skipError.toLowerCase())
+    );
+
+    if (shouldSkip) {
+        // Don't log anything for skipped errors
+        return;
+    }
+
+    console.error('Uncaught error:', error);
+    handleAsyncError(error);
 });
 
 // Component to render the themed toaster inside the theme provider
@@ -250,6 +323,9 @@ function Main() {
     const { jwk, address, connected, connectionStrategy, provider, actions: walletActions } = useWallet()
     const { actions: globalStateActions } = useGlobalState()
     const [errorBoundary, setErrorBoundary] = useState<ErrorBoundary | null>(null);
+
+    // Handle wallet disconnect events and clear subspace state
+    useSubspaceWalletDisconnectHandler();
 
     // Set the global error boundary reference
     useEffect(() => {

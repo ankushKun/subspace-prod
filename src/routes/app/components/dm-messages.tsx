@@ -866,7 +866,7 @@ const DMMessages = React.forwardRef<DMMessagesRef, {
                     scrollToBottom();
                     setTimeout(() => setIsAtBottom(true), 100);
                 }, 100);
-                toast.success("Message sent!");
+                // toast.success("Message sent!");
             } else {
                 toast.error("Failed to send message");
             }

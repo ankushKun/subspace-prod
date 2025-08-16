@@ -17,8 +17,6 @@ import ProfileCreationDialog from "@/components/profile-creation-dialog"
 import NicknameSettingDialog from "@/components/nickname-setting-dialog"
 import ServerWelcomeDialog from "@/components/server-welcome-dialog"
 
-import DataLoader from "./data-loader"
-
 export default function App() {
     const { serverId, channelId, friendId } = useParams()
     const [searchParams, setSearchParams] = useSearchParams()
@@ -247,6 +245,7 @@ export default function App() {
     }, [profile, isCreatingProfile, serverId, address, servers, nicknameDialogOpen, nicknameDialogServerId, skippedServers])
 
     // Global keydown: when not focused in an input, route keystrokes to the active composer
+    // Used for autofocusing message input
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             // Ignore if any modifier keys are pressed
@@ -332,7 +331,6 @@ export default function App() {
 
     return (
         <>
-            <DataLoader />
             <title>{title}</title>
 
             <div className="flex flex-row items-start justify-start h-screen w-screen overflow-clip text-center text-2xl gap-0">

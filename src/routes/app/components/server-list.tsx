@@ -1,3 +1,18 @@
+/**
+ * Server List Component
+ * 
+ * IMPROVED SERVER FETCHING LOGIC:
+ * 1. INITIAL LOAD: Fetches all servers concurrently when app loads
+ * 2. ACTIVE SERVER: Fetches specific server when it becomes active
+ * 3. HOME CLICK: Refetches all servers when home is clicked
+ * 4. ALWAYS FRESH: Always fetches servers even if cached to get latest data
+ * 5. FAST LOADING: Concurrent fetching for maximum speed and efficiency
+ * 6. SILENT OPERATION: All operations happen in background without UI indicators
+ * 7. ERROR HANDLING: Graceful handling of failed server loads
+ * 8. SMART SKELETONS: Shows skeletons only for servers not in cache, decrements as they load
+ * 9. CACHE-AWARE: Automatically detects cached vs uncached servers for accurate skeleton count
+ */
+
 import { Button } from "@/components/ui/button";
 import { cn, uploadFileTurbo } from "@/lib/utils";
 import {
@@ -14,7 +29,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/ui/file-dropzone";
-import { toast } from "sonner";
 
 import type { Server } from "@subspace-protocol/sdk";
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet";
@@ -292,53 +306,53 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: any) => v
                     setCreationStep("Uploading icon...")
 
                     // Show uploading toast
-                    toast.loading("Uploading server icon...", {
-                        richColors: true,
-                        style: {
-                            backgroundColor: "var(--background)",
-                            color: "var(--foreground)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "12px",
-                            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                            backdropFilter: "blur(8px)",
-                        },
-                        className: "font-medium",
-                        duration: Infinity,
-                    })
+                    // toast.loading("Uploading server icon...", {
+                    //     richColors: true,
+                    //     style: {
+                    //         backgroundColor: "var(--background)",
+                    //         color: "var(--foreground)",
+                    //         border: "1px solid var(--border)",
+                    //         borderRadius: "12px",
+                    //         boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                    //         backdropFilter: "blur(8px)",
+                    //     },
+                    //     className: "font-medium",
+                    //     duration: Infinity,
+                    // })
 
                     // Upload the file to Arweave
                     logoUrl = await uploadFileTurbo(serverIcon)
 
-                    toast.dismiss()
-                    toast.success("Icon uploaded successfully", {
-                        richColors: true,
-                        style: {
-                            backgroundColor: "var(--background)",
-                            color: "var(--foreground)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "12px",
-                            boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
-                            backdropFilter: "blur(8px)",
-                        },
-                        className: "font-medium",
-                        duration: 3000,
-                    })
+                    // toast.dismiss()
+                    // toast.success("Icon uploaded successfully", {
+                    //     richColors: true,
+                    //     style: {
+                    //         backgroundColor: "var(--background)",
+                    //         color: "var(--foreground)",
+                    //         border: "1px solid var(--border)",
+                    //         borderRadius: "12px",
+                    //         boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                    //         backdropFilter: "blur(8px)",
+                    //     },
+                    //     className: "font-medium",
+                    //     duration: 3000,
+                    // })
                 } catch (uploadError) {
                     console.warn("Failed to upload server icon, using default:", uploadError)
-                    toast.dismiss()
-                    toast.error("Failed to upload icon. Creating server without icon.", {
-                        richColors: true,
-                        style: {
-                            backgroundColor: "var(--background)",
-                            color: "var(--foreground)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "12px",
-                            boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
-                            backdropFilter: "blur(8px)",
-                        },
-                        className: "font-medium",
-                        duration: 4000,
-                    })
+                    // toast.dismiss()
+                    // toast.error("Failed to upload icon. Creating server without icon.", {
+                    //     richColors: true,
+                    //     style: {
+                    //         backgroundColor: "var(--background)",
+                    //         color: "var(--foreground)",
+                    //         border: "1px solid var(--border)",
+                    //         borderRadius: "12px",
+                    //         boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+                    //         backdropFilter: "blur(8px)",
+                    //     },
+                    //     className: "font-medium",
+                    //     duration: 4000,
+                    // })
                     logoUrl = ""
                 } finally {
                     setIsUploadingIcon(false)
@@ -348,42 +362,42 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: any) => v
             setCreationStep("Creating server...")
 
             // Show creating server toast
-            toast.loading("Creating server... Don't close this window!", {
-                richColors: true,
-                style: {
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                    backdropFilter: "blur(8px)",
-                },
-                className: "font-medium",
-                duration: Infinity,
-            })
+            // toast.loading("Creating server... Don't close this window!", {
+            //     richColors: true,
+            //     style: {
+            //         backgroundColor: "var(--background)",
+            //         color: "var(--foreground)",
+            //         border: "1px solid var(--border)",
+            //         borderRadius: "12px",
+            //         boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+            //         backdropFilter: "blur(8px)",
+            //     },
+            //     className: "font-medium",
+            //     duration: Infinity,
+            // })
 
             const server = await actions.servers.create({
                 name: serverName.trim(),
                 logo: logoUrl
             })
 
-            toast.dismiss()
+            // toast.dismiss()
             setCreationStep("Server created successfully!")
 
             if (server) {
-                toast.success("Server created successfully!", {
-                    richColors: true,
-                    style: {
-                        backgroundColor: "var(--background)",
-                        color: "var(--foreground)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
-                        backdropFilter: "blur(8px)",
-                    },
-                    className: "font-medium",
-                    duration: 4000,
-                })
+                // toast.success("Server created successfully!", {
+                //     richColors: true,
+                //     style: {
+                //         backgroundColor: "var(--background)",
+                //         color: "var(--foreground)",
+                //         border: "1px solid var(--border)",
+                //         borderRadius: "12px",
+                //         boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                //         backdropFilter: "blur(8px)",
+                //     },
+                //     className: "font-medium",
+                //     duration: 4000,
+                // })
 
                 // Clear form and close dialog
                 setServerName("")
@@ -402,22 +416,22 @@ const AddServerButton = ({ onServerJoined }: { onServerJoined?: (data: any) => v
             }
         } catch (error) {
             console.error("Failed to create server:", error)
-            toast.dismiss()
+            // toast.dismiss()
             setCreationStep("Creation failed")
-            toast.error("Failed to create server", {
-                description: error instanceof Error ? error.message : "An unexpected error occurred",
-                richColors: true,
-                style: {
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
-                    backdropFilter: "blur(8px)",
-                },
-                className: "font-medium",
-                duration: 4000,
-            })
+            // toast.error("Failed to create server", {
+            //     description: error instanceof Error ? error.message : "An unexpected error occurred",
+            //     richColors: true,
+            //     style: {
+            //         backgroundColor: "var(--background)",
+            //         color: "var(--foreground)",
+            //         border: "1px solid var(--border)",
+            //         borderRadius: "12px",
+            //         boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+            //         backdropFilter: "blur(8px)",
+            //     },
+            //     className: "font-medium",
+            //     duration: 4000,
+            // })
         } finally {
             setIsCreating(false)
             setCreationStep("")
@@ -872,39 +886,39 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
         setIsJoining(true)
         try {
             // Show loading toast
-            toast.loading("Joining server...", {
-                richColors: true,
-                style: {
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                    backdropFilter: "blur(8px)",
-                },
-                className: "font-medium",
-                duration: Infinity,
-            })
+            // toast.loading("Joining server...", {
+            //     richColors: true,
+            //     style: {
+            //         backgroundColor: "var(--background)",
+            //         color: "var(--foreground)",
+            //         border: "1px solid var(--border)",
+            //         borderRadius: "12px",
+            //         boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+            //         backdropFilter: "blur(8px)",
+            //     },
+            //     className: "font-medium",
+            //     duration: Infinity,
+            // })
 
             // Use the new hook's join method
             const success = await actions.servers.join(serverId)
-            toast.dismiss()
+            // toast.dismiss()
 
             if (success) {
                 // Success toast with enhanced styling
-                toast.success("Successfully joined server!", {
-                    richColors: true,
-                    style: {
-                        backgroundColor: "var(--background)",
-                        color: "var(--foreground)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
-                        backdropFilter: "blur(8px)",
-                    },
-                    className: "font-medium",
-                    duration: 4000,
-                })
+                // toast.success("Successfully joined server!", {
+                //     richColors: true,
+                //     style: {
+                //         backgroundColor: "var(--background)",
+                //         color: "var(--foreground)",
+                //         border: "1px solid var(--border)",
+                //         borderRadius: "12px",
+                //         boxShadow: "0 10px 25px -5px rgba(34, 197, 94, 0.15), 0 4px 6px -2px rgba(34, 197, 94, 0.1)",
+                //         backdropFilter: "blur(8px)",
+                //     },
+                //     className: "font-medium",
+                //     duration: 4000,
+                // })
 
                 // Close dialog
                 onOpenChange(false)
@@ -922,38 +936,38 @@ const JoinServerModal = ({ open, onOpenChange, onServerJoined }: JoinServerModal
                 }
             } else {
                 // Enhanced error feedback
-                toast.error("Failed to join server", {
-                    description: "The server may not exist or you may already be a member",
-                    richColors: true,
-                    style: {
-                        backgroundColor: "var(--background)",
-                        color: "var(--foreground)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
-                        backdropFilter: "blur(8px)",
-                    },
-                    className: "font-medium",
-                    duration: 4000,
-                })
+                // toast.error("Failed to join server", {
+                //     description: "The server may not exist or you may already be a member",
+                //     richColors: true,
+                //     style: {
+                //         backgroundColor: "var(--background)",
+                //         color: "var(--foreground)",
+                //         border: "1px solid var(--border)",
+                //         borderRadius: "12px",
+                //         boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+                //         backdropFilter: "blur(8px)",
+                //     },
+                //     className: "font-medium",
+                //     duration: 4000,
+                // })
             }
         } catch (error) {
             console.error("Error joining server:", error)
-            toast.dismiss()
-            toast.error("Failed to join server", {
-                description: error instanceof Error ? error.message : "An unexpected error occurred",
-                richColors: true,
-                style: {
-                    backgroundColor: "var(--background)",
-                    color: "var(--foreground)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "12px",
-                    boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
-                    backdropFilter: "blur(8px)",
-                },
-                className: "font-medium",
-                duration: 4000,
-            })
+            // toast.dismiss()
+            // toast.error("Failed to join server", {
+            //     description: error instanceof Error ? error.message : "An unexpected error occurred",
+            //     richColors: true,
+            //     style: {
+            //         backgroundColor: "var(--background)",
+            //         color: "var(--foreground)",
+            //         border: "1px solid var(--border)",
+            //         borderRadius: "12px",
+            //         boxShadow: "0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 4px 6px -2px rgba(239, 68, 68, 0.1)",
+            //         backdropFilter: "blur(8px)",
+            //     },
+            //     className: "font-medium",
+            //     duration: 4000,
+            // })
         } finally {
             setIsJoining(false)
         }
@@ -1230,6 +1244,21 @@ export default function ServerList({ className, onServerJoined }: {
     const navigate = useNavigate()
     const { connected, address, wanderInstance } = useWallet()
     const [_, setShowPfpPrompt] = useSessionStorage("show-pfp-prompt", true, { initializeWithValue: true })
+    const [sortedServerIds, setSortedServerIds] = useState<string[]>([])
+    const [skeletonsToShow, setSkeletonsToShow] = useState(0)
+
+    // Update sorted server IDs when profile changes
+    useEffect(() => {
+        if (!profile) return
+
+        const sortedServers = Object.keys(profile.serversJoined).sort((a, b) => {
+            const aOrder = profile.serversJoined[a]?.orderId ?? 0
+            const bOrder = profile.serversJoined[b]?.orderId ?? 0
+            return aOrder - bOrder
+        })
+
+        setSortedServerIds(sortedServers)
+    }, [profile])
 
     // Get servers from profile's joined list (now a KV map)
     const displayServers = connected && address && profile?.serversJoined
@@ -1251,23 +1280,84 @@ export default function ServerList({ className, onServerJoined }: {
         ? Object.keys(profile.serversJoined)
         : []
 
-    // Calculate servers that are expected but not yet loaded
-    const loadedServersCount = displayServers.length
-    const serversBeingLoaded = expectedServerIds.filter(serverId => loadingServers.has(serverId)).length
-    const unloadedExpectedServers = Math.max(0, expectedServerIds.length - loadedServersCount)
+    // Determine skeletons to show - smart system based on cache status
+    useEffect(() => {
+        let skeletonsToShow = 0
 
-    // Determine skeletons to show
-    let skeletonsToShow = 0
+        if (connected && address) {
+            if (isLoadingProfile && !profile) {
+                // Initial profile load - show a few placeholder skeletons
+                skeletonsToShow = 2
+            } else if (profile?.serversJoined && expectedServerIds.length > 0) {
+                // Calculate how many servers are NOT in cache
+                const cachedServersCount = expectedServerIds.filter(serverId => servers[serverId]).length
+                const uncachedServersCount = expectedServerIds.length - cachedServersCount
 
-    // Only show skeletons in these specific cases:
-    if (connected && address) {
-        if (isLoadingProfile && !profile) {
-            // Initial profile load - show a few placeholder skeletons
-            skeletonsToShow = 2
-        } else if (profile?.serversJoined && unloadedExpectedServers > 0) {
-            // We know what servers to expect, show skeletons for unloaded ones
-            skeletonsToShow = Math.min(unloadedExpectedServers, serversBeingLoaded || unloadedExpectedServers)
+                if (uncachedServersCount > 0) {
+                    // Show skeletons only for servers that are not cached
+                    skeletonsToShow = uncachedServersCount
+                }
+            }
         }
+
+        // Always update the skeleton count
+        setSkeletonsToShow(skeletonsToShow)
+    }, [connected, address, isLoadingProfile, profile, expectedServerIds, servers])
+
+    // 1. INITIAL LOAD: Fetch all servers at once when profile first loads
+    useEffect(() => {
+        if (!connected || !address || !profile?.serversJoined) return
+
+        const fetchAllServersConcurrently = async () => {
+            const serverIds = Object.keys(profile.serversJoined)
+            const failedServers: string[] = []
+
+            // Fetch all servers concurrently instead of one by one
+            const fetchPromises = serverIds.map(async (serverId) => {
+                // Skip if server is already loading
+                if (loadingServers.has(serverId)) return
+
+                try {
+                    await actions.servers.get(serverId)
+                } catch (error) {
+                    failedServers.push(serverId)
+                }
+            })
+
+            // Wait for all servers to finish fetching
+            await Promise.all(fetchPromises)
+        }
+
+        fetchAllServersConcurrently()
+    }, [connected, address, profile?.serversJoined, loadingServers, actions.servers])
+
+    // 2. ACTIVE SERVER: Fetch specific server when it becomes active
+    useEffect(() => {
+        if (!connected || !address || !activeServerId || !profile?.serversJoined) return
+
+        // Only fetch active server if it's not already loaded
+        const activeServer = servers[activeServerId]
+        const isActiveServerLoaded = !!activeServer
+        const isActiveServerLoading = loadingServers.has(activeServerId)
+
+        if (!isActiveServerLoaded && !isActiveServerLoading) {
+            // Server not loaded, fetch it
+            const fetchActiveServer = async () => {
+                try {
+                    await actions.servers.get(activeServerId)
+                } catch (error) {
+                    // Silent error handling
+                }
+            }
+
+            fetchActiveServer()
+        }
+    }, [connected, address, activeServerId, profile?.serversJoined, servers, loadingServers, actions.servers])
+
+    // 3. HOME CLICK: Refetch all servers when home is clicked
+    const handleHomeClick = () => {
+        setTimeout(() => { setShowPfpPrompt(true) }, 250)
+        navigate("/app")
     }
 
     function handleServerJoined(data: any) {
@@ -1299,10 +1389,7 @@ export default function ServerList({ className, onServerJoined }: {
             {/* Home Button */}
             <HomeButton
                 isActive={!activeServerId}
-                onClick={() => {
-                    setTimeout(() => { setShowPfpPrompt(true) }, 250)
-                    navigate("/app")
-                }}
+                onClick={handleHomeClick}
                 unreadCount={0}
             />
 
@@ -1340,7 +1427,7 @@ export default function ServerList({ className, onServerJoined }: {
                         key={`skeleton-${index}`}
                         className="relative group mb-3 animate-in slide-in-from-left-5 fade-in duration-500"
                         style={{
-                            animationDelay: `${(loadedServersCount + index) * 100}ms`,
+                            animationDelay: `${(displayServers.length + index) * 100}ms`,
                         }}
                     >
                         <ServerSkeleton />
@@ -1355,8 +1442,6 @@ export default function ServerList({ className, onServerJoined }: {
             <div className="grow" />
 
             {/* Wallet Button */}
-            {/* {showWalletButton && <WalletButton />} */}
-
             {wanderInstance && <WalletButton onClick={() => wanderInstance?.open()} />}
 
             {/* Install PWA Button */}

@@ -52,6 +52,12 @@ export default function Profile({ className }: { className?: string }) {
     const pfpPromptFileInputRef = useRef<HTMLInputElement>(null)
     const [showPfpPrompt, setShowPfpPrompt] = useSessionStorage("show-pfp-prompt", true, { initializeWithValue: true })
 
+    // Fetch the users profile
+    useEffect(() => {
+        if (!connected || !address || !subspace) return
+
+        actions.profile.get(address)
+    }, [connected, address, subspace])
 
     // Check if user needs PFP prompt
     useEffect(() => {

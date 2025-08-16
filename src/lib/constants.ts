@@ -78,10 +78,18 @@ export class Constants {
     static readonly DEFAULT_ROLE_COLOR = "#99AAB5";
 
     static readonly CuEndpoints = {
-        AoTestnet: "https://cu.ao-testnet.xyz",
-        ArnodeAsia: "https://cu.arnode.asia",
+        Legacynet: "https://cu.ao-testnet.xyz",
+        BetterIDEa: "https://cu.arnode.asia",
         Ardrive: "https://cu.ardrive.io",
-        Randao: "https://ur-cu.randao.net"
+        RandAO: "https://ur-cu.randao.net",
+        "Localhost ⚠️": "http://localhost:6363"
+    }
+
+    static readonly HyperbeamEndpoints = {
+        Forward: "https://forward.computer",
+        BetterIDEa: "https://hb.arnode.asia",
+        PermaDAO: "https://hb.arweave.asia",
+        "Localhost ⚠️": "http://localhost:8173"
     }
 
     static readonly CommonTags: Tag[] = [

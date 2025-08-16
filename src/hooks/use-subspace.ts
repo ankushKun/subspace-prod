@@ -16,16 +16,28 @@ import { createSigner } from "@permaweb/aoconnect";
 import { useWallet } from "./use-wallet";
 import { useGlobalState } from "./use-global-state";
 import { Constants as WebConstants } from "@/lib/constants";
+import { useEffect } from "react";
 
 // Helper function to get CU URL from localStorage
 function getCuUrl(): string {
     const storedUrl = localStorage.getItem('subspace-cu-url');
-    return storedUrl || WebConstants.CuEndpoints.ArnodeAsia; // Default to ArnodeAsia
+    return storedUrl || WebConstants.CuEndpoints.BetterIDEa; // Default to BetterIDEa
 }
 
 // Helper function to set CU URL in localStorage
 export function setCuUrl(url: string): void {
     localStorage.setItem('subspace-cu-url', url);
+}
+
+// Helper function to get Hyperbeam URL from localStorage
+function getHyperbeamUrl(): string {
+    const storedUrl = localStorage.getItem('subspace-hyperbeam-url');
+    return storedUrl || WebConstants.HyperbeamEndpoints.BetterIDEa; // Default to BetterIDEa
+}
+
+// Helper function to set Hyperbeam URL in localStorage
+export function setHyperbeamUrl(url: string): void {
+    localStorage.setItem('subspace-hyperbeam-url', url);
 }
 
 
@@ -163,9 +175,16 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
                 // Check if address has changed (wallet switch)
                 if (previousAddress && previousAddress !== owner) {
+                    // Clear all user-specific data from state on wallet change
                     set({
+                        profile: null,
+                        profiles: {},
+                        servers: {},
+                        messages: {},
                         friends: {},
                         dmConversations: {},
+                        loadingProfiles: new Set<string>(),
+                        loadingServers: new Set<string>(),
                         loadingFriends: new Set<string>(),
                         loadingDMs: new Set<string>(),
                         currentAddress: owner
@@ -1047,10 +1066,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 if (!subspace) return false
 
                 try {
-                    const success = await subspace.server.editMessage(serverId, {
-                        messageId,
-                        content
-                    })
+                    const success = await subspace.server.editMessage(serverId, channelId, messageId, content)
 
                     if (success) {
                         // Update the cached message
@@ -1094,7 +1110,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 if (!subspace) return false
 
                 try {
-                    const success = await subspace.server.deleteMessage(serverId, messageId)
+                    const success = await subspace.server.deleteMessage(serverId, channelId, messageId)
 
                     if (success) {
                         // Remove message from cache
@@ -1705,10 +1721,12 @@ export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
     if (!owner) return null
 
     const cuUrl = getCuUrl();
+    const hyperbeamUrl = getHyperbeamUrl();
 
     const config: ConnectionConfig = {
         CU_URL: cuUrl,
         GATEWAY_URL: 'https://arweave.net',
+        HYPERBEAM_URL: hyperbeamUrl,
         owner: owner
     };
 
@@ -1724,12 +1742,46 @@ export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
         const walletState = useWallet.getState();
         const strategy = walletState.connectionStrategy;
 
-        if (strategy === 'wauth') {
-            throw new Error('WAuth integration is not fully implemented yet. Please use ArWallet or WanderConnect for full functionality.');
-        } else if (strategy === 'guest_user') {
+        if (strategy === 'guest_user') {
             throw new Error('Guest user mode has limited functionality. Please connect a wallet for full features.');
         } else {
             throw new Error('Failed to initialize Subspace client. Please check your connection and try again.');
         }
     }
+}
+
+
+
+// Custom hook to handle wallet disconnect events and clear subspace state
+export function useSubspaceWalletDisconnectHandler() {
+    const { actions } = useSubspace();
+
+    useEffect(() => {
+        const handleWalletDisconnected = () => {
+            console.log("🔌 Wallet disconnected, clearing subspace state");
+
+            // Clear all user-specific data from subspace state
+            // Use the store's set method directly to clear state
+            useSubspace.setState({
+                profile: null,
+                profiles: {},
+                servers: {},
+                messages: {},
+                friends: {},
+                dmConversations: {},
+                loadingProfiles: new Set<string>(),
+                loadingServers: new Set<string>(),
+                loadingFriends: new Set<string>(),
+                loadingDMs: new Set<string>(),
+                currentAddress: "",
+                subspace: null
+            });
+        };
+
+        window.addEventListener("subspace-wallet-disconnected", handleWalletDisconnected);
+
+        return () => {
+            window.removeEventListener("subspace-wallet-disconnected", handleWalletDisconnected);
+        };
+    }, [actions]);
 }

@@ -1,3 +1,16 @@
+/**
+ * Messages Component
+ * 
+ * IMPROVED MESSAGE FETCHING LOGIC:
+ * 1. AUTOMATIC POLLING: Messages are fetched every 5 seconds when channel is active
+ * 2. INITIAL LOAD: Shows loading state while fetching initial messages
+ * 3. AUTOMATIC SYNCING: Automatically refreshes after send/edit/delete operations
+ * 4. BACKGROUND FETCHING: All fetching happens in background without UI indicators
+ * 5. SMART POLLING: Only fetches when channel is active and conditions are met
+ * 6. ERROR HANDLING: Graceful handling of failed message fetches
+ * 7. PERFORMANCE: Efficient polling with cleanup to prevent memory leaks
+ */
+
 import { cn } from "@/lib/utils";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useSubspace } from "@/hooks/use-subspace";
@@ -1747,11 +1760,16 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     const [loading, setLoading] = useState(false);
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
     const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
+    const [initialMessagesLoaded, setInitialMessagesLoaded] = useState(false);
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<MessageInputRef>(null);
+
+    // Message fetching state
+    const [isMessageFetchingActive, setIsMessageFetchingActive] = useState(false);
+    const messageFetchIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Expose focusInput method to parent component
     React.useImperativeHandle(ref, () => ({
@@ -1770,18 +1788,75 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     useEffect(() => {
         setReplyingTo(null);
         setEditingMessage(null);
+        setInitialMessagesLoaded(false); // Reset initial load state when channel changes
     }, [activeChannelId]);
 
-    // // Try multiple ways to find the channel
-    // let channel = null;
-    // if (server?.channels) {
-    //     // Handle both string and number channel IDs for compatibility
-    //     channel = server.channels.find(c =>
-    //         c.channelId.toString() === activeChannelId ||
-    //         (typeof c.channelId === 'string' && c.channelId === activeChannelId) ||
-    //         (typeof c.channelId === 'number' && c.channelId === parseInt(activeChannelId))
-    //     );
-    // }
+    // MESSAGE FETCHING: Activate message fetching loop when channel becomes active
+    useEffect(() => {
+        if (!activeServerId || !activeChannelId || !subspace || !server || !channel) {
+            // Stop message fetching if conditions aren't met
+            if (isMessageFetchingActive) {
+                console.log(`🔄 [Messages] Stopping message fetching - missing prerequisites`)
+                setIsMessageFetchingActive(false)
+                if (messageFetchIntervalRef.current) {
+                    clearInterval(messageFetchIntervalRef.current)
+                    messageFetchIntervalRef.current = null
+                }
+            }
+            return
+        }
+
+        // Start message fetching if not already active
+        if (!isMessageFetchingActive) {
+            console.log(`🔄 [Messages] Starting message fetching for ${activeServerId}/${activeChannelId}`)
+            setIsMessageFetchingActive(true)
+            setLoading(true) // Show loading state for initial fetch
+
+            // Initial fetch
+            fetchMessages()
+
+            // Set up polling interval (every 5 seconds)
+            messageFetchIntervalRef.current = setInterval(() => {
+                if (isMessageFetchingActive) {
+                    fetchMessages()
+                }
+            }, 5000)
+        }
+
+        // Cleanup function
+        return () => {
+            if (messageFetchIntervalRef.current) {
+                clearInterval(messageFetchIntervalRef.current)
+                messageFetchIntervalRef.current = null
+            }
+        }
+    }, [activeServerId, activeChannelId, subspace, server, channel, isMessageFetchingActive])
+
+    // Fetch messages for the current channel
+    const fetchMessages = async () => {
+        if (!activeServerId || !activeChannelId || !subspace) return
+
+        try {
+            console.log(`🔄 [Messages] Fetching messages for ${activeServerId}/${activeChannelId}`)
+            await actions.servers.getMessages(activeServerId, activeChannelId, 50)
+
+            // Mark initial load as complete
+            if (!initialMessagesLoaded) {
+                setInitialMessagesLoaded(true)
+                setLoading(false)
+                console.log(`✅ [Messages] Initial messages loaded for ${activeServerId}/${activeChannelId}`)
+            }
+        } catch (error) {
+            console.warn(`❌ [Messages] Failed to fetch messages:`, error)
+            // Still mark as loaded to avoid infinite loading state
+            if (!initialMessagesLoaded) {
+                setInitialMessagesLoaded(true)
+                setLoading(false)
+            }
+        }
+    }
+
+
 
     // Helper function to check if two timestamps are on the same day
     const isSameDay = (timestamp1: number, timestamp2: number) => {
@@ -1791,8 +1866,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             date1.getMonth() === date2.getMonth() &&
             date1.getDate() === date2.getDate()
     }
-
-    // Fetching/polling is centralized in DataLoader
 
     // Scroll event listener to track if user is at bottom
     useEffect(() => {
@@ -1847,8 +1920,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
         }
     }, [replyingTo, editingMessage]);
 
-    // Loading and refreshing are centralized in DataLoader
-
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         // Don't immediately set isAtBottom to true - let the scroll event handler detect it
@@ -1880,7 +1951,13 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                     // Force set isAtBottom to true since user just sent a message
                     setTimeout(() => setIsAtBottom(true), 100);
                 }, 100);
-                toast.success("Message sent!");
+
+                // Refresh messages after sending to show the new message
+                setTimeout(() => {
+                    fetchMessages()
+                }, 1000)
+
+                // toast.success("Message sent!");
             } else {
                 toast.error("Failed to send message");
             }
@@ -1906,6 +1983,11 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             if (success) {
                 setEditingMessage(null);
                 toast.success("Message updated!");
+
+                // Refresh messages after editing to get the latest state
+                setTimeout(() => {
+                    fetchMessages()
+                }, 500)
             } else {
                 toast.error("Failed to update message");
             }
@@ -1930,6 +2012,11 @@ export default function Messages({ className, onToggleMemberList, showMemberList
             if (!success) {
                 throw new Error("Failed to delete message");
             }
+
+            // Refresh messages after deletion to get the latest state
+            setTimeout(() => {
+                fetchMessages()
+            }, 500)
         } catch (error) {
             console.error("Failed to delete message:", error);
             throw error; // Re-throw to be handled by the toast.promise
@@ -2085,7 +2172,7 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                                         <Skeleton className="w-10 h-10 rounded-full" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-baseline gap-2 mb-1">
+                                        <div className="flex items-center justify-center gap-2 mb-1">
                                             <Skeleton className="w-24 h-4" />
                                             <Skeleton className="w-16 h-3" />
                                         </div>

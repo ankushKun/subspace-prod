@@ -8,18 +8,25 @@ import { ArrowLeft, Settings2, Globe, Palette, Moon, Sun } from "lucide-react"
 import { useNavigate } from "react-router"
 import alien from "@/assets/subspace/alien-black.svg"
 import { Constants } from "@/lib/constants"
-import { setCuUrl } from "@/hooks/use-subspace"
+import { setCuUrl, setHyperbeamUrl } from "@/hooks/use-subspace"
 import { useTheme } from "@/components/theme-provider"
 
 export default function Settings() {
     const navigate = useNavigate()
     const [currentCuUrl, setCurrentCuUrl] = useState<string>("")
+    const [currentHyperbeamUrl, setCurrentHyperbeamUrl] = useState<string>("")
     const { theme, setTheme } = useTheme()
 
     // Load current CU URL from localStorage on mount
     useEffect(() => {
-        const storedUrl = localStorage.getItem('subspace-cu-url') || Constants.CuEndpoints.ArnodeAsia
+        const storedUrl = localStorage.getItem('subspace-cu-url') || Constants.CuEndpoints.BetterIDEa
         setCurrentCuUrl(storedUrl)
+    }, [])
+
+    // Load current Hyperbeam URL from localStorage on mount
+    useEffect(() => {
+        const storedUrl = localStorage.getItem('subspace-hyperbeam-url') || Constants.HyperbeamEndpoints.BetterIDEa
+        setCurrentHyperbeamUrl(storedUrl)
     }, [])
 
     // Handle CU URL change
@@ -33,9 +40,26 @@ export default function Settings() {
         }, 100)
     }
 
+    // Handle Hyperbeam URL change
+    const handleHyperbeamUrlChange = (newUrl: string) => {
+        setCurrentHyperbeamUrl(newUrl)
+        setHyperbeamUrl(newUrl)
+
+        // Refresh the app to apply the new Hyperbeam URL
+        setTimeout(() => {
+            window.location.reload()
+        }, 100)
+    }
+
     // Get display name for CU endpoint
     const getCuDisplayName = (url: string) => {
         const entry = Object.entries(Constants.CuEndpoints).find(([_, value]) => value === url)
+        return entry ? entry[0] : url
+    }
+
+    // Get display name for Hyperbeam endpoint
+    const getHyperbeamDisplayName = (url: string) => {
+        const entry = Object.entries(Constants.HyperbeamEndpoints).find(([_, value]) => value === url)
         return entry ? entry[0] : url
     }
 
@@ -191,6 +215,69 @@ export default function Settings() {
                                 <div className="p-3 bg-primary/5 rounded-sm border border-primary/20">
                                     <p className="text-xs text-primary/80 font-ocr leading-relaxed">
                                         <strong className="text-primary">Note:</strong> Changing the CU endpoint will refresh the app to apply the changes.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* Hyperbeam Node Section */}
+                    <Card className="p-6 bg-card border-primary/30 shadow-lg backdrop-blur-sm relative">
+                        {/* Card glow effect */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 rounded-xl pointer-events-none" />
+
+                        <div className="relative z-10 space-y-4">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="flex items-center justify-center w-8 h-8 bg-primary/20 rounded-sm border border-primary/30">
+                                    <Globe className="w-4 h-4 text-primary" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-freecam text-primary">
+                                        HYPERBEAM NODE
+                                    </h2>
+                                    <p className="text-sm font-ocr text-primary/60">
+                                        Select the Hyperbeam node endpoint
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Hyperbeam URL Selector */}
+                            <div className="space-y-3">
+                                <Select
+                                    value={currentHyperbeamUrl}
+                                    onValueChange={handleHyperbeamUrlChange}
+                                >
+                                    <SelectTrigger className="w-full bg-primary/10 border-primary/30 text-primary font-ocr h-12 text-left">
+                                        <SelectValue placeholder="Select Hyperbeam Node">
+                                            <div className="flex flex-col items-start">
+                                                <span className="font-medium text-primary">
+                                                    {getHyperbeamDisplayName(currentHyperbeamUrl)}
+                                                </span>
+                                            </div>
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background border border-primary/30 min-w-[400px]">
+                                        {Object.entries(Constants.HyperbeamEndpoints).map(([name, url]) => (
+                                            <SelectItem
+                                                key={url}
+                                                value={url}
+                                                className="font-ocr text-primary hover:bg-primary/10 focus:bg-primary/10 cursor-pointer py-3"
+                                            >
+                                                <div className="flex flex-col gap-1 w-full">
+                                                    <span className="font-medium text-primary text-sm">
+                                                        {name}
+                                                    </span>
+                                                    <span className="text-xs text-primary/60 font-mono break-all">
+                                                        {url}
+                                                    </span>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <div className="p-3 bg-primary/5 rounded-sm border border-primary/20">
+                                    <p className="text-xs text-primary/80 font-ocr leading-relaxed">
+                                        <strong className="text-primary">Note:</strong> Changing the Hyperbeam node will refresh the app to apply the changes.
                                     </p>
                                 </div>
                             </div>

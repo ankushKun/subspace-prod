@@ -60,7 +60,7 @@
   <meta name="apple-mobile-web-app-title" content="Subspace">
 
   <!-- Preload critical resources -->
-  <link rel="preload" href="https://subspace.ar.io/embed.png" as="image">
+  <link href="https://subspace.ar.io/embed.png">
 
   <!-- Force dark mode immediately to prevent flash of light theme -->
   <script>
@@ -71,6 +71,30 @@
     document.documentElement.classList.remove('light', 'system');
     // Set a flag to indicate forced dark mode
     window.__SUBSPACE_FORCE_DARK__ = true;
+
+    const skipErrors = [
+      "cannot contain a nested",
+      "cannot be a descendant of"
+    ]
+
+    const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+
+    console.error = (...args) => {
+      const message = args.join(' ');
+      if (skipErrors.some(skipError => message.toLowerCase().includes(skipError.toLowerCase()))) {
+        return; // Don't log skipped errors
+      }
+      originalConsoleError.apply(console, args);
+    };
+
+    console.warn = (...args) => {
+      const message = args.join(' ');
+      if (skipErrors.some(skipError => message.toLowerCase().includes(skipError.toLowerCase()))) {
+        return; // Don't log skipped warnings
+      }
+      originalConsoleWarn.apply(console, args);
+    };
   </script>
 </head>
 
