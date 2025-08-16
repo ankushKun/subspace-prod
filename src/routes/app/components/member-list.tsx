@@ -83,7 +83,7 @@ const MemberItem = ({
 }) => {
     const [isHovered, setIsHovered] = useState(false)
 
-    const displayName = isBot 
+    const displayName = isBot
         ? (profile?.primaryName || `Bot ${shortenAddress(member.userId)}`)
         : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
 
@@ -262,7 +262,7 @@ export default function MemberList({ className, isVisible = true, style }: {
         : server?.members && typeof server.members === 'object'
             ? Object.values(server.members)
             : []
-    
+
     // Get bots from cached server data and convert to member-like format
     const serverBots = server?.bots && typeof server.bots === 'object'
         ? Object.entries(server.bots).map(([botId, botInfo]) => ({
@@ -276,7 +276,7 @@ export default function MemberList({ className, isVisible = true, style }: {
             process: (botInfo as any).process
         }))
         : []
-    
+
     // Combine members and bots
     const members = [...regularMembers, ...serverBots]
 
@@ -305,7 +305,7 @@ export default function MemberList({ className, isVisible = true, style }: {
 
         return members.filter(member => {
             const profile = profiles[member.userId]
-            const displayName = member.isBot 
+            const displayName = member.isBot
                 ? (profile?.primaryName || `Bot ${shortenAddress(member.userId)}`)
                 : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
             const lowerQuery = searchQuery.toLowerCase()
@@ -331,7 +331,7 @@ export default function MemberList({ className, isVisible = true, style }: {
 
         // Add "No Role" section for members without any roles at all
         roleGroups['no-role'] = { role: null, members: [] }
-        
+
         // Add "Bots" section for bots
         roleGroups['bots'] = { role: { name: 'Bots', color: '#8b5cf6' }, members: [], isBotsSection: true }
 
@@ -342,7 +342,7 @@ export default function MemberList({ className, isVisible = true, style }: {
                 roleGroups['bots'].members.push(member)
                 return
             }
-            
+
             if (!member.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
                 roleGroups['no-role'].members.push(member)
                 return
@@ -419,7 +419,7 @@ export default function MemberList({ className, isVisible = true, style }: {
                 // Bots section comes first (highest priority)
                 if (keyA === 'bots') return -1
                 if (keyB === 'bots') return 1
-                
+
                 // No role section always goes last
                 if (keyA === 'no-role') return 1
                 if (keyB === 'no-role') return -1
