@@ -229,7 +229,7 @@ export default function MemberList({ className, isVisible = true, style }: {
     style?: React.CSSProperties
 }) {
     const { activeServerId } = useGlobalState()
-    const { servers, actions, profiles } = useSubspace()
+    const { servers, actions, profiles, loadingMembers } = useSubspace()
     const [searchQuery, setSearchQuery] = useState("")
     const [loadingProfiles, setLoadingProfiles] = useState(false)
 
@@ -243,9 +243,19 @@ export default function MemberList({ className, isVisible = true, style }: {
             ? Object.values(server.members)
             : []
 
+    // Check if members are currently loading for the active server
+    const isLoadingMembers = activeServerId ? loadingMembers.has(activeServerId) : false
 
-    const isLoadingMembers = (servers[activeServerId] as any)?.membersLoading || false
+    // Automatically fetch members when active server changes
+    useEffect(() => {
+        if (activeServerId && server && (!server.members || server.members.length === 0)) {
+            // Fetch members if they don't exist
+            actions.servers.getMembers(activeServerId)
+        }
+    }, [activeServerId, server, actions.servers])
 
+    // Check if server has members loaded
+    const hasMembers = activeServerId && server ? (server.members && server.members.length > 0) : false
 
 
     // Only show loading state if we have no members AND we're loading
@@ -435,9 +445,23 @@ export default function MemberList({ className, isVisible = true, style }: {
                     <h2 className="text-xs font-bold text-primary font-freecam tracking-wider">
                         LIFE FORMS
                     </h2>
-                    <span className="text-sm text-primary/60 ml-auto font-ocr">
-                        {server.memberCount || members.length}
-                    </span>
+                    <div className="flex items-center gap-2 ml-auto">
+                        <span className="text-sm text-primary/60 font-ocr">
+                            {server.memberCount || members.length}
+                        </span>
+                        {/* {hasMembers && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => actions.servers.refreshMembers(activeServerId)}
+                                disabled={isLoadingMembers}
+                                className="h-6 w-6 p-0 hover:bg-primary/10 text-primary/60 hover:text-primary/80 transition-colors"
+                                title="Refresh members"
+                            >
+                                <Loader2 className={`w-3 h-3 ${isLoadingMembers ? 'animate-spin' : ''}`} />
+                            </Button>
+                        )} */}
+                    </div>
                 </div>
                 <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent absolute bottom-0" />
             </div>

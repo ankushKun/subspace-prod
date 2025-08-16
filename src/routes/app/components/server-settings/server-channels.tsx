@@ -522,16 +522,6 @@ export default function ServerChannels() {
 
             const activeChannel = channels.find(ch => ch.channelId.toString() === activeChannelId)
 
-            console.log('🔍 Move to uncategorized DEBUG:', {
-                activeChannelId,
-                activeChannel: activeChannel ? {
-                    name: activeChannel.name,
-                    categoryId: activeChannel.categoryId,
-                    categoryIdType: typeof activeChannel.categoryId
-                } : null,
-                uncategorizedCount: uncategorizedChannels.length
-            })
-
             if (activeChannel) {
                 // Only move if channel is currently in a category (not already uncategorized)
                 const isCurrentlyInCategory = activeChannel.categoryId && activeChannel.categoryId.toString() !== ''

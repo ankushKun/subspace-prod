@@ -75,6 +75,7 @@ interface SubspaceState {
     // ✅ ADDED: Loading guards to prevent duplicate calls
     loadingProfiles: Set<string>  // userIds currently being loaded
     loadingServers: Set<string>   // serverIds currently being loaded
+    loadingMembers: Set<string>   // serverIds with members currently being loaded
     loadingFriends: Set<string>   // friendIds currently being loaded
     loadingDMs: Set<string>       // friendIds with DMs currently being loaded
     // Track current wallet address to detect changes
@@ -156,6 +157,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     isLoadingProfile: false,
     loadingProfiles: new Set<string>(),
     loadingServers: new Set<string>(),
+    loadingMembers: new Set<string>(),
     loadingFriends: new Set<string>(),
     loadingDMs: new Set<string>(),
     currentAddress: "",
@@ -185,6 +187,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         dmConversations: {},
                         loadingProfiles: new Set<string>(),
                         loadingServers: new Set<string>(),
+                        loadingMembers: new Set<string>(),
                         loadingFriends: new Set<string>(),
                         loadingDMs: new Set<string>(),
                         currentAddress: owner
@@ -314,12 +317,35 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                             server.members = []
                         }
                     }
+
                     set({
                         servers: {
                             ...get().servers,
                             [serverId]: server
                         }
                     })
+
+                    // Automatically fetch members if they don't exist and we're not already loading them
+                    if (server && (!server.members || server.members.length === 0)) {
+                        const currentLoadingMembers = new Set(get().loadingMembers)
+                        if (!currentLoadingMembers.has(serverId)) {
+                            currentLoadingMembers.add(serverId)
+                            set({ loadingMembers: currentLoadingMembers })
+
+                            try {
+                                // Fetch members in the background
+                                await get().actions.servers.getMembers(serverId)
+                            } catch (error) {
+                                console.error(`Failed to fetch members for server ${serverId}:`, error)
+                            } finally {
+                                // Remove from loading state
+                                const updatedLoadingMembers = new Set(get().loadingMembers)
+                                updatedLoadingMembers.delete(serverId)
+                                set({ loadingMembers: updatedLoadingMembers })
+                            }
+                        }
+                    }
+
                     return server
                 } catch (e) {
                     console.error("[hooks/use-subspace] Failed to get server:", e)
@@ -566,12 +592,23 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return []
 
+                // Check if members are already being loaded for this server
+                const currentLoadingMembers = new Set(get().loadingMembers)
+                if (currentLoadingMembers.has(serverId)) {
+                    console.log(`[hooks/use-subspace] Members already loading for server ${serverId}, skipping...`)
+                    return []
+                }
+
                 // Get the server instance from current state, don't call servers.get to avoid recursion
                 const server = get().servers[serverId]
                 if (!server) {
                     console.error("Server not found for getMembers")
                     return []
                 }
+
+                // Mark as loading
+                currentLoadingMembers.add(serverId)
+                set({ loadingMembers: currentLoadingMembers })
 
                 try {
                     const membersData = await subspace.server.getAllMembers(serverId)
@@ -594,10 +631,27 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 } catch (e) {
                     console.log("error", e)
                     return []
+                } finally {
+                    // Remove from loading state
+                    const updatedLoadingMembers = new Set(get().loadingMembers)
+                    updatedLoadingMembers.delete(serverId)
+                    set({ loadingMembers: updatedLoadingMembers })
                 }
             },
             refreshMembers: async (serverId: string) => {
                 return get().actions.servers.getMembers(serverId)
+            },
+            refreshMembersWithProfiles: async (serverId: string) => {
+                // First refresh members, then refresh their profiles
+                const members = await get().actions.servers.getMembers(serverId)
+                if (members && members.length > 0) {
+                    await get().actions.servers.refreshMemberProfiles(serverId)
+                }
+                return members
+            },
+            hasMembers: (serverId: string): boolean => {
+                const server = get().servers[serverId]
+                return !!(server?.members && server.members.length > 0)
             },
             refreshMemberProfiles: async (serverId: string) => {
                 console.log(`[hooks/use-subspace] 🔄 Refreshing member profiles for server ${serverId}`)
@@ -1044,8 +1098,6 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             sendMessage: async (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => {
                 const subspace = get().subspace
                 if (!subspace) return false
-
-                console.log("🔧 SDK DEBUG: sendMessage", serverId, params)
 
                 try {
                     const success = await subspace.server.sendMessage(serverId, params)
@@ -1771,6 +1823,7 @@ export function useSubspaceWalletDisconnectHandler() {
                 dmConversations: {},
                 loadingProfiles: new Set<string>(),
                 loadingServers: new Set<string>(),
+                loadingMembers: new Set<string>(),
                 loadingFriends: new Set<string>(),
                 loadingDMs: new Set<string>(),
                 currentAddress: "",

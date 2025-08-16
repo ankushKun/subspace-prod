@@ -1744,7 +1744,7 @@ const InvitePreview: React.FC<InvitePreviewProps> = ({ serverId, href }) => {
 //     onToggleMemberList?: () => void;
 //     showMemberList?: boolean;
 // }>(({ className, onToggleMemberList, showMemberList }, ref) => {
-export default function Messages({ className, onToggleMemberList, showMemberList, ref }: { className?: string, onToggleMemberList?: () => void, showMemberList?: boolean, ref: React.RefObject<MessagesRef> }) {
+function Messages({ className, onToggleMemberList, showMemberList, ref }: { className?: string, onToggleMemberList?: () => void, showMemberList?: boolean, ref: React.RefObject<MessagesRef> }) {
     const { activeServerId, activeChannelId } = useGlobalState();
     const { servers, profile, profiles, actions, subspace, messages: messagesState } = useSubspace();
     const { shouldUseOverlays } = useMobileContext();
@@ -1795,31 +1795,34 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     useEffect(() => {
         if (!activeServerId || !activeChannelId || !subspace || !server || !channel) {
             // Stop message fetching if conditions aren't met
-            if (isMessageFetchingActive) {
-                setIsMessageFetchingActive(false)
-                if (messageFetchIntervalRef.current) {
-                    clearInterval(messageFetchIntervalRef.current)
-                    messageFetchIntervalRef.current = null
-                }
+            if (messageFetchIntervalRef.current) {
+                clearInterval(messageFetchIntervalRef.current)
+                messageFetchIntervalRef.current = null
             }
+            setIsMessageFetchingActive(false)
             return
         }
 
-        // Start message fetching if not already active
-        if (!isMessageFetchingActive) {
-            setIsMessageFetchingActive(true)
-            setLoading(true) // Show loading state for initial fetch
+        // Always start fresh message fetching for the new channel
+        setIsMessageFetchingActive(true)
+        setLoading(true) // Show loading state for initial fetch
 
-            // Initial fetch
-            fetchMessages()
-
-            // Set up polling interval (every 5 seconds)
-            messageFetchIntervalRef.current = setInterval(() => {
-                if (isMessageFetchingActive) {
-                    fetchMessages()
-                }
-            }, 5000)
+        // Clear any existing interval
+        if (messageFetchIntervalRef.current) {
+            clearInterval(messageFetchIntervalRef.current)
+            messageFetchIntervalRef.current = null
         }
+
+        // Initial fetch
+        fetchMessages()
+
+        // Set up polling interval (every 1 second)
+        messageFetchIntervalRef.current = setInterval(() => {
+            // Only fetch if we still have the required conditions
+            if (activeServerId && activeChannelId && subspace && server && channel) {
+                fetchMessages()
+            }
+        }, 1000)
 
         // Cleanup function
         return () => {
@@ -1827,12 +1830,43 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 clearInterval(messageFetchIntervalRef.current)
                 messageFetchIntervalRef.current = null
             }
+            setIsMessageFetchingActive(false)
         }
-    }, [activeServerId, activeChannelId, subspace, server, channel, isMessageFetchingActive])
+    }, [activeServerId, activeChannelId, subspace, server, channel])
+
+    // Heartbeat effect to ensure the interval keeps running
+    useEffect(() => {
+        if (!isMessageFetchingActive || !messageFetchIntervalRef.current) return
+
+        // Set up a heartbeat to check if the interval is still running
+        const heartbeatInterval = setInterval(() => {
+            if (messageFetchIntervalRef.current && activeServerId && activeChannelId && subspace && server && channel) {
+                // Force a message fetch to ensure the loop is working
+                fetchMessages()
+            }
+        }, 10000) // Check every 10 seconds
+
+        return () => {
+            clearInterval(heartbeatInterval)
+        }
+    }, [isMessageFetchingActive, activeServerId, activeChannelId, subspace, server, channel])
+
+    // Cleanup effect to ensure interval is cleared on unmount
+    useEffect(() => {
+        return () => {
+            if (messageFetchIntervalRef.current) {
+                clearInterval(messageFetchIntervalRef.current)
+                messageFetchIntervalRef.current = null
+            }
+            setIsMessageFetchingActive(false)
+        }
+    }, [])
 
     // Fetch messages for the current channel
     const fetchMessages = async () => {
-        if (!activeServerId || !activeChannelId || !subspace) return
+        if (!activeServerId || !activeChannelId || !subspace) {
+            return
+        }
 
         try {
             await actions.servers.getMessages(activeServerId, activeChannelId, 50)
@@ -1843,11 +1877,13 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 setLoading(false)
             }
         } catch (error) {
+            console.warn("Failed to fetch messages:", error)
             // Still mark as loaded to avoid infinite loading state
             if (!initialMessagesLoaded) {
                 setInitialMessagesLoaded(true)
                 setLoading(false)
             }
+            // Don't let errors stop the loop - it will continue trying
         }
     }
 
@@ -1951,8 +1987,6 @@ export default function Messages({ className, onToggleMemberList, showMemberList
                 setTimeout(() => {
                     fetchMessages()
                 }, 1000)
-
-                // toast.success("Message sent!");
             } else {
                 toast.error("Failed to send message");
             }
@@ -2273,4 +2307,4 @@ export default function Messages({ className, onToggleMemberList, showMemberList
     );
 }
 
-// export default Messages
+export default Messages

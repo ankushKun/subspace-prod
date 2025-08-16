@@ -4,6 +4,7 @@
  * IMPROVED SERVER FETCHING LOGIC:
  * 1. INITIAL LOAD: Fetches all servers concurrently when app loads
  * 2. ACTIVE SERVER: Fetches specific server when it becomes active
+ * 2.5. ACTIVE SERVER MEMBERS: Automatically fetches members when server becomes active
  * 3. HOME CLICK: Refetches all servers when home is clicked
  * 4. ALWAYS FRESH: Always fetches servers even if cached to get latest data
  * 5. FAST LOADING: Concurrent fetching for maximum speed and efficiency
@@ -11,6 +12,7 @@
  * 7. ERROR HANDLING: Graceful handling of failed server loads
  * 8. SMART SKELETONS: Shows skeletons only for servers not in cache, decrements as they load
  * 9. CACHE-AWARE: Automatically detects cached vs uncached servers for accurate skeleton count
+ * 10. MEMBER AUTO-FETCH: Automatically loads member lists when servers become active
  */
 
 import { Button } from "@/components/ui/button";
@@ -1353,6 +1355,17 @@ export default function ServerList({ className, onServerJoined }: {
             fetchActiveServer()
         }
     }, [connected, address, activeServerId, profile?.serversJoined, servers, loadingServers, actions.servers])
+
+    // 2.5. ACTIVE SERVER MEMBERS: Fetch members when server becomes active
+    useEffect(() => {
+        if (!connected || !address || !activeServerId || !profile?.serversJoined) return
+
+        const activeServer = servers[activeServerId]
+        if (activeServer && (!activeServer.members || activeServer.members.length === 0)) {
+            // Fetch members if they don't exist
+            actions.servers.getMembers(activeServerId)
+        }
+    }, [connected, address, activeServerId, profile?.serversJoined, servers, actions.servers])
 
     // 3. HOME CLICK: Refetch all servers when home is clicked
     const handleHomeClick = () => {
