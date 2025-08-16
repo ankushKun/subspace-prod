@@ -9,7 +9,8 @@ import type {
     Message,
     Friend,
     DMMessage,
-    DMResponse
+    DMResponse,
+    Bot
 } from "@subspace-protocol/sdk"
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createSigner } from "@permaweb/aoconnect";
@@ -70,8 +71,11 @@ interface SubspaceState {
     // Friends and DMs state
     friends: Record<string, ExtendedFriend>  // userId -> friend info
     dmConversations: Record<string, DMConversation>  // friendId -> conversation
+    // Bot state
+    bots: Record<string, Bot>
     isCreatingProfile: boolean
     isLoadingProfile: boolean
+    isLoadingBots: boolean
     // ✅ ADDED: Loading guards to prevent duplicate calls
     loadingProfiles: Set<string>  // userIds currently being loaded
     loadingServers: Set<string>   // serverIds currently being loaded
@@ -82,6 +86,17 @@ interface SubspaceState {
     currentAddress: string
     actions: {
         init: () => void
+        bots: {
+            create: (params: { name: string; description?: string; pfp?: string; publicBot?: boolean }) => Promise<string | null>;
+            get: (botId: string) => Promise<Bot | null>;
+            getAll: () => Promise<Record<string, Bot>>;
+            getByOwner: (ownerId: string) => Promise<Bot[]>;
+            delete: (botId: string) => Promise<boolean>;
+            addToServer: (params: { serverId: string; botId: string; permissions?: any }) => Promise<boolean>;
+            removeFromServer: (params: { serverId: string; botId: string }) => Promise<boolean>;
+            updateSource: (botId: string, source: string) => Promise<boolean>;
+            update: (botId: string, params: { name?: string; pfp?: string; publicBot?: boolean }) => Promise<boolean>;
+        }
         profile: {
             get: (userId?: string) => Promise<Profile | null>
             getBulk: (userIds: string[]) => Promise<Profile[]>
@@ -153,8 +168,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     messages: {},
     friends: {},
     dmConversations: {},
+    bots: {},
     isCreatingProfile: false,
     isLoadingProfile: false,
+    isLoadingBots: false,
     loadingProfiles: new Set<string>(),
     loadingServers: new Set<string>(),
     loadingMembers: new Set<string>(),
@@ -162,6 +179,171 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     loadingDMs: new Set<string>(),
     currentAddress: "",
     actions: {
+        bots: {
+            create: async (params) => {
+                const subspace = get().subspace;
+                if (!subspace) return null;
+
+                try {
+                    const botId = await subspace.bot.createBot(params);
+                    if (botId) {
+                        // Get bot info and cache it
+                        const botInfo = await subspace.bot.getBot(botId);
+                        if (botInfo) {
+                            set((state) => ({
+                                bots: { ...state.bots, [botId]: botInfo }
+                            }));
+                        }
+                    }
+                    return botId;
+                } catch (error) {
+                    console.error("Failed to create bot:", error);
+                    return null;
+                }
+            },
+            get: async (botId) => {
+                const subspace = get().subspace;
+                if (!subspace) return null;
+
+                try {
+                    const botInfo = await subspace.bot.getBot(botId);
+                    if (botInfo) {
+                        set((state) => ({
+                            bots: { ...state.bots, [botId]: botInfo }
+                        }));
+                    }
+                    return botInfo;
+                } catch (error) {
+                    console.error("Failed to get bot:", error);
+                    return null;
+                }
+            },
+            getAll: async () => {
+                const subspace = get().subspace;
+                if (!subspace) return {};
+
+                try {
+                    const bots = await subspace.bot.getAllBots();
+                    const convertedBots = Object.entries(bots).reduce((acc, [id, bot]) => {
+                        acc[id] = bot;
+                        return acc;
+                    }, {} as Record<string, Bot>);
+                    set({ bots: convertedBots });
+                    return bots;
+                } catch (error) {
+                    console.error("Failed to get all bots:", error);
+                    return {};
+                }
+            },
+            update: async (botId, params) => {
+                const subspace = get().subspace;
+                if (!subspace) return false;
+
+                try {
+                    const success = await subspace.bot.updateBot(botId, params);
+                    if (success) {
+                        // Get updated bot info and cache it
+                        const botInfo = await subspace.bot.getBot(botId);
+                        if (botInfo) {
+                            set((state) => ({
+                                bots: { ...state.bots, [botId]: botInfo }
+                            }));
+                        }
+                    }
+                    return success;
+                } catch (error) {
+                    console.error("Failed to update bot:", error);
+                    return false;
+                }
+            },
+            getByOwner: async (ownerId) => {
+                const subspace = get().subspace;
+                if (!subspace) return [];
+
+                try {
+                    const bots = await subspace.bot.getBotsByOwner(ownerId);
+                    // Update the store with these bots
+                    const botsMap = bots.reduce((acc, bot) => {
+                        acc[bot.process] = bot;
+                        return acc;
+                    }, {} as Record<string, Bot>);
+                    set((state) => ({
+                        bots: { ...state.bots, ...botsMap }
+                    }));
+                    return bots;
+                } catch (error) {
+                    console.error("Failed to get bots by owner:", error);
+                    return [];
+                }
+            },
+            delete: async (botId) => {
+                const subspace = get().subspace;
+                if (!subspace) return false;
+
+                try {
+                    const success = await subspace.bot.deleteBot(botId);
+                    if (success) {
+                        // Remove from store
+                        set((state) => {
+                            const { [botId]: removed, ...remainingBots } = state.bots;
+                            return { bots: remainingBots };
+                        });
+                    }
+                    return success;
+                } catch (error) {
+                    console.error("Failed to delete bot:", error);
+                    return false;
+                }
+            },
+            addToServer: async (params) => {
+                const subspace = get().subspace;
+                if (!subspace) return false;
+
+                try {
+                    const success = await subspace.bot.addBotToServer(params);
+                    if (success) {
+                        // Update bot info to reflect new server
+                        await get().actions.bots.get(params.botId);
+                    }
+                    return success;
+                } catch (error) {
+                    console.error("Failed to add bot to server:", error);
+                    return false;
+                }
+            },
+            removeFromServer: async (params) => {
+                const subspace = get().subspace;
+                if (!subspace) return false;
+
+                try {
+                    const success = await subspace.bot.removeBotFromServer(params);
+                    if (success) {
+                        // Update bot info to reflect removed server
+                        await get().actions.bots.get(params.botId);
+                    }
+                    return success;
+                } catch (error) {
+                    console.error("Failed to remove bot from server:", error);
+                    return false;
+                }
+            },
+            updateSource: async (botId, source) => {
+                const subspace = get().subspace;
+                if (!subspace) return false;
+
+                try {
+                    const success = await subspace.bot.updateBotSource(botId, source);
+                    if (success) {
+                        // Update bot info to reflect changes
+                        await get().actions.bots.get(botId);
+                    }
+                    return success;
+                } catch (error) {
+                    console.error("Failed to update bot source:", error);
+                    return false;
+                }
+            }
+        },
         init: async () => {
             try {
                 const signer = await useWallet.getState().actions.getSigner()

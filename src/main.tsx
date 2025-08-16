@@ -30,6 +30,9 @@ import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-reac
 import alien from '@/assets/subspace/alien-green.svg';
 import { Toaster } from 'sonner';
 import Invite from '@/routes/invite';
+import Developer from '@/routes/developer';
+import Bots from '@/routes/developer/bots';
+import BotSettings from './routes/developer/bot-settings';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -464,6 +467,10 @@ function Main() {
                         <Route path="/app/:serverId" element={<App />} />
                         <Route path="/app/:serverId/:channelId" element={<App />} />
                         <Route path="/app/:serverId/settings" element={<ServerSettings />} />
+
+                        <Route path="/developer" element={<Developer />} />
+                        <Route path="/developer/bots" element={<Bots />} />
+                        <Route path="/developer/bots/:botId" element={<BotSettings />} />
                     </Routes>
                 </HashRouter>
             </ThemeProvider>
