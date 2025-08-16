@@ -6,7 +6,7 @@ import type { Member, Role } from "@subspace-protocol/sdk";
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Crown, Users, Search, MoreHorizontal, UsersRound, Loader2 } from "lucide-react";
+import { Crown, Users, Search, MoreHorizontal, UsersRound, Loader2, Bot } from "lucide-react";
 import alien from "@/assets/subspace/alien-black.svg";
 import alienGreen from "@/assets/subspace/alien-green.svg";
 import ProfilePopover from "./profile-popover";
@@ -15,11 +15,13 @@ import ProfilePopover from "./profile-popover";
 const MemberAvatar = ({
     userId,
     profile,
-    size = "sm"
+    size = "sm",
+    isBot = false
 }: {
     userId: string;
     profile?: any;
     size?: "xs" | "sm" | "md";
+    isBot?: boolean;
 }) => {
     const sizeClasses = {
         xs: "w-6 h-6 text-[10px]",
@@ -51,6 +53,12 @@ const MemberAvatar = ({
                     </div>
                 )}
             </div>
+            {/* Bot indicator */}
+            {isBot && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center border border-background">
+                    <Bot className="w-1.5 h-1.5 text-white" />
+                </div>
+            )}
             {/* Subtle glow effect */}
             <div className="absolute inset-0 rounded-sm bg-primary/20 blur-sm scale-110 -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
@@ -63,17 +71,21 @@ const MemberItem = ({
     profile,
     isOwner = false,
     roleColor,
-    server
+    server,
+    isBot = false
 }: {
     member: any;
     profile?: any & { primaryName: string, primaryLogo: string };
     isOwner?: boolean;
     roleColor?: string;
     server?: any;
+    isBot?: boolean;
 }) => {
     const [isHovered, setIsHovered] = useState(false)
 
-    const displayName = member.nickname || profile?.primaryName || shortenAddress(member.userId)
+    const displayName = isBot 
+        ? (profile?.primaryName || `Bot ${shortenAddress(member.userId)}`)
+        : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
 
     return (
         <div className="relative group">
@@ -93,7 +105,7 @@ const MemberItem = ({
                     <div className="flex items-center gap-3 w-full relative z-10">
                         {/* Avatar */}
                         <div className="flex-shrink-0">
-                            <MemberAvatar userId={member.userId} profile={profile} size="sm" />
+                            <MemberAvatar userId={member.userId} profile={profile} size="sm" isBot={isBot} />
                         </div>
 
                         {/* Member info */}
@@ -108,8 +120,13 @@ const MemberItem = ({
                                     {displayName}
                                 </span>
 
+                                {/* Bot indicator */}
+                                {isBot && (
+                                    <Bot className="w-3 h-3 text-purple-500 flex-shrink-0" />
+                                )}
+
                                 {/* Owner indicator */}
-                                {isOwner && (
+                                {isOwner && !isBot && (
                                     <Crown className="w-3 h-3 text-primary flex-shrink-0 animate-pulse" />
                                 )}
                             </div>
@@ -140,7 +157,8 @@ const MemberSection = ({
     profiles,
     isOwnerSection = false,
     roleColor,
-    server
+    server,
+    isBotsSection = false
 }: {
     title: string;
     members: any[];
@@ -148,6 +166,7 @@ const MemberSection = ({
     isOwnerSection?: boolean;
     roleColor?: string;
     server?: any;
+    isBotsSection?: boolean;
 }) => {
     const memberCount = members.length
 
@@ -215,6 +234,7 @@ const MemberSection = ({
                             isOwner={member.userId === server?.ownerId}
                             roleColor={memberRoleColor}
                             server={server}
+                            isBot={isBotsSection}
                         />
                     )
                 })}
@@ -237,11 +257,28 @@ export default function MemberList({ className, isVisible = true, style }: {
     const server = servers[activeServerId]
 
     // Get members from cached server data
-    const members = server?.members && Array.isArray(server.members)
+    const regularMembers = server?.members && Array.isArray(server.members)
         ? server.members
         : server?.members && typeof server.members === 'object'
             ? Object.values(server.members)
             : []
+    
+    // Get bots from cached server data and convert to member-like format
+    const serverBots = server?.bots && typeof server.bots === 'object'
+        ? Object.entries(server.bots).map(([botId, botInfo]) => ({
+            userId: botId,
+            serverId: server.serverId,
+            nickname: undefined,
+            roles: [], // Bots don't have roles
+            joinedAt: "Unknown",
+            isBot: true,
+            approved: (botInfo as any).approved,
+            process: (botInfo as any).process
+        }))
+        : []
+    
+    // Combine members and bots
+    const members = [...regularMembers, ...serverBots]
 
     // Check if members are currently loading for the active server
     const isLoadingMembers = activeServerId ? loadingMembers.has(activeServerId) : false
@@ -268,7 +305,9 @@ export default function MemberList({ className, isVisible = true, style }: {
 
         return members.filter(member => {
             const profile = profiles[member.userId]
-            const displayName = member.nickname || profile?.primaryName || shortenAddress(member.userId)
+            const displayName = member.isBot 
+                ? (profile?.primaryName || `Bot ${shortenAddress(member.userId)}`)
+                : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
             const lowerQuery = searchQuery.toLowerCase()
 
             return displayName.toLowerCase().includes(lowerQuery) ||
@@ -280,7 +319,7 @@ export default function MemberList({ className, isVisible = true, style }: {
 
     // Organize members by their ACTUAL roles - create sections for each role they have
     const organizedMembersByRole = useMemo(() => {
-        const roleGroups: Record<string, { role: any | null; members: any[] }> = {}
+        const roleGroups: Record<string, { role: any | null; members: any[]; isBotsSection?: boolean }> = {}
 
         // Get ALL roles in the server
         const serverRoles = Object.values(server?.roles || {})
@@ -292,9 +331,18 @@ export default function MemberList({ className, isVisible = true, style }: {
 
         // Add "No Role" section for members without any roles at all
         roleGroups['no-role'] = { role: null, members: [] }
+        
+        // Add "Bots" section for bots
+        roleGroups['bots'] = { role: { name: 'Bots', color: '#8b5cf6' }, members: [], isBotsSection: true }
 
         // Categorize each member by their highest priority role
         filteredMembers.forEach(member => {
+            // Handle bots separately
+            if (member.isBot) {
+                roleGroups['bots'].members.push(member)
+                return
+            }
+            
             if (!member.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
                 roleGroups['no-role'].members.push(member)
                 return
@@ -368,6 +416,10 @@ export default function MemberList({ className, isVisible = true, style }: {
         const groups = Object.entries(organizedMembersByRole)
             .filter(([key, group]) => group.members.length > 0) // Only show groups with members
             .sort(([keyA, groupA], [keyB, groupB]) => {
+                // Bots section comes first (highest priority)
+                if (keyA === 'bots') return -1
+                if (keyB === 'bots') return 1
+                
                 // No role section always goes last
                 if (keyA === 'no-role') return 1
                 if (keyB === 'no-role') return -1
@@ -512,6 +564,7 @@ export default function MemberList({ className, isVisible = true, style }: {
                                     isOwnerSection={false}
                                     roleColor={group.role?.color}
                                     server={server}
+                                    isBotsSection={group.isBotsSection || false}
                                 />
                             )
                         })}

@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react"
 import { useParams, useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
 import { useWallet } from "@/hooks/use-wallet"
 import { useSubspace } from "@/hooks/use-subspace"
 import type { Bot, Server } from "@subspace-protocol/sdk"
@@ -26,6 +27,8 @@ export default function AddBot() {
     const [selectedServer, setSelectedServer] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [hasAdded, setHasAdded] = useState(false)
+    const [addingStatus, setAddingStatus] = useState<string>("")
+    const [addingProgress, setAddingProgress] = useState<number>(0)
 
     // Track if the component is mounted
     const isMounted = useRef(true)
@@ -101,12 +104,12 @@ export default function AddBot() {
         fetchBotInfo()
     }, [botId, connected, subspace])
 
-    // Get available servers where user has MANAGE_BOTS permission
+    // Get servers where user has MANAGE_BOTS permission
     console.log('Debug - All servers:', servers)
     console.log('Debug - Current user address:', address)
     console.log('Debug - Bot info:', botInfo)
 
-    const availableServers = Object.entries(servers || {}).filter(([serverId, server]) => {
+    const eligibleServers = Object.entries(servers || {}).filter(([serverId, server]) => {
         console.log(`\nDebug - Checking server: ${server.name} (${serverId})`)
 
         const member = server.members?.[address!]
@@ -133,16 +136,23 @@ export default function AddBot() {
         console.log('Debug - Has MANAGE_BOTS permission:', hasPermission)
         console.log('Debug - Is server owner:', member.userId === server.ownerId)
 
-        // Check if bot isn't already in this server
-        const botNotInServer = !botInfo?.joinedServers?.[serverId]
-        console.log('Debug - Bot not in server:', botNotInServer)
-        console.log('Debug - Bot joined servers:', botInfo?.joinedServers)
+        return hasPermission
+    }).map(([serverId, server]) => {
+        // Check if bot is already in this server
+        const botAlreadyInServer = botInfo?.joinedServers?.[serverId] === true
+        console.log(`Debug - Bot already in ${server.name}:`, botAlreadyInServer)
 
-        const isEligible = hasPermission && botNotInServer
-        console.log('Debug - Server is eligible:', isEligible)
-
-        return isEligible
+        return {
+            serverId,
+            server,
+            botAlreadyInServer,
+            canAdd: !botAlreadyInServer
+        }
     })
+
+    // Separate available and unavailable servers for display
+    const availableServers = eligibleServers.filter(item => item.canAdd)
+    const serversWithBot = eligibleServers.filter(item => item.botAlreadyInServer)
 
 
 
@@ -151,11 +161,18 @@ export default function AddBot() {
 
         setIsAdding(true)
         setError(null)
+        setAddingStatus("")
+        setAddingProgress(0)
 
         try {
             const success = await subspaceActions.bots.addToServer({
                 serverId: selectedServer,
                 botId: botId
+            }, (status: string, progress?: number) => {
+                setAddingStatus(status)
+                if (progress !== undefined) {
+                    setAddingProgress(progress)
+                }
             })
 
             if (success) {
@@ -165,13 +182,15 @@ export default function AddBot() {
                 setBotInfo(updatedBot)
                 toast.success("Bot added successfully!")
             } else {
-                setError("Failed to add bot to server")
+                setError("Failed to add bot to server - please try again")
             }
         } catch (err) {
             console.error("Error adding bot:", err)
             setError("Failed to add bot to server")
         } finally {
             setIsAdding(false)
+            setAddingStatus("")
+            setAddingProgress(0)
         }
     }
 
@@ -296,7 +315,7 @@ export default function AddBot() {
                                 </div>
 
                                 {/* Server Selection */}
-                                {!hasAdded && availableServers.length > 0 && (
+                                {!hasAdded && eligibleServers.length > 0 && (
                                     <div className="w-full space-y-2">
                                         <label className="text-sm font-medium">ADD TO SERVER:</label>
                                         <Select
@@ -308,16 +327,49 @@ export default function AddBot() {
                                                 <SelectValue placeholder="Select a server" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {availableServers.map(([id, server]) => (
-                                                    <SelectItem key={id} value={id}>
+                                                {/* Available servers (can add bot) */}
+                                                {availableServers.map(({ serverId, server }) => (
+                                                    <SelectItem key={serverId} value={serverId}>
                                                         {server.name}
                                                     </SelectItem>
                                                 ))}
+
+                                                {/* Servers that already have the bot (disabled) */}
+                                                {serversWithBot.length > 0 && (
+                                                    <>
+                                                        {availableServers.length > 0 && (
+                                                            <div className="px-2 py-1.5 text-xs text-muted-foreground border-t">
+                                                                Already added:
+                                                            </div>
+                                                        )}
+                                                        {serversWithBot.map(({ serverId, server }) => (
+                                                            <SelectItem
+                                                                key={serverId}
+                                                                value={serverId}
+                                                                disabled
+                                                                className="opacity-50"
+                                                            >
+                                                                <div className="flex items-center justify-between w-full">
+                                                                    <span>{server.name}</span>
+                                                                    <CheckCircle className="w-3 h-3 text-green-500 ml-2" />
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </>
+                                                )}
                                             </SelectContent>
                                         </Select>
-                                        <p className="text-xs text-muted-foreground">
-                                            This requires you to have Manage Server permission in the server.
-                                        </p>
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-muted-foreground">
+                                                This requires you to have Manage Server permission in the server.
+                                            </p>
+                                            {serversWithBot.length > 0 && (
+                                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    <CheckCircle className="w-3 h-3 text-green-500" />
+                                                    Bot is already added to {serversWithBot.length} server{serversWithBot.length !== 1 ? 's' : ''}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
@@ -330,7 +382,7 @@ export default function AddBot() {
                                         <CheckCircle className="w-4 h-4 mr-2" />
                                         Go to Server
                                     </Button>
-                                ) : availableServers.length === 0 ? (
+                                ) : eligibleServers.length === 0 ? (
                                     <div className="text-center space-y-2">
                                         <p className="text-sm text-muted-foreground">
                                             You don't have permission to add bots to any servers.
@@ -339,21 +391,50 @@ export default function AddBot() {
                                             Return to App
                                         </Button>
                                     </div>
+                                ) : availableServers.length === 0 ? (
+                                    <div className="text-center space-y-2">
+                                        <p className="text-sm text-muted-foreground">
+                                            This bot is already added to all servers you can manage.
+                                        </p>
+                                        <div className="text-xs text-muted-foreground">
+                                            Already in: {serversWithBot.map(({ server }) => server.name).join(', ')}
+                                        </div>
+                                        <Button variant="outline" onClick={() => navigate("/app")}>
+                                            Return to App
+                                        </Button>
+                                    </div>
                                 ) : (
-                                    <Button
-                                        onClick={handleAddBot}
-                                        disabled={!selectedServer || isAdding}
-                                        className="w-full"
-                                    >
-                                        {isAdding ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                Adding Bot...
-                                            </>
-                                        ) : (
-                                            "Continue"
+                                    <div className="w-full space-y-4">
+                                        {/* Progress indicator when adding */}
+                                        {isAdding && (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-muted-foreground">
+                                                        {addingStatus || "Processing..."}
+                                                    </span>
+                                                    <span className="text-muted-foreground">
+                                                        {Math.round(addingProgress)}%
+                                                    </span>
+                                                </div>
+                                                <Progress value={addingProgress} className="w-full" />
+                                            </div>
                                         )}
-                                    </Button>
+
+                                        <Button
+                                            onClick={handleAddBot}
+                                            disabled={!selectedServer || isAdding}
+                                            className="w-full"
+                                        >
+                                            {isAdding ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    Adding Bot...
+                                                </>
+                                            ) : (
+                                                "Continue"
+                                            )}
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
                         )}

@@ -33,7 +33,7 @@ export function setCuUrl(url: string): void {
 // Helper function to get Hyperbeam URL from localStorage
 function getHyperbeamUrl(): string {
     const storedUrl = localStorage.getItem('subspace-hyperbeam-url');
-    return storedUrl || WebConstants.HyperbeamEndpoints.BetterIDEa; // Default to BetterIDEa
+    return storedUrl || WebConstants.HyperbeamEndpoints.PermaDAO; // Default to BetterIDEa
 }
 
 // Helper function to set Hyperbeam URL in localStorage
@@ -92,7 +92,7 @@ interface SubspaceState {
             getAll: () => Promise<Record<string, Bot>>;
             getByOwner: (ownerId: string) => Promise<Bot[]>;
             delete: (botId: string) => Promise<boolean>;
-            addToServer: (params: { serverId: string; botId: string; permissions?: any }) => Promise<boolean>;
+            addToServer: (params: { serverId: string; botId: string; permissions?: any }, onStatusUpdate?: (status: string, progress?: number) => void) => Promise<boolean>;
             removeFromServer: (params: { serverId: string; botId: string }) => Promise<boolean>;
             updateSource: (botId: string, source: string) => Promise<boolean>;
             update: (botId: string, params: { name?: string; pfp?: string; publicBot?: boolean }) => Promise<boolean>;
@@ -295,19 +295,46 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return false;
                 }
             },
-            addToServer: async (params) => {
+            addToServer: async (params, onStatusUpdate?: (status: string, progress?: number) => void) => {
                 const subspace = get().subspace;
                 if (!subspace) return false;
 
                 try {
+                    // Step 1: Send the addBotToServer request
+                    onStatusUpdate?.("Sending bot addition request...", 10);
                     const success = await subspace.bot.addBotToServer(params);
-                    if (success) {
-                        // Update bot info to reflect new server
-                        await get().actions.bots.get(params.botId);
+
+                    if (!success) {
+                        onStatusUpdate?.("Failed to send bot addition request", 0);
+                        return false;
                     }
-                    return success;
+
+                    onStatusUpdate?.("Request sent, waiting for processing...", 25);
+
+                    // Step 2: Use the bot manager's polling function with increasing intervals
+                    const pollSuccess = await subspace.bot.pollBotAdditionStatus(
+                        params,
+                        onStatusUpdate,
+                        20,     // maxRetries: 20 attempts  
+                        60000   // maxTotalTime: 60 seconds
+                    );
+
+                    // Always try to update local bot cache regardless of polling result
+                    try {
+                        await get().actions.bots.get(params.botId);
+                    } catch (error) {
+                        console.error("Failed to refresh bot cache:", error);
+                    }
+
+                    if (pollSuccess) {
+                        onStatusUpdate?.("Bot addition completed successfully!", 100);
+                    }
+
+                    return pollSuccess;
+
                 } catch (error) {
                     console.error("Failed to add bot to server:", error);
+                    onStatusUpdate?.("Failed to add bot to server", 0);
                     return false;
                 }
             },
