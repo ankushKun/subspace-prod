@@ -18,6 +18,7 @@ import { useWallet } from "./use-wallet";
 import { useGlobalState } from "./use-global-state";
 import { Constants as WebConstants } from "@/lib/constants";
 import { useEffect } from "react";
+// Remove the import since we're now using SDK methods directly
 
 // Helper function to get CU URL from localStorage
 function getCuUrl(): string {
@@ -39,6 +40,36 @@ function getHyperbeamUrl(): string {
 // Helper function to set Hyperbeam URL in localStorage
 export function setHyperbeamUrl(url: string): void {
     localStorage.setItem('subspace-hyperbeam-url', url);
+}
+
+// Helper function to check if a userId is a bot
+export function isBotUserId(userId: string, activeServerId?: string): boolean {
+    const state = useSubspace.getState()
+
+    // Check if it's in the global bots store
+    if (state.bots[userId]) {
+        return true
+    }
+
+    // Check if it's in the server's bot list
+    if (activeServerId && state.servers[activeServerId]?.bots?.[userId]) {
+        return true
+    }
+
+    return false
+}
+
+// Helper function to get bot or user profile
+export function getBotOrUserProfile(userId: string, activeServerId?: string): Profile | Bot | null {
+    const state = useSubspace.getState()
+
+    // Check if it's a bot first
+    if (isBotUserId(userId, activeServerId)) {
+        return state.bots[userId] || null
+    }
+
+    // Return user profile
+    return state.profiles[userId] || null
 }
 
 
@@ -101,8 +132,8 @@ interface SubspaceState {
         }
         profile: {
             get: (userId?: string) => Promise<Profile | null>
-            getBulk: (userIds: string[]) => Promise<Profile[]>
-            getBulkPrimaryNames: (userIds: string[]) => Promise<void>
+            getBulk: (userIds: string[]) => Promise<Record<string, Profile | null>>
+            getBulkPrimaryNames: (userIds: string[]) => Promise<Record<string, Profile | null>>
             updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
         }
         servers: {
@@ -231,7 +262,25 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         acc[id] = bot;
                         return acc;
                     }, {} as Record<string, Bot>);
-                    set({ bots: convertedBots });
+
+                    // Also update profiles cache with bot data
+                    const botProfiles = Object.entries(bots).reduce((acc, [id, bot]) => {
+                        acc[id] = {
+                            userId: id,
+                            name: bot.name,
+                            primaryName: bot.name,
+                            pfp: bot.pfp,
+                            primaryLogo: bot.pfp,
+                            isBot: true,
+                            ...bot
+                        };
+                        return acc;
+                    }, {} as Record<string, any>);
+
+                    set((state) => ({
+                        bots: convertedBots,
+                        profiles: { ...state.profiles, ...botProfiles }
+                    }));
                     return bots;
                 } catch (error) {
                     console.error("Failed to get all bots:", error);
@@ -270,8 +319,24 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         acc[bot.process] = bot;
                         return acc;
                     }, {} as Record<string, Bot>);
+
+                    // Also update profiles cache with bot data
+                    const botProfiles = bots.reduce((acc, bot) => {
+                        acc[bot.process] = {
+                            userId: bot.process,
+                            name: bot.name,
+                            primaryName: bot.name,
+                            pfp: bot.pfp,
+                            primaryLogo: bot.pfp,
+                            isBot: true,
+                            ...bot
+                        };
+                        return acc;
+                    }, {} as Record<string, any>);
+
                     set((state) => ({
-                        bots: { ...state.bots, ...botsMap }
+                        bots: { ...state.bots, ...botsMap },
+                        profiles: { ...state.profiles, ...botProfiles }
                     }));
                     return bots;
                 } catch (error) {
@@ -286,10 +351,14 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     const success = await subspace.bot.deleteBot(botId);
                     if (success) {
-                        // Remove from store
+                        // Remove from both bots and profiles store
                         set((state) => {
-                            const { [botId]: removed, ...remainingBots } = state.bots;
-                            return { bots: remainingBots };
+                            const { [botId]: removedBot, ...remainingBots } = state.bots;
+                            const { [botId]: removedProfile, ...remainingProfiles } = state.profiles;
+                            return {
+                                bots: remainingBots,
+                                profiles: remainingProfiles
+                            };
                         });
                     }
                     return success;
@@ -468,47 +537,56 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
             },
             getBulk: async (userIds: string[]) => {
-
                 const subspace = get().subspace
-                if (!subspace) return []
+                if (!subspace) return {}
 
-                const profiles = await subspace.user.getBulkProfiles(userIds)
-                if (profiles) {
-                    const profilesKV = profiles.reduce((acc: Record<string, Profile>, profile: Profile) => {
-                        acc[profile.userId] = profile as Profile
-                        return acc
-                    }, {} as Record<string, Profile>)
+                try {
+                    // Use the SDK's bulk profile method
+                    const results = await subspace.user.getBulkProfiles(userIds)
 
-                    // merge profiles values with any existing data from the state (primaryName, primaryLogo)
+                    // Update the profiles cache with successful results
+                    const successfulProfiles = Object.entries(results)
+                        .filter(([_, profile]) => profile !== null)
+                        .reduce((acc, [userId, profile]) => {
+                            acc[userId] = profile!
+                            return acc
+                        }, {} as Record<string, Profile>)
 
-                    const stateProfiles = get().profiles
-                    Object.keys(stateProfiles).forEach((userId) => {
-                        if (profilesKV[userId]) {
-                            profilesKV[userId] = {
-                                ...profilesKV[userId],
-                                ...stateProfiles[userId]
-                            }
-                        }
-                    })
+                    if (Object.keys(successfulProfiles).length > 0) {
+                        set({ profiles: { ...get().profiles, ...successfulProfiles } })
+                    }
 
-                    set({ profiles: { ...get().profiles, ...profilesKV } })
+                    return results
+                } catch (error) {
+                    console.error("Failed to get bulk profiles:", error)
+                    return {}
                 }
-                return profiles as Profile[]
             },
             getBulkPrimaryNames: async (userIds: string[]) => {
                 const subspace = get().subspace
-                if (!subspace) return
+                if (!subspace) return {}
 
-                // promise.all wont work and api calls will get blocked due to rate limiting
-                // instead, run a loop and fetch their profiles one by one
+                try {
+                    // Use the SDK's bulk primary names method
+                    const results = await subspace.user.getBulkPrimaryNames(userIds)
 
-                for (const userId of userIds) {
-                    const profile = await get().actions.profile.get(userId)
-                    // delay 250ms
-                    await new Promise(resolve => setTimeout(resolve, 220))
+                    // Update the profiles cache with successful results
+                    const successfulProfiles = Object.entries(results)
+                        .filter(([_, profile]) => profile !== null)
+                        .reduce((acc, [userId, profile]) => {
+                            acc[userId] = profile!
+                            return acc
+                        }, {} as Record<string, Profile>)
+
+                    if (Object.keys(successfulProfiles).length > 0) {
+                        set({ profiles: { ...get().profiles, ...successfulProfiles } })
+                    }
+
+                    return results
+                } catch (error) {
+                    console.error("Failed to get bulk primary names:", error)
+                    return {}
                 }
-
-
             },
             updateProfile: async (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => {
                 const subspace = get().subspace

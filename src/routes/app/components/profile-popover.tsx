@@ -1,4 +1,4 @@
-import { useSubspace } from "@/hooks/use-subspace"
+import { useSubspace, isBotUserId } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { cn, shortenAddress } from "@/lib/utils"
@@ -52,6 +52,11 @@ export default function ProfilePopover({
     const profile = profiles[userId]
     const isCurrentUser = address === userId
 
+    // Check if this is a bot using the helper function
+    const isBot = useMemo(() => {
+        return isBotUserId(userId, activeServerId)
+    }, [userId, activeServerId])
+
     // Get member info from server
     const member = server?.members && typeof server.members === 'object'
         ? Array.isArray(server.members)
@@ -60,15 +65,26 @@ export default function ProfilePopover({
         : undefined
     const nickname = member?.nickname
 
-    // Get display name following priority order
-    const displayName = nickname || profile?.primaryName || shortenAddress(userId)
+    // Get display name following priority order (different for bots)
+    const displayName = isBot
+        ? (nickname || profile?.primaryName || profile?.name || shortenAddress(userId))
+        : (nickname || profile?.primaryName || shortenAddress(userId))
 
     // Create badges array based on user profile
     const allBadges = useMemo(() => {
         const badges = []
 
-        // Add ArNS badge if user has primary name
-        if (profile?.primaryName) {
+        // Add bot badge if this is a bot
+        if (isBot) {
+            badges.push({
+                logo: "🤖", // Bot emoji as logo
+                hoverText: "Bot",
+                children: <span className="text-blue-500 font-bold">BOT</span>
+            })
+        }
+
+        // Add ArNS badge if user has primary name (not for bots)
+        if (!isBot && profile?.primaryName) {
             badges.push({
                 logo: Constants.Icons.ArnsLogo,
                 hoverText: "ArNS",
@@ -76,8 +92,8 @@ export default function ProfilePopover({
             })
         }
 
-        // Add Wander Tier badge
-        if (profile?.wndrTier) {
+        // Add Wander Tier badge (not for bots)
+        if (!isBot && profile?.wndrTier) {
             badges.push({
                 logo: Constants.WanderTiers[profile.wndrTier.tier]?.Icon,
                 hoverText: `${Constants.WanderTiers[profile.wndrTier.tier]?.Label} Tier`,
@@ -87,7 +103,7 @@ export default function ProfilePopover({
         }
 
         return badges
-    }, [profile])
+    }, [profile, isBot])
 
     const visibleBadges = showAllBadges ? allBadges : allBadges.slice(0, MAX_VISIBLE_BADGES)
     const hasMoreBadges = allBadges.length > MAX_VISIBLE_BADGES
@@ -330,8 +346,14 @@ export default function ProfilePopover({
             setIsRefreshing(true)
 
             try {
-                // Fetch latest profile data (general user profile including primary name)
-                await actions.profile.get(userId)
+                // Fetch latest profile data - different for bots vs users
+                if (isBot) {
+                    // For bots, fetch bot profile data
+                    await actions.bots.get(userId)
+                } else {
+                    // For users, fetch user profile data
+                    await actions.profile.get(userId)
+                }
 
                 // Fetch latest server data if we're in a server
                 if (activeServerId) {
@@ -534,7 +556,10 @@ export default function ProfilePopover({
                                     {/* Show secondary info only when not editing nickname */}
                                     {(!isEditingNickname && nickname) && (
                                         <p className="text-sm text-primary/70 font-medium font-ocr mt-1">
-                                            {profile?.primaryName || shortenAddress(userId)}
+                                            {isBot
+                                                ? (profile?.primaryName || profile?.name || shortenAddress(userId))
+                                                : (profile?.primaryName || shortenAddress(userId))
+                                            }
                                         </p>
                                     )}
                                 </div>

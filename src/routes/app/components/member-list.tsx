@@ -1,5 +1,5 @@
 import { useGlobalState } from "@/hooks/use-global-state";
-import { useSubspace } from "@/hooks/use-subspace";
+import { useSubspace, isBotUserId } from "@/hooks/use-subspace";
 import { cn, shortenAddress } from "@/lib/utils";
 import { Constants } from "@/lib/constants";
 import type { Member, Role } from "@subspace-protocol/sdk";
@@ -157,7 +157,8 @@ const MemberSection = ({
     profiles,
     isOwnerSection = false,
     roleColor,
-    server
+    server,
+    activeServerId
 }: {
     title: string;
     members: any[];
@@ -165,6 +166,7 @@ const MemberSection = ({
     isOwnerSection?: boolean;
     roleColor?: string;
     server?: any;
+    activeServerId?: string;
 }) => {
     const memberCount = members.length
 
@@ -232,7 +234,7 @@ const MemberSection = ({
                             isOwner={member.userId === server?.ownerId}
                             roleColor={memberRoleColor}
                             server={server}
-                            isBot={member.isBot || false}
+                            isBot={isBotUserId(member.userId, activeServerId)}
                         />
                     )
                 })}
@@ -288,6 +290,71 @@ export default function MemberList({ className, isVisible = true, style }: {
             actions.servers.getMembers(activeServerId)
         }
     }, [activeServerId, server, actions.servers])
+
+    // Fetch profiles for all members in batches when members are loaded
+    useEffect(() => {
+        const fetchMemberProfiles = async () => {
+            if (!activeServerId || !server || !members.length || loadingProfiles) return
+
+            setLoadingProfiles(true)
+            try {
+                // Separate regular members and bots using helper function
+                const regularMemberIds = members
+                    .filter(member => !isBotUserId(member.userId, activeServerId))
+                    .map(member => member.userId)
+                    .filter(userId => !profiles[userId]) // Only fetch if not already cached
+
+                const botMemberIds = members
+                    .filter(member => isBotUserId(member.userId, activeServerId))
+                    .map(member => member.userId)
+                    .filter(userId => !profiles[userId]) // Only fetch if not already cached
+
+                // Fetch regular member profiles in batches of 10 through SDK
+                if (regularMemberIds.length > 0) {
+                    console.log(`👥 Starting to fetch ${regularMemberIds.length} member profiles...`)
+                    const profileResults = await actions.profile.getBulk(regularMemberIds)
+                    const successCount = Object.values(profileResults).filter(p => p !== null).length
+                    console.log(`✅ Completed member profile fetching: ${successCount}/${regularMemberIds.length} successful`)
+                }
+
+                // Fetch bot profiles individually with delays (since they use different API)
+                if (botMemberIds.length > 0) {
+                    console.log(`🤖 Starting to fetch ${botMemberIds.length} bot profiles...`)
+                    let botSuccessCount = 0
+
+                    for (let i = 0; i < botMemberIds.length; i++) {
+                        const botId = botMemberIds[i]
+                        console.log(`🤖 Fetching bot profile ${i + 1}/${botMemberIds.length}: ${botId}`)
+
+                        try {
+                            await actions.bots.get(botId)
+                            botSuccessCount++
+                        } catch (error) {
+                            console.error(`❌ Failed to fetch bot profile for ${botId}:`, error)
+                        }
+
+                        // Add delay between bot fetches (except for the last one)
+                        if (i < botMemberIds.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 300))
+                        }
+                    }
+
+                    console.log(`✅ Completed bot profile fetching: ${botSuccessCount}/${botMemberIds.length} successful`)
+                }
+
+                console.log(`🎉 All profile fetching completed for server ${activeServerId}`)
+            } catch (error) {
+                console.error('❌ Error fetching member profiles:', error)
+            } finally {
+                setLoadingProfiles(false)
+            }
+        }
+
+        // Only run if we have members and aren't already loading profiles
+        if (members.length > 0 && !loadingProfiles) {
+            fetchMemberProfiles()
+        }
+    }, [members, activeServerId, server, actions.profile, actions.bots, profiles, loadingProfiles])
 
     // Check if server has members loaded
     const hasMembers = activeServerId && server ? (server.members && Object.keys(server.members).length > 0) : false
@@ -549,6 +616,7 @@ export default function MemberList({ className, isVisible = true, style }: {
                                     isOwnerSection={false}
                                     roleColor={group.role?.color}
                                     server={server}
+                                    activeServerId={activeServerId}
                                 />
                             )
                         })}
