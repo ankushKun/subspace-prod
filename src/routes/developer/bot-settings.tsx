@@ -1,15 +1,16 @@
 import { useEffect, useState, useRef } from "react"
-import { useParams, useNavigate } from "react-router"
+import { useParams, useNavigate, Link } from "react-router"
 import { useSubspace } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { BotIcon, ArrowLeft, Trash2, Server, Upload, Loader2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { BotIcon, ArrowLeft, Trash2, Server, Upload, Loader2, Users, Shield, ExternalLink, AlertCircle } from "lucide-react"
 import { uploadFileTurbo } from "@/lib/utils"
 import { toast } from "sonner"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import type { Bot } from "@subspace-protocol/sdk"
+import type { Bot, Server as ServerType } from "@subspace-protocol/sdk"
 
 export default function BotSettings() {
     const navigate = useNavigate()
@@ -31,6 +32,14 @@ export default function BotSettings() {
         pfp: ""
     })
 
+    // Server data state
+    const [serverDetails, setServerDetails] = useState<Record<string, ServerType>>({})
+    const [loadingServers, setLoadingServers] = useState<Set<string>>(new Set())
+    const [serverErrors, setServerErrors] = useState<Set<string>>(new Set())
+    const [removingFromServer, setRemovingFromServer] = useState<string | null>(null)
+    const [removeServerDialogOpen, setRemoveServerDialogOpen] = useState(false)
+    const [serverToRemove, setServerToRemove] = useState<string | null>(null)
+
     useEffect(() => {
         if (!connected || !address || !subspace || !botId) return
         loadBot()
@@ -50,6 +59,11 @@ export default function BotSettings() {
                     description: botData.description || "",
                     pfp: botData.pfp || ""
                 })
+
+                // Load server details for joined servers
+                if (botData.joinedServers) {
+                    loadServerDetails(Object.keys(botData.joinedServers))
+                }
             } else {
                 throw new Error("Bot not found")
             }
@@ -59,6 +73,38 @@ export default function BotSettings() {
         } finally {
             setIsLoading(false)
         }
+    }
+
+    const loadServerDetails = async (serverIds: string[]) => {
+        if (!subspace || serverIds.length === 0) return
+
+        // Set loading state for all servers
+        setLoadingServers(new Set(serverIds))
+        setServerErrors(new Set())
+
+        const newServerDetails: Record<string, ServerType> = {}
+        const errors = new Set<string>()
+
+        // Load server details concurrently
+        await Promise.allSettled(
+            serverIds.map(async (serverId) => {
+                try {
+                    const serverData = await subspace.server.getServer(serverId)
+                    if (serverData) {
+                        newServerDetails[serverId] = serverData
+                    } else {
+                        errors.add(serverId)
+                    }
+                } catch (error) {
+                    console.error(`Failed to load server ${serverId}:`, error)
+                    errors.add(serverId)
+                }
+            })
+        )
+
+        setServerDetails(newServerDetails)
+        setServerErrors(errors)
+        setLoadingServers(new Set())
     }
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,6 +201,33 @@ export default function BotSettings() {
             console.error("Failed to delete bot:", error)
             setError("Failed to delete bot. Please try again.")
         }
+    }
+
+    const handleRemoveBotFromServer = async (serverId: string) => {
+        if (!subspace || !botId) return
+
+        setRemovingFromServer(serverId)
+        try {
+            const success = await subspace.bot.removeBotFromServer({ serverId, botId })
+            if (success) {
+                toast.success("Bot removed from server successfully")
+                await loadBot() // Reload bot data to refresh the servers list
+            } else {
+                toast.error("Failed to remove bot from server")
+            }
+        } catch (error) {
+            console.error("Failed to remove bot from server:", error)
+            toast.error("Failed to remove bot from server. Please try again.")
+        } finally {
+            setRemovingFromServer(null)
+            setRemoveServerDialogOpen(false)
+            setServerToRemove(null)
+        }
+    }
+
+    const initiateServerRemoval = (serverId: string) => {
+        setServerToRemove(serverId)
+        setRemoveServerDialogOpen(true)
     }
 
     if (isLoading) {
@@ -351,46 +424,198 @@ export default function BotSettings() {
                 {/* Bot Servers */}
                 <Card className="mb-8 border-border/50 bg-card/50 backdrop-blur-sm">
                     <CardHeader>
-                        <CardTitle className="font-ocr">Connected Servers</CardTitle>
-                        <CardDescription>Servers this bot is currently active in</CardDescription>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="font-ocr">Connected Servers</CardTitle>
+                                <CardDescription>Servers this bot is currently active in</CardDescription>
+                            </div>
+                            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                                {Object.keys(bot.joinedServers || {}).length} {Object.keys(bot.joinedServers || {}).length === 1 ? 'Server' : 'Servers'}
+                            </Badge>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {Object.keys(bot.joinedServers || {}).length === 0 ? (
-                            <div className="text-center py-8">
-                                <Server className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                                <p className="text-muted-foreground">This bot isn't in any servers yet</p>
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 flex items-center justify-center">
+                                    <Server className="w-8 h-8 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-foreground mb-2">No servers connected</h3>
+                                <p className="text-muted-foreground mb-4">This bot isn't in any servers yet</p>
+                                <p className="text-xs text-muted-foreground">Invite your bot to servers to see them here</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {Object.keys(bot.joinedServers || {}).map(serverId => (
-                                    <Card key={serverId} className="bg-background/50">
-                                        <CardContent className="p-4">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-medium">{serverId}</p>
+                            <div className="space-y-3">
+                                {Object.keys(bot.joinedServers || {}).map(serverId => {
+                                    const serverData = serverDetails[serverId]
+                                    const isLoading = loadingServers.has(serverId)
+                                    const hasError = serverErrors.has(serverId)
+                                    const isRemoving = removingFromServer === serverId
+
+                                    return (
+                                        <Card key={serverId} className={`group relative overflow-hidden transition-all duration-200 hover:shadow-md ${hasError
+                                            ? 'bg-red-500/5 border-red-500/20'
+                                            : 'bg-background/50 border-border/50 hover:border-primary/30'
+                                            }`}>
+                                            <CardContent className="p-4">
+                                                <div className="flex items-center gap-4">
+                                                    {/* Server Avatar */}
+                                                    <div className="relative">
+                                                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center flex-shrink-0">
+                                                            {isLoading ? (
+                                                                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                                                            ) : serverData?.logo ? (
+                                                                <img
+                                                                    src={`https://arweave.net/${serverData.logo}`}
+                                                                    alt={serverData.name}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            ) : hasError ? (
+                                                                <AlertCircle className="w-6 h-6 text-red-500" />
+                                                            ) : (
+                                                                <Shield className="w-6 h-6 text-primary" />
+                                                            )}
+                                                        </div>
+
+                                                        {/* Online status indicator */}
+                                                        {!isLoading && !hasError && (
+                                                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background flex items-center justify-center">
+                                                                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Server Information */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-start justify-between mb-1">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h3 className="font-semibold text-foreground truncate">
+                                                                    {isLoading ? (
+                                                                        <div className="h-5 bg-muted rounded w-32 animate-pulse" />
+                                                                    ) : hasError ? (
+                                                                        <span className="text-red-500">Failed to load server</span>
+                                                                    ) : (
+                                                                        serverData?.name || `Server ${serverId.slice(0, 8)}...`
+                                                                    )}
+                                                                </h3>
+
+                                                                {!isLoading && !hasError && serverData && (
+                                                                    <div className="flex items-center gap-3 mt-1">
+                                                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                                            <Users className="w-3 h-3" />
+                                                                            <span>{serverData.memberCount || 0} members</span>
+                                                                        </div>
+
+                                                                        {serverData.description && (
+                                                                            <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                                                                {serverData.description}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Server ID */}
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <span className="text-xs font-mono text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                                                                {serverId.slice(0, 16)}...
+                                                            </span>
+
+                                                            {!hasError && (
+                                                                <Link to={`/invite/${serverId}`} target="_blank">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+
+                                                                    >
+                                                                        <ExternalLink className="w-3 h-3 mr-1" />
+                                                                        Join
+                                                                    </Button>
+                                                                </Link>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Actions */}
+                                                    <div className="flex items-center gap-2">
+                                                        {hasError ? (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-muted-foreground hover:text-foreground"
+                                                                onClick={() => loadServerDetails([serverId])}
+                                                            >
+                                                                Retry
+                                                            </Button>
+                                                        ) : (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                disabled={isRemoving || isLoading}
+                                                                className="text-red-500 hover:text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+                                                                onClick={() => initiateServerRemoval(serverId)}
+                                                            >
+                                                                {isRemoving ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                )}
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                                                    onClick={() => {
-                                                        if (confirm("Remove bot from this server?")) {
-                                                            subspace?.bot.removeBotFromServer({ serverId, botId: bot.process })
-                                                                .then(() => loadBot())
-                                                        }
-                                                    }}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
+                                            </CardContent>
+                                        </Card>
+                                    )
+                                })}
                             </div>
                         )}
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Remove Bot from Server Dialog */}
+            <AlertDialog open={removeServerDialogOpen} onOpenChange={setRemoveServerDialogOpen}>
+                <AlertDialogContent className="bg-background border border-primary/20">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="font-ocr text-primary">
+                            Remove Bot from Server
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted-foreground">
+                            Are you sure you want to remove "{bot?.name}" from this server?
+                            {serverToRemove && serverDetails[serverToRemove] && (
+                                <span className="block mt-1 font-medium">
+                                    Server: {serverDetails[serverToRemove].name}
+                                </span>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel
+                            className="border-border/50 text-muted-foreground hover:text-foreground"
+                            disabled={removingFromServer !== null}
+                        >
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => serverToRemove && handleRemoveBotFromServer(serverToRemove)}
+                            disabled={removingFromServer !== null}
+                            className="bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
+                        >
+                            {removingFromServer ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Removing...
+                                </>
+                            ) : (
+                                'Remove Bot'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Delete Bot Dialog */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

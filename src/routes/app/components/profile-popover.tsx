@@ -53,9 +53,11 @@ export default function ProfilePopover({
     const isCurrentUser = address === userId
 
     // Get member info from server
-    const member = server?.members && Array.isArray(server.members)
-        ? server.members.find((m: any) => m.userId === userId)
-        : server?.members?.[userId]
+    const member = server?.members && typeof server.members === 'object'
+        ? Array.isArray(server.members)
+            ? server.members.find((m: any) => m.userId === userId)
+            : server.members[userId]
+        : undefined
     const nickname = member?.nickname
 
     // Get display name following priority order
@@ -149,8 +151,12 @@ export default function ProfilePopover({
         if (server.ownerId === address) return true
 
         // Check if user has appropriate permissions
-        const serverMembers = (server as any)?.members || []
-        const currentMember = serverMembers.find((m: any) => m.userId === address)
+        const serverMembers = server?.members || {}
+        const currentMember = typeof serverMembers === 'object'
+            ? Array.isArray(serverMembers)
+                ? serverMembers.find((m: any) => m.userId === address)
+                : serverMembers[address]
+            : undefined
 
         if (!currentMember || !currentMember.roles) return false
 
@@ -166,7 +172,7 @@ export default function ProfilePopover({
         }
 
         return false
-    }, [server, address, (server as any)?.members])
+    }, [server, address, server?.members])
 
     // Check if current user can manage this specific user's roles
     const canManageThisUserRoles = useMemo(() => {

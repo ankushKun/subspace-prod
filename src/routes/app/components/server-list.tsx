@@ -1249,22 +1249,33 @@ export default function ServerList({ className, onServerJoined }: {
     const [sortedServerIds, setSortedServerIds] = useState<string[]>([])
     const [skeletonsToShow, setSkeletonsToShow] = useState(0)
 
-    // Update sorted server IDs when profile changes
+    // Update sorted server IDs when profile changes - ONLY approved servers
     useEffect(() => {
         if (!profile) return
 
-        const sortedServers = Object.keys(profile.serversJoined).sort((a, b) => {
-            const aOrder = profile.serversJoined[a]?.orderId ?? 0
-            const bOrder = profile.serversJoined[b]?.orderId ?? 0
-            return aOrder - bOrder
-        })
+        const sortedServers = Object.keys(profile.serversJoined)
+            .filter((serverId) => {
+                const serverData = profile.serversJoined[serverId]
+                // Only include servers that are approved (serverApproved === true)
+                return serverData?.serverApproved === true
+            })
+            .sort((a, b) => {
+                const aOrder = profile.serversJoined[a]?.orderId ?? 0
+                const bOrder = profile.serversJoined[b]?.orderId ?? 0
+                return aOrder - bOrder
+            })
 
         setSortedServerIds(sortedServers)
     }, [profile])
 
-    // Get servers from profile's joined list (now a KV map)
+    // Get servers from profile's joined list (now a KV map) - ONLY approved servers
     const displayServers = connected && address && profile?.serversJoined
         ? Object.keys(profile.serversJoined)
+            .filter((serverId) => {
+                const serverData = profile.serversJoined[serverId]
+                // Only include servers that are approved (serverApproved === true)
+                return serverData?.serverApproved === true
+            })
             .sort((a, b) => {
                 const aOrder = profile.serversJoined[a]?.orderId ?? 0
                 const bOrder = profile.serversJoined[b]?.orderId ?? 0
@@ -1277,9 +1288,13 @@ export default function ServerList({ className, onServerJoined }: {
             .filter(server => server !== null)
         : []
 
-    // Get expected server IDs from profile
+    // Get expected server IDs from profile - ONLY approved servers
     const expectedServerIds = connected && address && profile?.serversJoined
-        ? Object.keys(profile.serversJoined)
+        ? Object.keys(profile.serversJoined).filter((serverId) => {
+            const serverData = profile.serversJoined[serverId]
+            // Only include servers that are approved (serverApproved === true)
+            return serverData?.serverApproved === true
+        })
         : []
 
     // Determine skeletons to show - smart system based on cache status
@@ -1306,15 +1321,19 @@ export default function ServerList({ className, onServerJoined }: {
         setSkeletonsToShow(skeletonsToShow)
     }, [connected, address, isLoadingProfile, profile, expectedServerIds, servers])
 
-    // 1. INITIAL LOAD: Fetch all servers at once when profile first loads
+    // 1. INITIAL LOAD: Fetch all servers at once when profile first loads - ONLY approved servers
     useEffect(() => {
         if (!connected || !address || !profile?.serversJoined) return
 
         const fetchAllServersConcurrently = async () => {
-            const serverIds = Object.keys(profile.serversJoined)
+            // Only fetch approved servers
+            const serverIds = Object.keys(profile.serversJoined).filter((serverId) => {
+                const serverData = profile.serversJoined[serverId]
+                return serverData?.serverApproved === true
+            })
             const failedServers: string[] = []
 
-            // Fetch all servers concurrently instead of one by one
+            // Fetch all approved servers concurrently instead of one by one
             const fetchPromises = serverIds.map(async (serverId) => {
                 // Skip if server is already loading
                 if (loadingServers.has(serverId)) return
@@ -1333,9 +1352,16 @@ export default function ServerList({ className, onServerJoined }: {
         fetchAllServersConcurrently()
     }, [connected, address, profile?.serversJoined, loadingServers, actions.servers])
 
-    // 2. ACTIVE SERVER: Fetch specific server when it becomes active
+    // 2. ACTIVE SERVER: Fetch specific server when it becomes active - ONLY if approved
     useEffect(() => {
         if (!connected || !address || !activeServerId || !profile?.serversJoined) return
+
+        // Check if the active server is approved before fetching
+        const serverData = profile.serversJoined[activeServerId]
+        if (!serverData || serverData.serverApproved !== true) {
+            // Server is not approved, don't fetch it
+            return
+        }
 
         // Only fetch active server if it's not already loaded
         const activeServer = servers[activeServerId]
@@ -1356,9 +1382,16 @@ export default function ServerList({ className, onServerJoined }: {
         }
     }, [connected, address, activeServerId, profile?.serversJoined, servers, loadingServers, actions.servers])
 
-    // 2.5. ACTIVE SERVER MEMBERS: Fetch members when server becomes active
+    // 2.5. ACTIVE SERVER MEMBERS: Fetch members when server becomes active - ONLY if approved
     useEffect(() => {
         if (!connected || !address || !activeServerId || !profile?.serversJoined) return
+
+        // Check if the active server is approved before fetching members
+        const serverData = profile.serversJoined[activeServerId]
+        if (!serverData || serverData.serverApproved !== true) {
+            // Server is not approved, don't fetch members
+            return
+        }
 
         const activeServer = servers[activeServerId]
         if (activeServer && (!activeServer.members || Object.keys(activeServer.members || {}).length === 0)) {

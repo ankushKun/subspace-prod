@@ -84,7 +84,7 @@ const MemberItem = ({
     const [isHovered, setIsHovered] = useState(false)
 
     const displayName = isBot
-        ? (profile?.primaryName || `Bot ${shortenAddress(member.userId)}`)
+        ? (member.nickname || profile?.primaryName || profile?.name || `${shortenAddress(member.userId)}`)
         : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
 
     return (
@@ -121,9 +121,9 @@ const MemberItem = ({
                                 </span>
 
                                 {/* Bot indicator */}
-                                {isBot && (
+                                {/* {isBot && (
                                     <Bot className="w-3 h-3 text-purple-500 flex-shrink-0" />
-                                )}
+                                )} */}
 
                                 {/* Owner indicator */}
                                 {isOwner && !isBot && (
@@ -157,8 +157,7 @@ const MemberSection = ({
     profiles,
     isOwnerSection = false,
     roleColor,
-    server,
-    isBotsSection = false
+    server
 }: {
     title: string;
     members: any[];
@@ -166,7 +165,6 @@ const MemberSection = ({
     isOwnerSection?: boolean;
     roleColor?: string;
     server?: any;
-    isBotsSection?: boolean;
 }) => {
     const memberCount = members.length
 
@@ -234,7 +232,7 @@ const MemberSection = ({
                             isOwner={member.userId === server?.ownerId}
                             roleColor={memberRoleColor}
                             server={server}
-                            isBot={isBotsSection}
+                            isBot={member.isBot || false}
                         />
                     )
                 })}
@@ -257,20 +255,20 @@ export default function MemberList({ className, isVisible = true, style }: {
     const server = servers[activeServerId]
 
     // Get members from cached server data
-    const regularMembers = server?.members && Array.isArray(server.members)
-        ? server.members
-        : server?.members && typeof server.members === 'object'
-            ? Object.values(server.members)
-            : []
+    const regularMembers = server?.members && typeof server.members === 'object'
+        ? Array.isArray(server.members)
+            ? server.members
+            : Object.values(server.members)
+        : []
 
     // Get bots from cached server data and convert to member-like format
     const serverBots = server?.bots && typeof server.bots === 'object'
         ? Object.entries(server.bots).map(([botId, botInfo]) => ({
             userId: botId,
             serverId: server.serverId,
-            nickname: undefined,
-            roles: [], // Bots don't have roles
-            joinedAt: "Unknown",
+            nickname: (botInfo as any).nickname || undefined,
+            roles: (botInfo as any).roles || ["1"], // Bots have roles now, default to @everyone
+            joinedAt: (botInfo as any).joinedAt || "Unknown",
             isBot: true,
             approved: (botInfo as any).approved,
             process: (botInfo as any).process
@@ -285,14 +283,14 @@ export default function MemberList({ className, isVisible = true, style }: {
 
     // Automatically fetch members when active server changes
     useEffect(() => {
-        if (activeServerId && server && (!server.members || server.members.length === 0)) {
+        if (activeServerId && server && (!server.members || Object.keys(server.members).length === 0)) {
             // Fetch members if they don't exist
             actions.servers.getMembers(activeServerId)
         }
     }, [activeServerId, server, actions.servers])
 
     // Check if server has members loaded
-    const hasMembers = activeServerId && server ? (server.members && server.members.length > 0) : false
+    const hasMembers = activeServerId && server ? (server.members && Object.keys(server.members).length > 0) : false
 
 
     // Only show loading state if we have no members AND we're loading
@@ -306,7 +304,7 @@ export default function MemberList({ className, isVisible = true, style }: {
         return members.filter(member => {
             const profile = profiles[member.userId]
             const displayName = member.isBot
-                ? (profile?.primaryName || `Bot ${shortenAddress(member.userId)}`)
+                ? (member.nickname || profile?.primaryName || `${shortenAddress(member.userId)}`)
                 : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
             const lowerQuery = searchQuery.toLowerCase()
 
@@ -319,7 +317,7 @@ export default function MemberList({ className, isVisible = true, style }: {
 
     // Organize members by their ACTUAL roles - create sections for each role they have
     const organizedMembersByRole = useMemo(() => {
-        const roleGroups: Record<string, { role: any | null; members: any[]; isBotsSection?: boolean }> = {}
+        const roleGroups: Record<string, { role: any | null; members: any[] }> = {}
 
         // Get ALL roles in the server
         const serverRoles = Object.values(server?.roles || {})
@@ -332,17 +330,8 @@ export default function MemberList({ className, isVisible = true, style }: {
         // Add "No Role" section for members without any roles at all
         roleGroups['no-role'] = { role: null, members: [] }
 
-        // Add "Bots" section for bots
-        roleGroups['bots'] = { role: { name: 'Bots', color: '#8b5cf6' }, members: [], isBotsSection: true }
-
-        // Categorize each member by their highest priority role
+        // Categorize each member by their highest priority role (including bots)
         filteredMembers.forEach(member => {
-            // Handle bots separately
-            if (member.isBot) {
-                roleGroups['bots'].members.push(member)
-                return
-            }
-
             if (!member.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
                 roleGroups['no-role'].members.push(member)
                 return
@@ -416,10 +405,6 @@ export default function MemberList({ className, isVisible = true, style }: {
         const groups = Object.entries(organizedMembersByRole)
             .filter(([key, group]) => group.members.length > 0) // Only show groups with members
             .sort(([keyA, groupA], [keyB, groupB]) => {
-                // Bots section comes first (highest priority)
-                if (keyA === 'bots') return -1
-                if (keyB === 'bots') return 1
-
                 // No role section always goes last
                 if (keyA === 'no-role') return 1
                 if (keyB === 'no-role') return -1
@@ -564,7 +549,6 @@ export default function MemberList({ className, isVisible = true, style }: {
                                     isOwnerSection={false}
                                     roleColor={group.role?.color}
                                     server={server}
-                                    isBotsSection={group.isBotsSection || false}
                                 />
                             )
                         })}

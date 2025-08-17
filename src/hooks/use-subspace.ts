@@ -73,6 +73,8 @@ interface SubspaceState {
     dmConversations: Record<string, DMConversation>  // friendId -> conversation
     // Bot state
     bots: Record<string, Bot>
+    // Server approval state
+    pendingServerApprovals: Set<string> // serverIds that have been approved but not yet joined
     isCreatingProfile: boolean
     isLoadingProfile: boolean
     isLoadingBots: boolean
@@ -169,6 +171,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     friends: {},
     dmConversations: {},
     bots: {},
+    pendingServerApprovals: new Set<string>(),
     isCreatingProfile: false,
     isLoadingProfile: false,
     isLoadingBots: false,
@@ -431,7 +434,11 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     const profile = await subspace.user.getProfile(targetUserId)
                     if (profile) {
-                        set({ profile })
+                        // Only set as global profile if this is the current user's profile
+                        if (targetUserId === walletAddress) {
+                            set({ profile })
+                        }
+                        // Always update the profiles cache regardless
                         set({ profiles: { ...get().profiles, [targetUserId]: profile } })
                         // a possibility that this was a migrated profile and even tho is exists, dmProcess wont exist,
                         // meaning user has not yet initialised their profile, so throw and error here to trigger profile creation
@@ -446,6 +453,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         const profileId = await subspace.user.createProfile()
                         if (profileId) {
                             const profile = await subspace.user.getProfile(profileId)
+                            if (profile) {
+                                // Set as global profile since this is the current user's newly created profile
+                                set({ profile })
+                                // Also update the profiles cache
+                                set({ profiles: { ...get().profiles, [profileId]: profile } })
+                            }
                             return profile
                         }
                     } else {
@@ -743,13 +756,58 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return false
                 }
             },
+            approveJoin: async (serverId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.user.approveJoinServer(serverId)
+                    if (success) {
+                        console.log(`Successfully approved join request for server ${serverId}`)
+                        // Track that this server has been approved but not yet joined
+                        const currentApprovals = get().pendingServerApprovals
+                        set({
+                            pendingServerApprovals: new Set([...currentApprovals, serverId])
+                        })
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to approve join server:", error)
+                    return false
+                }
+            },
             join: async (serverId: string) => {
                 const subspace = get().subspace
                 if (!subspace) return false
 
                 try {
-                    const success = await subspace.user.joinServer(serverId)
+                    // Use the new two-step join process
+                    const success = await subspace.user.joinServerWithApproval(serverId)
                     if (success) {
+                        // Remove from pending approvals since we've successfully joined
+                        const currentApprovals = get().pendingServerApprovals
+                        currentApprovals.delete(serverId)
+                        set({
+                            pendingServerApprovals: new Set(currentApprovals)
+                        })
+
+                        // Refresh the user's profile to get updated serverApproved status
+                        // Add a small delay to ensure the server notification is processed
+                        setTimeout(async () => {
+                            try {
+                                const walletAddress = useWallet.getState().address
+                                if (walletAddress) {
+                                    const updatedProfile = await subspace.user.getProfile(walletAddress)
+                                    if (updatedProfile) {
+                                        set({ profile: updatedProfile })
+                                        console.log(`Profile refreshed after joining server ${serverId}. ServerApproved status:`, updatedProfile.serversJoined[serverId]?.serverApproved)
+                                    }
+                                }
+                            } catch (error) {
+                                console.error(`Failed to refresh profile after joining server ${serverId}:`, error)
+                            }
+                        }, 2000) // 2 second delay to allow server notification to be processed
+
                         // After successfully joining, we need to fetch the server details
                         // and add it to our local state
                         try {
@@ -768,6 +826,42 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return success
                 } catch (error) {
                     console.error("Failed to join server:", error)
+                    return false
+                }
+            },
+            joinDirect: async (serverId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    // Direct join (Step 2 only) - for cases where approval was already done
+                    const success = await subspace.user.joinServer(serverId)
+                    if (success) {
+                        // Remove from pending approvals since we've successfully joined
+                        const currentApprovals = get().pendingServerApprovals
+                        currentApprovals.delete(serverId)
+                        set({
+                            pendingServerApprovals: new Set(currentApprovals)
+                        })
+
+                        // After successfully joining, we need to fetch the server details
+                        // and add it to our local state
+                        try {
+                            const server = await subspace.server.getServer(serverId)
+                            if (server) {
+                                set({
+                                    servers: { ...get().servers, [serverId]: server },
+                                })
+                            } else {
+                                console.error(`Successfully joined server ${serverId} but failed to fetch server details`)
+                            }
+                        } catch (error) {
+                            console.error(`Successfully joined server ${serverId} but failed to fetch server details:`, error)
+                        }
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to join server directly:", error)
                     return false
                 }
             },
@@ -801,23 +895,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return {}
 
-                // Check if members are already being loaded for this server
-                const currentLoadingMembers = new Set(get().loadingMembers)
-                if (currentLoadingMembers.has(serverId)) {
-                    console.log(`[hooks/use-subspace] Members already loading for server ${serverId}, skipping...`)
-                    return {}
-                }
-
                 // Get the server instance from current state, don't call servers.get to avoid recursion
                 const server = get().servers[serverId]
                 if (!server) {
                     console.error("Server not found for getMembers")
                     return {}
                 }
-
-                // Mark as loading
-                currentLoadingMembers.add(serverId)
-                set({ loadingMembers: currentLoadingMembers })
 
                 try {
                     const membersData = await subspace.server.getAllMembers(serverId)
@@ -837,13 +920,9 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 } catch (e) {
                     console.log("error", e)
                     return {}
-                } finally {
-                    // Remove from loading state
-                    const updatedLoadingMembers = new Set(get().loadingMembers)
-                    updatedLoadingMembers.delete(serverId)
-                    set({ loadingMembers: updatedLoadingMembers })
                 }
             },
+
             refreshMembers: async (serverId: string) => {
                 return get().actions.servers.getMembers(serverId)
             },
@@ -1966,6 +2045,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         messages: state.messages,
         profile: state.profile,
         profiles: state.profiles,
+        bots: state.bots,
         friends: state.friends,
         dmConversations: state.dmConversations,
         // ✅ EXCLUDED: Loading states and currentAddress don't need to be persisted
@@ -2024,6 +2104,7 @@ export function useSubspaceWalletDisconnectHandler() {
                 profile: null,
                 profiles: {},
                 servers: {},
+                bots: {},
                 messages: {},
                 friends: {},
                 dmConversations: {},

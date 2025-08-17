@@ -28,7 +28,8 @@ export default function Invite() {
     // Build a Subspace SDK instance using the current wallet context
     const getSubspaceInstance = async () => {
         const config = {
-            CU_URL: Constants.CuEndpoints.ArnodeAsia,
+            CU_URL: Constants.CuEndpoints.BetterIDEa,
+            HYPERBEAM_URL: localStorage.getItem("subspace-hyperbeam-url") || Constants.HyperbeamEndpoints.BetterIDEa,
             GATEWAY_URL: 'https://arweave.net',
             owner: address || "0x69420" // default to a placeholder for read-only operations
         }
@@ -186,7 +187,8 @@ export default function Invite() {
         setIsJoining(true)
         try {
             const subspace = await getSubspaceInstance()
-            const success = await subspace.user.joinServer(invite)
+            // Use the new two-step join process
+            const success = await subspace.user.joinServerWithApproval(invite)
 
             if (success) {
                 // Refresh server data

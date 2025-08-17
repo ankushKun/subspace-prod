@@ -98,5 +98,5 @@ export class Constants {
         { name: "Authority", value: "fcoN_xJeisVsPXA-trzVAuIiqO3ydLQxM-L4XbrQKzY" }
     ]
 
-    static readonly SubspaceServer = "Uyg8d-jd4tbLWSD8oFyq3n28kQ72jlvrbmHqoHfemRY"
+    static readonly SubspaceServer = "7Aesf5GpkoBBE8fwuizGRB7yhu65ncO-hFSFZkE1LGk"
 }

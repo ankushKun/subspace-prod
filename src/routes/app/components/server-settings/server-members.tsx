@@ -27,7 +27,7 @@ import {
     Check,
     Plus,
     Minus,
-    Bot
+    Bot as BotIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSubspace } from "@/hooks/use-subspace"
@@ -35,7 +35,7 @@ import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
 import { PermissionHelpers, Permissions } from "@/lib/permissions"
-import type { Member, Role, Bot as BotType } from "@subspace-protocol/sdk"
+import type { Member, Role, Bot, ServerBot } from "@subspace-protocol/sdk"
 
 // Extended interfaces for UI purposes
 interface ExtendedMember extends Omit<Member, 'joinedAt'> {
@@ -45,17 +45,11 @@ interface ExtendedMember extends Omit<Member, 'joinedAt'> {
     isBot?: false
 }
 
-interface ExtendedBot {
-    userId: string // Using botId as userId for consistency
-    serverId: string
+interface ExtendedBot extends ServerBot {
     displayName?: string
     avatar?: string
-    joinedAt?: string | number
-    nickname?: string
-    roles: string[] // Empty array for bots
     isBot: true
-    approved: boolean
-    process: string
+    // roles and nickname are already defined in ServerBot
 }
 
 interface ExtendedRole extends Role {
@@ -66,7 +60,7 @@ type ExtendedMemberOrBot = ExtendedMember | ExtendedBot
 
 export default function ServerMembers() {
     const { activeServerId } = useGlobalState()
-    const { servers, profiles, actions: subspaceActions } = useSubspace()
+    const { servers, profiles, bots, actions: subspaceActions } = useSubspace()
     const { address: walletAddress } = useWallet()
 
     // Get the current server
@@ -105,21 +99,20 @@ export default function ServerMembers() {
         })
 
         // Process bots
-        const serverBots = server.bots || {}
+        const serverBots: Record<string, ServerBot> = server.bots || {}
         Object.entries(serverBots).forEach(([botId, botInfo]) => {
             // Get bot details from store if available
-            const botProfile = profiles[botId]
+            const botProfile = bots[botId]
             combined[botId] = {
                 userId: botId,
-                serverId: server.serverId,
-                displayName: botProfile?.primaryName || `Bot ${botId.slice(0, 8)}`,
+                displayName: botProfile?.name || `${botId.slice(0, 8)}`,
                 avatar: botProfile?.pfp,
-                joinedAt: "Unknown",
+                joinedAt: botInfo.joinedAt || "Unknown",
                 isBot: true,
                 approved: botInfo.approved,
                 process: botInfo.process,
-                roles: [], // Bots don't have roles in the traditional sense
-                nickname: undefined
+                roles: botInfo.roles || ["1"], // Bots now have roles, default to @everyone
+                nickname: botInfo.nickname || undefined // Bots now support nicknames
             } as ExtendedBot
         })
 
@@ -131,9 +124,9 @@ export default function ServerMembers() {
         if (!server || !server.roles) return []
 
         return Object.values(server.roles).map(role => {
-            // Count members with this role (exclude bots)
+            // Count members with this role (include bots since they now have roles)
             const memberCount = Object.values(members).filter(member =>
-                !member.isBot && member.roles && member.roles.includes(role.roleId.toString())
+                member.roles && member.roles.includes(role.roleId.toString())
             ).length
 
             return {
@@ -268,28 +261,17 @@ export default function ServerMembers() {
             member.displayName?.toLowerCase().includes(searchTerm) ||
             member.nickname?.toLowerCase().includes(searchTerm)
 
-        // For bots, only match search (no role filtering)
-        if (member.isBot) {
-            return matchesSearch
-        }
-
-        // For regular members, apply role filtering
+        // Apply role filtering for both members and bots (bots now have roles)
         const matchesRole = roleFilter === "all" || (member.roles && member.roles.includes(roleFilter))
         return matchesSearch && matchesRole
     })
 
     const openRoleDialog = (member: ExtendedMemberOrBot) => {
-        // Don't open role dialog for bots
-        if (member.isBot) {
-            toast.info("Bots don't have roles")
-            return
-        }
         setSelectedMember(member)
         setIsRoleDialogOpen(true)
     }
 
     const updateMemberRoles = async (member: ExtendedMemberOrBot, newRoles: string[]) => {
-        if (member.isBot) return // Don't update roles for bots
         if (!activeServerId || !canManageMembers) {
             toast.error("Insufficient permissions to manage member roles")
             return
@@ -353,7 +335,6 @@ export default function ServerMembers() {
     }
 
     const toggleMemberRole = async (member: ExtendedMemberOrBot, roleId: string) => {
-        if (member.isBot) return // Don't toggle roles for bots
         if (!activeServerId || !canManageMembers) {
             toast.error("Insufficient permissions to manage member roles")
             return
@@ -415,10 +396,6 @@ export default function ServerMembers() {
     }
 
     const startEditingNickname = (member: ExtendedMemberOrBot) => {
-        if (member.isBot) {
-            toast.info("Bots don't have nicknames")
-            return
-        }
         setEditingNickname(member.userId)
         setNicknameValue(member.nickname || "")
     }
@@ -429,8 +406,7 @@ export default function ServerMembers() {
     }
 
     const saveNickname = async (member: ExtendedMemberOrBot) => {
-        if (member.isBot) return // Don't save nicknames for bots
-        const isCurrentUser = member.userId === walletAddress
+        const isCurrentUser = member.userId === walletAddress && !member.isBot // Bots are never current user
         if (!activeServerId || (!canManageNicknames && !isCurrentUser)) {
             toast.error("Insufficient permissions to edit nicknames")
             return
@@ -723,7 +699,7 @@ export default function ServerMembers() {
                                                             {/* Bot indicator */}
                                                             {member.isBot && (
                                                                 <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center border-2 border-background">
-                                                                    <Bot className="w-3 h-3 text-white" />
+                                                                    <BotIcon className="w-3 h-3 text-white" />
                                                                 </div>
                                                             )}
                                                         </div>
@@ -800,7 +776,7 @@ export default function ServerMembers() {
                                                                 )}
                                                                 {member.isBot && (
                                                                     <Badge variant="secondary" className="text-xs font-freecam bg-purple-500/15 text-purple-500 border-purple-500/30 hover:bg-purple-500/20 transition-colors">
-                                                                        <Bot className="w-3 h-3 mr-1" />
+                                                                        <BotIcon className="w-3 h-3 mr-1" />
                                                                         BOT
                                                                     </Badge>
                                                                 )}
@@ -824,11 +800,7 @@ export default function ServerMembers() {
 
                                                             {/* Roles Section */}
                                                             <div className="flex flex-wrap gap-1.5">
-                                                                {member.isBot ? (
-                                                                    <Badge variant="secondary" className="text-xs font-ocr bg-primary/10 text-primary/70 border-primary/20">
-                                                                        Bot (No roles)
-                                                                    </Badge>
-                                                                ) : member.roles && member.roles.length > 0 ? (
+                                                                {member.roles && member.roles.length > 0 ? (
                                                                     <>
                                                                         {member.roles.slice(0, 6).map((roleId) => {
                                                                             const isEveryoneRole = roleId === "1"
@@ -881,7 +853,7 @@ export default function ServerMembers() {
                                                                 )}
 
                                                                 {/* Quick Add Role Button */}
-                                                                {canManageMembers && !isOwner && !member.isBot && (
+                                                                {canManageMembers && !isOwner && (
                                                                     <DropdownMenu>
                                                                         <DropdownMenuTrigger asChild>
                                                                             <Badge
@@ -935,17 +907,15 @@ export default function ServerMembers() {
                                                                         <MessageSquare className="w-4 h-4 mr-2" />
                                                                         Send Message
                                                                     </DropdownMenuItem>
-                                                                    {!member.isBot && (
-                                                                        <DropdownMenuItem
-                                                                            className="font-ocr hover:bg-primary/5 focus:bg-primary/5"
-                                                                            onClick={() => openRoleDialog(member)}
-                                                                            disabled={isOwner || isUpdatingRoles}
-                                                                        >
-                                                                            <Shield className="w-4 h-4 mr-2" />
-                                                                            Manage Roles
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                    {((canManageNicknames && !isOwner) || isCurrentUser) && !member.isBot && (
+                                                                    <DropdownMenuItem
+                                                                        className="font-ocr hover:bg-primary/5 focus:bg-primary/5"
+                                                                        onClick={() => openRoleDialog(member)}
+                                                                        disabled={isOwner || isUpdatingRoles}
+                                                                    >
+                                                                        <Shield className="w-4 h-4 mr-2" />
+                                                                        Manage Roles
+                                                                    </DropdownMenuItem>
+                                                                    {((canManageNicknames && !isOwner) || isCurrentUser) && (
                                                                         <DropdownMenuItem
                                                                             className="font-ocr hover:bg-primary/5 focus:bg-primary/5"
                                                                             onClick={() => startEditingNickname(member)}
@@ -995,7 +965,7 @@ export default function ServerMembers() {
                                                                             className="font-ocr text-red-500/80 hover:bg-red-500/5 focus:bg-red-500/5 focus:text-red-500"
                                                                             disabled={true}
                                                                         >
-                                                                            <Bot className="w-4 h-4 mr-2" />
+                                                                            <BotIcon className="w-4 h-4 mr-2" />
                                                                             Remove Bot (Coming Soon)
                                                                         </DropdownMenuItem>
                                                                     )}
