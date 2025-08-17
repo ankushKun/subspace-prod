@@ -1386,8 +1386,26 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                 )
                             })()
                         ) : (
-                            // User PFP - use MessageAvatar component
-                            <MessageAvatar authorId={suggestion.id} size="sm" />
+                            // User PFP - use consistent styling with bot PFP
+                            (() => {
+                                if (profile?.pfp) {
+                                    return (
+                                        <img
+                                            src={`https://arweave.net/${profile.pfp}`}
+                                            alt={suggestion.display}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    )
+                                }
+                                // Fallback to alien icon for users too
+                                return (
+                                    <img
+                                        src={alien}
+                                        alt="User avatar"
+                                        className="w-5 h-5 object-contain opacity-70"
+                                    />
+                                )
+                            })()
                         )}
                     </div>
 
@@ -1397,8 +1415,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             <Bot className="w-1.5 h-1.5 text-white" />
                         </div>
                     )}
-
-                    {/* Remove the online indicator for now to keep it clean */}
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -1408,7 +1424,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         >
                             {suggestion.display}
                         </span>
-                        {/* Removed all badges for clean, consistent styling */}
                     </div>
                     <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground/80 truncate font-mono">
@@ -1431,12 +1446,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             </>
                         )}
                     </div>
-                </div>
-                <div className={cn(
-                    "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
-                    focused && "opacity-100"
-                )}>
-                    <AtSign className="w-3.5 h-3.5 text-muted-foreground/60" />
                 </div>
             </div>
         )
@@ -1523,7 +1532,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         "group-hover:text-blue-700 dark:group-hover:text-blue-300"
                     )} />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-semibold text-sm text-foreground group-hover:text-foreground truncate">
                             {highlightedDisplay}
@@ -1545,12 +1554,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             Channel #{suggestion.id}
                         </span>
                     )}
-                </div>
-                <div className={cn(
-                    "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
-                    focused && "opacity-100"
-                )}>
-                    <Hash className="w-3.5 h-3.5 text-blue-500/60" />
                 </div>
             </div>
         )

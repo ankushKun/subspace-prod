@@ -27,7 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
-import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock, Save, ChevronDown, ChevronUp } from "lucide-react"
+import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock, Save, ChevronDown, ChevronUp, Bot } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useState, useCallback, useMemo, useEffect } from "react"
@@ -229,7 +229,42 @@ export default function ProfilePopover({
 
     // Get user's roles from the server
     const getUserRoles = () => {
-        if (!server || !member || !member.roles || !Array.isArray(member.roles)) {
+        if (!server) {
+            return []
+        }
+
+        // Debug: Log server structure for bots
+        if (isBot) {
+            console.log(`Bot ${userId} - Server data:`, {
+                hasServer: !!server,
+                hasBots: !!server.bots,
+                botsKeys: server.bots ? Object.keys(server.bots) : [],
+                botData: server.bots ? server.bots[userId] : null,
+                serverRoles: server.roles ? Object.keys(server.roles) : []
+            })
+        }
+
+        // For bots, get roles from server.bots data
+        if (isBot && server.bots && server.bots[userId]) {
+            const botRoles = server.bots[userId].roles || []
+            console.log(`Bot ${userId} roles from server.bots:`, botRoles)
+
+            if (!Array.isArray(botRoles) || botRoles.length === 0) {
+                console.log(`Bot ${userId} has no roles or invalid roles array`)
+                return []
+            }
+
+            // Convert role IDs to role objects
+            const userRoles = Object.values(server.roles || {})
+                .filter((role: any) => botRoles.includes(role.roleId.toString()))
+                .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))
+
+            console.log(`Bot ${userId} resolved roles:`, userRoles)
+            return userRoles
+        }
+
+        // For regular users, get roles from server.members data
+        if (!member || !member.roles || !Array.isArray(member.roles)) {
             return []
         }
 
@@ -250,11 +285,19 @@ export default function ProfilePopover({
 
     // Get available roles for assignment
     const getAvailableRoles = () => {
-        if (!server || !server.roles || !member || !address) {
+        if (!server || !server.roles || !address) {
             return []
         }
 
-        const userRoleIds = member.roles || []
+        // For bots, get current roles from server.bots data
+        let userRoleIds: (string | number)[] = []
+        if (isBot && server.bots && server.bots[userId]) {
+            userRoleIds = server.bots[userId].roles || []
+        } else if (member) {
+            // For regular users, get roles from member data
+            userRoleIds = member.roles || []
+        }
+
         return Object.values(server.roles)
             .filter((role: any) => {
                 // User doesn't have this role
@@ -295,14 +338,21 @@ export default function ProfilePopover({
                 toast.success(`Successfully assigned ${roleName} role`)
                 setRolePopoverOpen(false)
 
-                // Refresh member data to get updated roles
-                // await actions.servers.refreshMembers(activeServerId)
-
-                // Also fetch specific member data to ensure we have the latest info
-                try {
-                    await actions.servers.getMember(activeServerId, userId)
-                } catch (error) {
-                    console.warn('Failed to refresh specific member data after role assignment:', error)
+                // Refresh data based on whether it's a bot or user
+                if (isBot) {
+                    // For bots: refresh the entire server to get updated bot data
+                    try {
+                        await actions.servers.get(activeServerId, true)
+                    } catch (error) {
+                        console.warn('Failed to refresh server data after bot role assignment:', error)
+                    }
+                } else {
+                    // For users: fetch specific member data
+                    try {
+                        await actions.servers.getMember(activeServerId, userId)
+                    } catch (error) {
+                        console.warn('Failed to refresh specific member data after role assignment:', error)
+                    }
                 }
             } else {
                 toast.error("Failed to assign role")
@@ -339,14 +389,21 @@ export default function ProfilePopover({
                 const roleName = server.roles?.[roleId]?.name || "Unknown Role"
                 toast.success(`Successfully removed ${roleName} role`)
 
-                // Refresh member data to get updated roles
-                // await actions.servers.refreshMembers(activeServerId)
-
-                // Also fetch specific member data to ensure we have the latest info
-                try {
-                    await actions.servers.getMember(activeServerId, userId)
-                } catch (error) {
-                    console.warn('Failed to refresh specific member data after role removal:', error)
+                // Refresh data based on whether it's a bot or user
+                if (isBot) {
+                    // For bots: refresh the entire server to get updated bot data
+                    try {
+                        await actions.servers.get(activeServerId, true)
+                    } catch (error) {
+                        console.warn('Failed to refresh server data after bot role removal:', error)
+                    }
+                } else {
+                    // For users: fetch specific member data
+                    try {
+                        await actions.servers.getMember(activeServerId, userId)
+                    } catch (error) {
+                        console.warn('Failed to refresh specific member data after role removal:', error)
+                    }
                 }
             } else {
                 toast.error("Failed to remove role")
@@ -374,13 +431,12 @@ export default function ProfilePopover({
                     // Fetch global bot profile
                     await actions.bots.get(userId)
 
-                    // Fetch server bot data (not regular member data)
+                    // Fetch server data to get updated bot information including roles
                     if (activeServerId) {
                         try {
-                            // Get server bot info from the server data
-                            const serverBotInfo = server?.bots?.[userId]
-                        } catch (botError) {
-                            console.warn('Failed to get server bot info:', botError)
+                            await actions.servers.get(activeServerId, true)
+                        } catch (serverError) {
+                            console.warn('Failed to refresh server data for bot:', serverError)
                         }
                     }
                 } else {
@@ -410,7 +466,7 @@ export default function ProfilePopover({
             setIsEditingNickname(false)
             setEditedNickname("")
         }
-    }, [userId, activeServerId, actions, isRefreshing, isBot, server?.bots])
+    }, [userId, activeServerId, actions, isRefreshing, isBot])
 
     return (
         <Popover open={isOpen} onOpenChange={handleOpenChange}>
@@ -456,9 +512,9 @@ export default function ProfilePopover({
                                         {/* Static Bot badge for bots */}
                                         {isBot && (
                                             <ProfileBadge
-                                                logo="🤖"
+                                                logo={<Bot className="w-3.5 h-3.5 text-primary" />}
                                                 hoverText="Bot"
-                                                children={<span className="text-blue-500 font-bold">BOT</span>}
+                                                children={<span className="text-primary font-bold">BOT</span>}
                                                 link="#"
                                             />
                                         )}
