@@ -9,6 +9,9 @@
  * 5. SMART POLLING: Only fetches when channel is active and conditions are met
  * 6. ERROR HANDLING: Graceful handling of failed message fetches
  * 7. PERFORMANCE: Efficient polling with cleanup to prevent memory leaks
+ * 8. REQUEST LIMITING: Maximum 5 concurrent requests with queuing and throttling
+ * 9. THROTTLING: Minimum 2 seconds between requests for the same channel
+ * 10. PAGE VISIBILITY: Pauses fetching when page is hidden to save resources
  */
 
 import { cn } from "@/lib/utils";
@@ -61,7 +64,8 @@ import {
     FileIcon, FileQuestion, LinkIcon, Eye,
     ArrowBigDownDash,
     ExternalLink,
-    Shield
+    Shield,
+    Bot
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -127,7 +131,7 @@ const shortenAddress = (address: string) => {
 };
 
 // Resolve a human-readable name for a user in the context of a server.
-// Priority: server nickname → profile primaryName → shortened address.
+// Priority: server nickname → bot name → profile primaryName → shortened address.
 const getDisplayName = (userId: string, profiles: Record<string, any>, activeServerId?: string, servers?: Record<string, any>) => {
     // Priority 1: server-specific nickname
     if (activeServerId && servers?.[activeServerId]) {
@@ -136,11 +140,38 @@ const getDisplayName = (userId: string, profiles: Record<string, any>, activeSer
         if (member?.nickname) return member.nickname
     }
 
-    // Priority 2: global profile primaryName
+    // Priority 2: bot name (if this is a bot)
+    if (activeServerId && servers?.[activeServerId]) {
+        const server = servers[activeServerId]
+        let botInfo = null
+
+        // Check if bots is an array or object
+        if (Array.isArray(server.bots)) {
+            botInfo = server.bots.find((b: any) => (b?.userId || b?.botId || b?.process) === userId)
+        } else if (typeof server.bots === 'object' && server.bots !== null) {
+            // For object format, check if the userId exists as a key (process ID)
+            botInfo = server.bots[userId] || null
+        }
+
+        // For bots, prioritize nickname, then profile names, then direct bot name
+        if (botInfo) {
+            if (botInfo.nickname) {
+                return botInfo.nickname
+            }
+            if (botInfo.name) {
+                return botInfo.name
+            }
+            if (botInfo.displayName) {
+                return botInfo.displayName
+            }
+        }
+    }
+
+    // Priority 3: global profile primaryName
     const profile = profiles[userId]
     if (profile?.primaryName) return profile.primaryName
 
-    // Priority 3: fallback to shortened address
+    // Priority 4: fallback to shortened address
     return shortenAddress(userId)
 };
 
@@ -936,7 +967,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
     const [attachments, setAttachments] = useState<string[]>([])
     const mentionsInputRef = useRef<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const { profiles } = useSubspace()
+    const { profiles, bots } = useSubspace()
     const { isMobile } = useMobileContext()
 
     // Synchronize input content with edit/reply state
@@ -992,61 +1023,244 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
 
     // Build a suggestion list for @mentions using server members and recent participants.
     const getMembersData = (query: string, callback: (data: any[]) => void) => {
-        if (!activeServerId) {
-            callback([])
-            return
-        }
+        try {
+            if (!activeServerId) {
+                callback([])
+                return
+            }
 
-        const serverMembers = servers[activeServerId]?.members || []
+            // Debug: Log the entire server object to see its structure
+            const server = servers[activeServerId]
+            console.log('=== DEBUG: Server Data ===')
+            console.log('Server ID:', activeServerId)
+            console.log('Full server object:', server)
+            console.log('Server members:', server?.members)
+            console.log('Server bots:', server?.bots)
+            console.log('Server bots type:', typeof server?.bots)
+            console.log('Server bots isArray:', Array.isArray(server?.bots))
+            console.log('========================')
 
-        // Use recent participants to surface likely targets
-        const chatParticipants = new Set<string>()
-        messagesInChannel.forEach(message => {
-            chatParticipants.add(message.authorId)
-        })
+            // Safely extract server members with proper type checking
+            let serverMembers: any[] = []
 
-        // Merge members and participants into a single map
-        const allUsers = new Map<string, {
-            id: string;
-            display: string;
-            isServerMember: boolean;
-            isChatParticipant: boolean;
-        }>()
+            if (server?.members) {
+                // Handle different possible data structures
+                if (Array.isArray(server.members)) {
+                    serverMembers = server.members
+                    console.log(`Found ${serverMembers.length} server members (array format)`)
+                } else if (typeof server.members === 'object' && server.members !== null) {
+                    // If members is an object with userId keys, convert to array
+                    serverMembers = Object.values(server.members)
+                    console.log(`Found ${serverMembers.length} server members (object format)`)
+                } else {
+                    console.warn('Unexpected members data structure:', typeof server.members, server.members)
+                    serverMembers = []
+                }
+            } else {
+                console.log('No server members found for server:', activeServerId)
+            }
 
-        // Add server members
-        serverMembers.forEach((member: any) => {
-            const displayName = getDisplayName(member.userId, profiles, activeServerId, servers)
-            allUsers.set(member.userId, {
-                id: member.userId,
-                display: displayName,
-                isServerMember: true,
-                isChatParticipant: chatParticipants.has(member.userId),
-            })
-        })
-
-        // Add chat participants who may not be listed as members (edge cache cases)
-        chatParticipants.forEach(userId => {
-            if (!allUsers.has(userId)) {
-                const displayName = getDisplayName(userId, profiles, activeServerId, servers)
-                allUsers.set(userId, {
-                    id: userId,
-                    display: displayName,
-                    isServerMember: false,
-                    isChatParticipant: true
+            // Safely extract server bots
+            let serverBots: any[] = []
+            if (server?.bots) {
+                if (Array.isArray(server.bots)) {
+                    serverBots = server.bots
+                    console.log(`Found ${serverBots.length} server bots (array format):`, serverBots)
+                } else if (typeof server.bots === 'object' && server.bots !== null) {
+                    // If bots is an object with process IDs as keys, convert to array
+                    // This matches the structure used in member-list.tsx
+                    serverBots = Object.entries(server.bots).map(([botId, botInfo]) => ({
+                        userId: botId, // Use the key as userId for consistency
+                        process: botId, // Keep the process ID
+                        nickname: (botInfo as any).nickname || "",
+                        roles: (botInfo as any).roles || ["1"],
+                        joinedAt: (botInfo as any).joinedAt || Date.now(),
+                        approved: (botInfo as any).approved || false,
+                        isBot: true
+                    }))
+                    console.log(`Found ${serverBots.length} server bots (object format):`, serverBots)
+                } else {
+                    console.warn('Unexpected bots data structure:', typeof server.bots, server.bots)
+                    serverBots = []
+                }
+            } else {
+                console.log('No server bots found for server:', activeServerId)
+                // Debug: Check if bots might be in a different location
+                console.log('Checking for bots in other server properties...')
+                Object.keys(server || {}).forEach(key => {
+                    if (key.toLowerCase().includes('bot')) {
+                        console.log(`Found potential bot-related property: ${key} =`, server[key])
+                    }
                 })
             }
-        })
 
-        const allUsersArray = Array.from(allUsers.values())
+            // Use recent participants to surface likely targets
+            const chatParticipants = new Set<string>()
+            messagesInChannel.forEach(message => {
+                chatParticipants.add(message.authorId)
+            })
+            console.log(`Found ${chatParticipants.size} chat participants`)
 
-        if (!query.trim()) {
-            const sortedUsers = allUsersArray
+            // Merge members, bots, and participants into a single map
+            const allUsers = new Map<string, {
+                id: string;
+                display: string;
+                isServerMember: boolean;
+                isBot: boolean;
+                isChatParticipant: boolean;
+                botProfile?: any;
+                botData?: any;
+            }>()
+
+            // Add server members - safely iterate
+            if (Array.isArray(serverMembers)) {
+                serverMembers.forEach((member: any) => {
+                    if (member && member.userId) {
+                        const displayName = getDisplayName(member.userId, profiles, activeServerId, servers)
+                        allUsers.set(member.userId, {
+                            id: member.userId,
+                            display: displayName,
+                            isServerMember: true,
+                            isBot: false,
+                            isChatParticipant: chatParticipants.has(member.userId),
+                        })
+                    } else {
+                        console.warn('Invalid member object:', member)
+                    }
+                })
+            }
+
+            // Add server bots
+            if (Array.isArray(serverBots)) {
+                console.log('Processing bots array:', serverBots)
+                serverBots.forEach((bot: any, index: number) => {
+                    console.log(`Processing bot ${index}:`, bot)
+                    // Check for bot identifier - now using userId which we set in the mapping above
+                    const botId = bot.userId
+                    if (bot && botId) {
+                        // Get bot profile data to access PFP and proper name
+                        const botProfile = profiles[botId] || bots[botId]
+
+                        // Debug: Log what bot profile data we have
+                        console.log(`Bot ${botId} profile data:`, {
+                            fromProfiles: profiles[botId],
+                            fromBots: bots[botId],
+                            botProfile: botProfile,
+                            botData: bot
+                        })
+
+                        // Use nickname if available, otherwise try profile name, then generate fallback
+                        let botName = bot.nickname
+                        if (!botName && botProfile) {
+                            // Handle both Profile and Bot types
+                            if ('primaryName' in botProfile && botProfile.primaryName) {
+                                botName = botProfile.primaryName
+                            } else if ('name' in botProfile && botProfile.name) {
+                                botName = botProfile.name
+                            }
+                        }
+                        // Also check if the bot data itself has a name property
+                        if (!botName && bot.name) {
+                            botName = bot.name
+                        }
+                        if (!botName) {
+                            botName = `Bot ${botId.slice(0, 8)}`
+                        }
+
+                        console.log(`Adding bot to suggestions: ${botName} (${botId}) with profile:`, botProfile)
+                        console.log(`Bot display name resolution:`, {
+                            nickname: bot.nickname,
+                            botName: bot.name,
+                            profileName: botProfile && 'primaryName' in botProfile ? botProfile.primaryName :
+                                botProfile && 'name' in botProfile ? botProfile.name : 'N/A',
+                            finalDisplayName: botName
+                        })
+                        allUsers.set(botId, {
+                            id: botId,
+                            display: botName, // This should now be the bot's actual name
+                            isServerMember: false,
+                            isBot: true,
+                            isChatParticipant: chatParticipants.has(botId),
+                            // Store additional bot info for rendering
+                            botProfile: botProfile,
+                            botData: bot
+                        })
+                    } else {
+                        console.warn('Invalid bot object - missing identifier:', bot)
+                    }
+                })
+            } else {
+                console.log('No bots array to process')
+            }
+
+            // Add chat participants who may not be listed as members (edge cache cases)
+            chatParticipants.forEach(userId => {
+                if (!allUsers.has(userId)) {
+                    const displayName = getDisplayName(userId, profiles, activeServerId, servers)
+                    allUsers.set(userId, {
+                        id: userId,
+                        display: displayName,
+                        isServerMember: false,
+                        isBot: false,
+                        isChatParticipant: true
+                    })
+                }
+            })
+
+            const allUsersArray = Array.from(allUsers.values())
+            const botCount = allUsersArray.filter(u => u.isBot).length
+            console.log(`Total users for suggestions: ${allUsersArray.length} (including ${botCount} bots)`)
+            console.log('All users array:', allUsersArray)
+
+            if (!query.trim()) {
+                const sortedUsers = allUsersArray
+                    .sort((a, b) => {
+                        // Prioritize chat participants, then members, then bots, then others
+                        if (a.isChatParticipant && !b.isChatParticipant) return -1
+                        if (!a.isChatParticipant && b.isChatParticipant) return 1
+                        if (a.isServerMember && !b.isServerMember) return -1
+                        if (!a.isServerMember && b.isServerMember) return 1
+                        if (a.isBot && !b.isBot) return -1
+                        if (!a.isBot && b.isBot) return 1
+                        return a.display.localeCompare(b.display)
+                    })
+                    .slice(0, 10)
+                    .map(user => ({
+                        id: user.id,
+                        display: user.display
+                    }))
+
+                console.log('Final sorted users (no query):', sortedUsers)
+                callback(sortedUsers)
+                return
+            }
+
+            const lowerQuery = query.toLowerCase()
+            const filteredUsers = allUsersArray
+                .filter(user => {
+                    const primaryName = profiles[user.id]?.primaryName
+                    return user.display.toLowerCase().includes(lowerQuery) ||
+                        user.id.toLowerCase().includes(lowerQuery) ||
+                        (primaryName && primaryName.toLowerCase().includes(lowerQuery))
+                })
                 .sort((a, b) => {
+                    const aDisplay = a.display.toLowerCase()
+                    const bDisplay = b.display.toLowerCase()
+
+                    const aStartsWith = aDisplay.startsWith(lowerQuery)
+                    const bStartsWith = bDisplay.startsWith(lowerQuery)
+
+                    if (aStartsWith && !bStartsWith) return -1
+                    if (!aStartsWith && bStartsWith) return 1
+
                     if (a.isChatParticipant && !b.isChatParticipant) return -1
                     if (!a.isChatParticipant && b.isChatParticipant) return 1
                     if (a.isServerMember && !b.isServerMember) return -1
                     if (!a.isServerMember && b.isServerMember) return 1
-                    return a.display.localeCompare(b.display)
+                    if (a.isBot && !b.isBot) return -1
+                    if (!a.isBot && b.isBot) return 1
+
+                    return aDisplay.localeCompare(bDisplay)
                 })
                 .slice(0, 10)
                 .map(user => ({
@@ -1054,42 +1268,13 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                     display: user.display
                 }))
 
-            callback(sortedUsers)
-            return
+            console.log('Final filtered users:', filteredUsers)
+            callback(filteredUsers)
+        } catch (error) {
+            console.error('Error in getMembersData:', error)
+            // Return empty array on error to prevent crashes
+            callback([])
         }
-
-        const lowerQuery = query.toLowerCase()
-        const filteredUsers = allUsersArray
-            .filter(user => {
-                const primaryName = profiles[user.id]?.primaryName
-                return user.display.toLowerCase().includes(lowerQuery) ||
-                    user.id.toLowerCase().includes(lowerQuery) ||
-                    (primaryName && primaryName.toLowerCase().includes(lowerQuery))
-            })
-            .sort((a, b) => {
-                const aDisplay = a.display.toLowerCase()
-                const bDisplay = b.display.toLowerCase()
-
-                const aStartsWith = aDisplay.startsWith(lowerQuery)
-                const bStartsWith = bDisplay.startsWith(lowerQuery)
-
-                if (aStartsWith && !bStartsWith) return -1
-                if (!aStartsWith && bStartsWith) return 1
-
-                if (a.isChatParticipant && !b.isChatParticipant) return -1
-                if (!a.isChatParticipant && b.isChatParticipant) return 1
-                if (a.isServerMember && !b.isServerMember) return -1
-                if (!a.isServerMember && b.isServerMember) return 1
-
-                return aDisplay.localeCompare(bDisplay)
-            })
-            .slice(0, 10)
-            .map(user => ({
-                id: user.id,
-                display: user.display
-            }))
-
-        callback(filteredUsers)
     }
 
     // Render a rich item for user suggestions
@@ -1101,7 +1286,43 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
         focused: boolean
     ) => {
         const profile = profiles[suggestion.id]
-        const serverMember = servers[activeServerId]?.members?.find((m: any) => m.userId === suggestion.id)
+
+        // Safely check if user is a server member
+        let serverMember: any = null
+        const server = servers[activeServerId]
+
+        if (server?.members) {
+            if (Array.isArray(server.members)) {
+                serverMember = server.members.find((m: any) => m?.userId === suggestion.id)
+            } else if (typeof server.members === 'object' && server.members !== null) {
+                // If members is an object, check if the userId exists as a key
+                serverMember = server.members[suggestion.id] || null
+            }
+        }
+
+        // Check if user is a bot
+        let isBot = false
+        let botInfo: any = null
+        if (server?.bots) {
+            if (Array.isArray(server.bots)) {
+                botInfo = server.bots.find((b: any) => (b?.userId || b?.botId || b?.process) === suggestion.id)
+            } else if (typeof server.bots === 'object' && server.bots !== null) {
+                // For object format, check if the userId exists as a key (process ID)
+                botInfo = server.bots[suggestion.id] || null
+            }
+            isBot = !!botInfo
+        }
+
+        // Debug: Log bot info when rendering
+        if (isBot) {
+            console.log(`Rendering bot suggestion for ${suggestion.id}:`, {
+                botInfo,
+                profiles: profiles[suggestion.id],
+                bots: bots[suggestion.id],
+                suggestion
+            })
+        }
+
         const isChatParticipant = messagesInChannel.some(m => m.authorId === suggestion.id)
         const roleColor = getUserRoleColor(suggestion.id, activeServerId, servers)
 
@@ -1116,9 +1337,68 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                 )}
             >
                 <div className="relative">
-                    <MessageAvatar authorId={suggestion.id} size="sm" />
-                    {/* Placeholder online indicator (real status could be wired later) */}
-                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full opacity-80" />
+                    {/* Use consistent squarish PFP styling for all items */}
+                    <div className="w-8 h-8 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-primary/30">
+                        {isBot && botInfo ? (
+                            // Bot PFP - check multiple sources
+                            (() => {
+                                // First check if bot has a pfp in its data
+                                if (botInfo.pfp) {
+                                    return (
+                                        <img
+                                            src={`https://arweave.net/${botInfo.pfp}`}
+                                            alt={botInfo.name || suggestion.display}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    )
+                                }
+
+                                // Then check if we have a bot profile with PFP
+                                const botProfile = profiles[suggestion.id] || bots[suggestion.id]
+                                if (botProfile && 'pfp' in botProfile && botProfile.pfp) {
+                                    return (
+                                        <img
+                                            src={`https://arweave.net/${botProfile.pfp}`}
+                                            alt={suggestion.display}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    )
+                                }
+
+                                // Then check for primaryLogo in bot profile (if it exists)
+                                if (botProfile && 'primaryLogo' in botProfile && botProfile.primaryLogo) {
+                                    return (
+                                        <img
+                                            src={`https://arweave.net/${botProfile.primaryLogo}`}
+                                            alt={suggestion.display}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    )
+                                }
+
+                                // Fallback to alien icon
+                                return (
+                                    <img
+                                        src={alien}
+                                        alt="Bot avatar"
+                                        className="w-5 h-5 object-contain opacity-70"
+                                    />
+                                )
+                            })()
+                        ) : (
+                            // User PFP - use MessageAvatar component
+                            <MessageAvatar authorId={suggestion.id} size="sm" />
+                        )}
+                    </div>
+
+                    {/* Small bot icon indicator (no badge, just icon) */}
+                    {isBot && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center border border-background">
+                            <Bot className="w-1.5 h-1.5 text-white" />
+                        </div>
+                    )}
+
+                    {/* Remove the online indicator for now to keep it clean */}
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
@@ -1126,30 +1406,27 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             className="font-semibold text-sm text-foreground group-hover:text-foreground truncate"
                             style={{ color: roleColor || undefined }}
                         >
-                            {highlightedDisplay}
+                            {suggestion.display}
                         </span>
-                        {serverMember && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary border-primary/20">
-                                <Users className="w-2.5 h-2.5 mr-1" />
-                                Member
-                            </Badge>
-                        )}
-                        {isChatParticipant && !serverMember && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-muted/50 text-muted-foreground border-muted-foreground/30">
-                                <AtSign className="w-2.5 h-2.5 mr-1" />
-                                Participant
-                            </Badge>
-                        )}
+                        {/* Removed all badges for clean, consistent styling */}
                     </div>
                     <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground/80 truncate font-mono">
                             {shortenAddress(suggestion.id)}
                         </span>
-                        {profile?.primaryName && (
+                        {profile?.primaryName && !isBot && (
                             <>
                                 <span className="text-xs text-muted-foreground/60">•</span>
                                 <span className="text-xs text-muted-foreground/80 truncate">
                                     {profile.primaryName}
+                                </span>
+                            </>
+                        )}
+                        {isBot && botInfo?.description && (
+                            <>
+                                <span className="text-xs text-muted-foreground/60">•</span>
+                                <span className="text-xs text-muted-foreground/80 truncate">
+                                    {botInfo.description}
                                 </span>
                             </>
                         )}
@@ -1518,7 +1795,25 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                 trigger="@"
                                 markup="@[__display__](__id__)"
                                 displayTransform={(id) => {
-                                    const displayName = getDisplayName(id, profiles, activeServerId, servers)
+                                    // Get the display name from our suggestions data
+                                    // For bots, check bot data first, then fall back to getDisplayName
+                                    const server = servers[activeServerId]
+                                    let displayName = id // fallback to ID
+
+                                    if (server?.bots && typeof server.bots === 'object') {
+                                        const serverBotInfo = server.bots[id]
+                                        const botInfo = bots[id]
+                                        if (botInfo) {
+                                            // Bot found - use nickname, name, or fallback
+                                            displayName = serverBotInfo.nickname || botInfo.name || `${id.slice(0, 8)}`
+                                        }
+                                    }
+
+                                    // If not a bot or no bot name found, try getDisplayName
+                                    if (displayName === id) {
+                                        displayName = getDisplayName(id, profiles, activeServerId, servers)
+                                    }
+
                                     return `@${displayName}`
                                 }}
                                 appendSpaceOnAdd
@@ -1767,9 +2062,18 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<MessageInputRef>(null);
 
-    // Message fetching state
+    // Message fetching state with request limiting
     const [isMessageFetchingActive, setIsMessageFetchingActive] = useState(false);
     const messageFetchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Request limiting system - track active requests and prevent more than 5 concurrent
+    const activeRequestsRef = useRef<Set<string>>(new Set());
+    const requestQueueRef = useRef<Array<() => void>>([]);
+    const pendingRequestsRef = useRef<Set<string>>(new Set()); // Track pending requests to prevent duplicates
+    const MAX_CONCURRENT_REQUESTS = 5;
+    const REQUEST_TIMEOUT = 30000; // 30 seconds timeout for requests
+    const MIN_REQUEST_INTERVAL = 1000; // Minimum 1 second between requests for the same channel
+    const lastRequestTimeRef = useRef<number>(0);
 
     // Expose focusInput method to parent component
     React.useImperativeHandle(ref, () => ({
@@ -1789,7 +2093,88 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
         setReplyingTo(null);
         setEditingMessage(null);
         setInitialMessagesLoaded(false); // Reset initial load state when channel changes
+
+        // Clear any pending requests when channel changes
+        pendingRequestsRef.current.clear();
+        lastRequestTimeRef.current = 0;
     }, [activeChannelId]);
+
+    // Request management functions
+    const executeRequest = async (requestId: string, requestFn: () => Promise<void>) => {
+        // Check if we're already at max concurrent requests
+        if (activeRequestsRef.current.size >= MAX_CONCURRENT_REQUESTS) {
+            console.log(`Request ${requestId} queued - max concurrent requests (${MAX_CONCURRENT_REQUESTS}) reached`);
+            // Queue this request for later execution
+            return new Promise<void>((resolve, reject) => {
+                requestQueueRef.current.push(async () => {
+                    try {
+                        await executeRequest(requestId, requestFn);
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            });
+        }
+
+        // Add to active requests
+        activeRequestsRef.current.add(requestId);
+        console.log(`Request ${requestId} started. Active requests: ${activeRequestsRef.current.size}/${MAX_CONCURRENT_REQUESTS}`);
+
+        // Set timeout to prevent hanging requests
+        const timeoutId = setTimeout(() => {
+            console.warn(`Request ${requestId} timed out after ${REQUEST_TIMEOUT}ms`);
+            activeRequestsRef.current.delete(requestId);
+            processQueue(); // Process next queued request
+        }, REQUEST_TIMEOUT);
+
+        try {
+            await requestFn();
+            console.log(`Request ${requestId} completed successfully`);
+        } catch (error) {
+            console.error(`Request ${requestId} failed:`, error);
+        } finally {
+            // Clean up
+            clearTimeout(timeoutId);
+            activeRequestsRef.current.delete(requestId);
+            console.log(`Request ${requestId} cleaned up. Active requests: ${activeRequestsRef.current.size}/${MAX_CONCURRENT_REQUESTS}`);
+            processQueue(); // Process next queued request
+        }
+    };
+
+    const processQueue = () => {
+        // Process queued requests if we have capacity
+        while (requestQueueRef.current.length > 0 && activeRequestsRef.current.size < MAX_CONCURRENT_REQUESTS) {
+            const nextRequest = requestQueueRef.current.shift();
+            if (nextRequest) {
+                console.log(`Processing queued request. Queue length: ${requestQueueRef.current.length}`);
+                nextRequest();
+            }
+        }
+    };
+
+    const generateRequestId = () => `fetch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Check if we should throttle requests
+    const shouldThrottleRequest = () => {
+        const now = Date.now();
+        const timeSinceLastRequest = now - lastRequestTimeRef.current;
+        const shouldThrottle = timeSinceLastRequest < MIN_REQUEST_INTERVAL;
+        if (shouldThrottle) {
+            console.log(`Throttling request - ${Math.ceil((MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000)}s remaining`);
+        }
+        return shouldThrottle;
+    };
+
+    // Debug function to log current request state
+    const logRequestState = () => {
+        console.log('=== Request State ===');
+        console.log(`Active requests: ${activeRequestsRef.current.size}/${MAX_CONCURRENT_REQUESTS}`);
+        console.log(`Queued requests: ${requestQueueRef.current.length}`);
+        console.log(`Pending channel requests: ${pendingRequestsRef.current.size}`);
+        console.log(`Time since last request: ${Date.now() - lastRequestTimeRef.current}ms`);
+        console.log('===================');
+    };
 
     // MESSAGE FETCHING: Activate message fetching loop when channel becomes active
     useEffect(() => {
@@ -1816,13 +2201,13 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
         // Initial fetch
         fetchMessages()
 
-        // Set up polling interval (every 1 second)
+        // Set up polling interval (every 5 seconds instead of 1 second to reduce load)
         messageFetchIntervalRef.current = setInterval(() => {
-            // Only fetch if we still have the required conditions
-            if (activeServerId && activeChannelId && subspace && server && channel) {
+            // Only fetch if we still have the required conditions and not throttled
+            if (activeServerId && activeChannelId && subspace && server && channel && !shouldThrottleRequest()) {
                 fetchMessages()
             }
-        }, 1000)
+        }, 5000) // Increased from 1000ms to 5000ms
 
         // Cleanup function
         return () => {
@@ -1840,14 +2225,22 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
 
         // Set up a heartbeat to check if the interval is still running
         const heartbeatInterval = setInterval(() => {
-            if (messageFetchIntervalRef.current && activeServerId && activeChannelId && subspace && server && channel) {
+            if (messageFetchIntervalRef.current && activeServerId && activeChannelId && subspace && server && channel && !shouldThrottleRequest()) {
                 // Force a message fetch to ensure the loop is working
                 fetchMessages()
             }
-        }, 10000) // Check every 10 seconds
+        }, 30000) // Increased from 10000ms to 30000ms
+
+        // Set up periodic request state logging for debugging
+        const debugInterval = setInterval(() => {
+            if (process.env.NODE_ENV === 'development') {
+                logRequestState();
+            }
+        }, 60000) // Log every minute in development
 
         return () => {
             clearInterval(heartbeatInterval)
+            clearInterval(debugInterval)
         }
     }, [isMessageFetchingActive, activeServerId, activeChannelId, subspace, server, channel])
 
@@ -1859,35 +2252,107 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
                 messageFetchIntervalRef.current = null
             }
             setIsMessageFetchingActive(false)
+
+            // Clear any pending requests
+            activeRequestsRef.current.clear()
+            requestQueueRef.current.length = 0
+            pendingRequestsRef.current.clear()
+
+            console.log('Messages component unmounted - all requests cleared');
         }
     }, [])
 
-    // Fetch messages for the current channel
+    // Additional cleanup when component becomes inactive
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                console.log('Page hidden - pausing message fetching');
+                setIsMessageFetchingActive(false);
+                if (messageFetchIntervalRef.current) {
+                    clearInterval(messageFetchIntervalRef.current);
+                    messageFetchIntervalRef.current = null;
+                }
+            } else {
+                console.log('Page visible - resuming message fetching');
+                if (activeServerId && activeChannelId && subspace && server && channel) {
+                    setIsMessageFetchingActive(true);
+                    // Restart the interval
+                    if (!messageFetchIntervalRef.current) {
+                        messageFetchIntervalRef.current = setInterval(() => {
+                            if (activeServerId && activeChannelId && subspace && server && channel && !shouldThrottleRequest()) {
+                                fetchMessages()
+                            }
+                        }, 5000);
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [activeServerId, activeChannelId, subspace, server, channel]);
+
+    // Fetch messages for the current channel with request limiting
     const fetchMessages = async () => {
         if (!activeServerId || !activeChannelId || !subspace) {
+            console.log('Skipping message fetch - missing required parameters');
             return
         }
 
-        try {
-            await actions.servers.getMessages(activeServerId, activeChannelId, 50)
+        // Check if we should throttle this request
+        if (shouldThrottleRequest()) {
+            console.log('Throttling message fetch request - too soon since last request');
+            return;
+        }
 
-            // Mark initial load as complete
-            if (!initialMessagesLoaded) {
-                setInitialMessagesLoaded(true)
-                setLoading(false)
-            }
+        // Check if there's already a pending request for this channel
+        const channelKey = `${activeServerId}-${activeChannelId}`;
+        if (pendingRequestsRef.current.has(channelKey)) {
+            console.log('Skipping message fetch - request already pending for this channel');
+            return;
+        }
+
+        const requestId = generateRequestId();
+
+        // Mark this channel as having a pending request
+        pendingRequestsRef.current.add(channelKey);
+
+        try {
+            await executeRequest(requestId, async () => {
+                try {
+                    // Update last request time
+                    lastRequestTimeRef.current = Date.now();
+
+                    console.log(`Fetching messages for channel ${activeChannelId} in server ${activeServerId}`);
+                    await actions.servers.getMessages(activeServerId, activeChannelId, 50)
+
+                    // Mark initial load as complete
+                    if (!initialMessagesLoaded) {
+                        setInitialMessagesLoaded(true)
+                        setLoading(false)
+                        console.log('Initial messages loaded successfully');
+                    }
+                } catch (error) {
+                    console.warn("Failed to fetch messages:", error)
+                    // Still mark as loaded to avoid infinite loading state
+                    if (!initialMessagesLoaded) {
+                        setInitialMessagesLoaded(true)
+                        setLoading(false)
+                        console.log('Marked as loaded despite error to prevent infinite loading');
+                    }
+                    // Don't let errors stop the loop - it will continue trying
+                }
+            });
         } catch (error) {
-            console.warn("Failed to fetch messages:", error)
-            // Still mark as loaded to avoid infinite loading state
-            if (!initialMessagesLoaded) {
-                setInitialMessagesLoaded(true)
-                setLoading(false)
-            }
-            // Don't let errors stop the loop - it will continue trying
+            console.error('Failed to execute message fetch request:', error);
+        } finally {
+            // Remove from pending requests
+            pendingRequestsRef.current.delete(channelKey);
         }
     }
-
-
 
     // Helper function to check if two timestamps are on the same day
     const isSameDay = (timestamp1: number, timestamp2: number) => {
