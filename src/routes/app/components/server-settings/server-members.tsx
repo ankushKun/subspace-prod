@@ -1,3 +1,17 @@
+/**
+ * Server Members Management Component
+ * 
+ * Provides comprehensive member management including role assignment, nickname editing,
+ * and member moderation with proper bot support.
+ * 
+ * Bot Data Fetching Improvements:
+ * - Added bot profile fetching to loadMembers function
+ * - Standardized display name logic: nickname > primaryName > truncateAddress
+ * - Helper function ensureBotProfilesLoaded for consistent bot profile loading
+ * - Proper bot profile handling in all role management functions
+ * - Automatic bot profile loading when server bots change
+ */
+
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,7 +44,7 @@ import {
     Bot as BotIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useSubspace } from "@/hooks/use-subspace"
+import { useSubspace, isBotUserId } from "@/hooks/use-subspace"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
 import { toast } from "sonner"
@@ -92,7 +106,7 @@ export default function ServerMembers() {
             const profile = profiles[member.userId]
             combined[member.userId] = {
                 ...member,
-                displayName: profile?.primaryName || member.nickname || null,
+                displayName: member.nickname || profile?.primaryName || null,  // Fixed priority order
                 avatar: profile?.pfp,
                 isBot: false
             } as ExtendedMember
@@ -105,7 +119,7 @@ export default function ServerMembers() {
             const botProfile = bots[botId]
             combined[botId] = {
                 userId: botId,
-                displayName: botProfile?.name || `${botId.slice(0, 8)}`,
+                displayName: botInfo.nickname || botProfile?.name || `${botId.slice(0, 8)}`,  // Fixed priority order
                 avatar: botProfile?.pfp,
                 joinedAt: botInfo.joinedAt || "Unknown",
                 isBot: true,
@@ -117,7 +131,15 @@ export default function ServerMembers() {
         })
 
         return combined
-    }, [server, profiles, server?.members, server?.bots])
+    }, [server, profiles, bots, server?.members, server?.bots])
+
+    // Ensure bot profiles are loaded when members change
+    useEffect(() => {
+        if (server?.bots && Object.keys(server.bots).length > 0) {
+            const botIds = Object.keys(server.bots)
+            ensureBotProfilesLoaded(botIds)
+        }
+    }, [server?.bots, bots])
 
     // Process server roles
     const roles = useMemo((): ExtendedRole[] => {
@@ -191,6 +213,28 @@ export default function ServerMembers() {
         return false
     }, [server, walletAddress, server?.members])
 
+    // Helper function to ensure bot profiles are loaded
+    const ensureBotProfilesLoaded = async (botIds: string[]) => {
+        if (botIds.length === 0) return
+
+        const unloadedBotIds = botIds.filter(botId => !bots[botId])
+        if (unloadedBotIds.length === 0) return
+
+        console.log(`🤖 Loading ${unloadedBotIds.length} bot profiles...`)
+
+        // Load bot profiles in small batches
+        for (let i = 0; i < unloadedBotIds.length; i += 3) {
+            const batch = unloadedBotIds.slice(i, i + 3)
+            await Promise.all(batch.map((botId: string) =>
+                subspaceActions.bots.get(botId).catch(console.error)
+            ))
+            // Small delay between batches
+            if (i + 3 < unloadedBotIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100))
+            }
+        }
+    }
+
     // Load members when component mounts or server changes
     useEffect(() => {
         if (activeServerId && server) {
@@ -215,14 +259,25 @@ export default function ServerMembers() {
                 // Load profiles in small batches to avoid overwhelming the system
                 for (let i = 0; i < memberUserIds.length; i += 3) {
                     const batch = memberUserIds.slice(i, i + 3)
-                    await Promise.all(batch.map((userId: string) =>
-                        subspaceActions.profile.get(userId).catch(console.error)
-                    ))
+                    await Promise.all(batch.map((userId: string) => {
+                        if (isBotUserId(userId, activeServerId)) {
+                            return subspaceActions.bots.get(userId).catch(console.error)
+                        } else {
+                            return subspaceActions.profile.get(userId).catch(console.error)
+                        }
+                    }))
                     // Small delay between batches
                     if (i + 3 < memberUserIds.length) {
                         await new Promise(resolve => setTimeout(resolve, 200))
                     }
                 }
+            }
+
+            // Also load profiles for any bots in the server
+            const serverBots = currentServer?.bots || {}
+            const botIds = Object.keys(serverBots)
+            if (botIds.length > 0) {
+                await ensureBotProfilesLoaded(botIds)
             }
         } catch (error) {
             console.error("Failed to load members:", error)
@@ -318,7 +373,11 @@ export default function ServerMembers() {
                 // Refresh members to get updated data and update UI
                 await subspaceActions.servers.refreshMembers(activeServerId)
                 // Refetch the user's profile to ensure changes are reflected globally
-                await subspaceActions.profile.get(member.userId)
+                if (member.isBot) {
+                    await subspaceActions.bots.get(member.userId)
+                } else {
+                    await subspaceActions.profile.get(member.userId)
+                }
                 // Reload members to update the UI with fresh data
                 await loadMembers()
                 setIsRoleDialogOpen(false)
@@ -377,7 +436,11 @@ export default function ServerMembers() {
                 // Refresh members to get updated data and update UI
                 await subspaceActions.servers.refreshMembers(activeServerId)
                 // Refetch the user's profile to ensure changes are reflected globally
-                await subspaceActions.profile.get(member.userId)
+                if (member.isBot) {
+                    await subspaceActions.bots.get(member.userId)
+                } else {
+                    await subspaceActions.profile.get(member.userId)
+                }
                 // Reload members to update the UI with fresh data
                 await loadMembers()
             } else {
@@ -424,7 +487,11 @@ export default function ServerMembers() {
                 // Refresh members to get updated data and update UI
                 await subspaceActions.servers.refreshMembers(activeServerId)
                 // Refetch the user's profile to ensure changes are reflected globally
-                await subspaceActions.profile.get(member.userId)
+                if (member.isBot) {
+                    await subspaceActions.bots.get(member.userId)
+                } else {
+                    await subspaceActions.profile.get(member.userId)
+                }
                 // Reload members to update the UI with fresh data
                 await loadMembers()
                 setEditingNickname(null)
@@ -546,7 +613,12 @@ export default function ServerMembers() {
     }
 
     const getDisplayName = (member: ExtendedMemberOrBot) => {
-        return member.nickname || member.displayName || truncateUserId(member.userId, 20)
+        // Standardized display name logic matching other components
+        if (member.isBot) {
+            return member.nickname || member.displayName || `${member.userId.slice(0, 8)}...`
+        } else {
+            return member.nickname || member.displayName || truncateUserId(member.userId, 20)
+        }
     }
 
     if (!server) {

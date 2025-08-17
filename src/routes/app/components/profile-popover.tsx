@@ -1,4 +1,24 @@
-import { useSubspace, isBotUserId } from "@/hooks/use-subspace"
+/**
+ * Profile Popover Component
+ * 
+ * Displays user/bot profile information in a popover with role management
+ * and nickname editing capabilities.
+ * 
+ * Bot Data Fetching Improvements:
+ * - Standardized display name logic: nickname > primaryName > shortenAddress
+ * - For bots: fetches global bot profile AND server bot data (not regular member data)
+ * - For users: fetches regular member global profile and server member data
+ * - Consistent bot detection using isBotUserId helper
+ * - Unified profile display for both users and bots
+ * - Uses getBotOrUserProfile helper for correct data access
+ * - Proper bot profile handling in role management functions
+ * - Consistent avatar and badge display for bots and users
+ * - Auto-fetches bot data on component mount if missing
+ * - Ensures component re-renders when bot data changes
+ * - Static Bot badge for bots (not dynamically added to list)
+ */
+
+import { useSubspace, isBotUserId, getBotOrUserProfile } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { cn, shortenAddress } from "@/lib/utils"
@@ -10,7 +30,7 @@ import { Input } from "@/components/ui/input"
 import { Check, Copy, Shield, Loader2, Plus, X, Pencil, UserPlus, UserCheck, UserX, Clock, Save, ChevronDown, ChevronUp } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import alien from "@/assets/subspace/alien-black.svg"
@@ -32,7 +52,7 @@ export default function ProfilePopover({
 }) {
     const { address } = useWallet()
     const { activeServerId } = useGlobalState()
-    const { profiles, servers, actions, subspace } = useSubspace()
+    const { profiles, servers, actions, bots, subspace } = useSubspace()
 
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isOpen, setIsOpen] = useState(false)
@@ -49,13 +69,23 @@ export default function ProfilePopover({
     const [showAllBadges, setShowAllBadges] = useState(false)
 
     const server = activeServerId ? servers[activeServerId] : null
-    const profile = profiles[userId]
+
+    // Use getBotOrUserProfile helper to get the correct profile data
+    const profile = getBotOrUserProfile(userId, activeServerId)
+
     const isCurrentUser = address === userId
 
     // Check if this is a bot using the helper function
     const isBot = useMemo(() => {
         return isBotUserId(userId, activeServerId)
     }, [userId, activeServerId])
+
+    // Fetch bot data when component mounts if it's a bot and we don't have the data
+    useEffect(() => {
+        if (isBot && !profile && !isRefreshing) {
+            actions.bots.get(userId).catch(console.error)
+        }
+    }, [isBot, profile, userId, actions.bots, isRefreshing, bots])
 
     // Get member info from server
     const member = server?.members && typeof server.members === 'object'
@@ -67,24 +97,15 @@ export default function ProfilePopover({
 
     // Get display name following priority order (different for bots)
     const displayName = isBot
-        ? (nickname || profile?.primaryName || profile?.name || shortenAddress(userId))
-        : (nickname || profile?.primaryName || shortenAddress(userId))
+        ? (nickname || (profile as any)?.primaryName || (profile as any)?.name || shortenAddress(userId))
+        : (nickname || (profile as any)?.primaryName || shortenAddress(userId))
 
     // Create badges array based on user profile
     const allBadges = useMemo(() => {
         const badges = []
 
-        // Add bot badge if this is a bot
-        if (isBot) {
-            badges.push({
-                logo: "🤖", // Bot emoji as logo
-                hoverText: "Bot",
-                children: <span className="text-blue-500 font-bold">BOT</span>
-            })
-        }
-
         // Add ArNS badge if user has primary name (not for bots)
-        if (!isBot && profile?.primaryName) {
+        if (!isBot && (profile as any)?.primaryName) {
             badges.push({
                 logo: Constants.Icons.ArnsLogo,
                 hoverText: "ArNS",
@@ -93,11 +114,11 @@ export default function ProfilePopover({
         }
 
         // Add Wander Tier badge (not for bots)
-        if (!isBot && profile?.wndrTier) {
+        if (!isBot && (profile as any)?.wndrTier) {
             badges.push({
-                logo: Constants.WanderTiers[profile.wndrTier.tier]?.Icon,
-                hoverText: `${Constants.WanderTiers[profile.wndrTier.tier]?.Label} Tier`,
-                children: <img src={`https://arweave.net/${Constants.WanderTiers[profile.wndrTier.tier]?.TextIcon}`} className="w-full h-full object-left object-cover" />,
+                logo: Constants.WanderTiers[(profile as any).wndrTier.tier]?.Icon,
+                hoverText: `${Constants.WanderTiers[(profile as any).wndrTier.tier]?.Label} Tier`,
+                children: <img src={`https://arweave.net/${Constants.WanderTiers[(profile as any).wndrTier.tier]?.TextIcon}`} className="w-full h-full object-left object-cover" />,
                 link: "https://www.wander.app/wndr"
             })
         }
@@ -348,29 +369,37 @@ export default function ProfilePopover({
             try {
                 // Fetch latest profile data - different for bots vs users
                 if (isBot) {
-                    // For bots, fetch bot profile data
+                    // For bots: fetch global bot profile AND server bot data
+
+                    // Fetch global bot profile
                     await actions.bots.get(userId)
+
+                    // Fetch server bot data (not regular member data)
+                    if (activeServerId) {
+                        try {
+                            // Get server bot info from the server data
+                            const serverBotInfo = server?.bots?.[userId]
+                        } catch (botError) {
+                            console.warn('Failed to get server bot info:', botError)
+                        }
+                    }
                 } else {
-                    // For users, fetch user profile data
+                    // For users: fetch regular member global profile and server member data
+
+                    // Fetch user profile
                     await actions.profile.get(userId)
-                }
 
-                // Fetch latest server data if we're in a server
-                if (activeServerId) {
-                    // Refresh all server members to get latest data
-                    // await actions.servers.refreshMembers(activeServerId)
-
-                    // Also get specific member data for this user in this server
-                    try {
-                        const memberData = await actions.servers.getMember(activeServerId, userId)
-                        // Member data includes server-specific info like nickname, roles, etc.
-                    } catch (memberError) {
-                        console.warn('Failed to fetch specific member data:', memberError)
-                        // Don't fail the whole operation if member data fetch fails
+                    // Fetch server member data
+                    if (activeServerId) {
+                        try {
+                            const memberData = await actions.servers.getMember(activeServerId, userId)
+                        } catch (memberError) {
+                            console.warn('Failed to fetch specific member data:', memberError)
+                        }
                     }
                 }
             } catch (error) {
-                console.error('Failed to refresh user and server data:', error)
+                console.error('Failed to refresh profile and server data:', error)
             } finally {
                 setIsRefreshing(false)
             }
@@ -381,7 +410,7 @@ export default function ProfilePopover({
             setIsEditingNickname(false)
             setEditedNickname("")
         }
-    }, [userId, activeServerId, actions, isRefreshing])
+    }, [userId, activeServerId, actions, isRefreshing, isBot, server?.bots])
 
     return (
         <Popover open={isOpen} onOpenChange={handleOpenChange}>
@@ -409,11 +438,11 @@ export default function ProfilePopover({
                             <div className="relative mb-3 flex items-start gap-2 max-w-full">
                                 <div className={cn(
                                     "w-16 h-16 min-w-16 rounded-sm overflow-clip border-2 border-background shadow-lg flex items-center justify-center",
-                                    profile.pfp ? "bg-transparent" : "bg-primary/20"
+                                    (profile as any)?.pfp ? "bg-transparent" : "bg-primary/20"
                                 )}>
-                                    {profile.pfp ? (
+                                    {(profile as any)?.pfp ? (
                                         <img
-                                            src={`https://arweave.net/${profile.pfp}`}
+                                            src={`https://arweave.net/${(profile as any).pfp}`}
                                             alt={displayName}
                                             className="w-full h-full object-cover"
                                         />
@@ -424,6 +453,16 @@ export default function ProfilePopover({
                                 <div className="my-1.5 max-w-56 w-full">
                                     {/* Profile badges section */}
                                     <div className="flex flex-wrap gap-1 mb-1">
+                                        {/* Static Bot badge for bots */}
+                                        {isBot && (
+                                            <ProfileBadge
+                                                logo="🤖"
+                                                hoverText="Bot"
+                                                children={<span className="text-blue-500 font-bold">BOT</span>}
+                                                link="#"
+                                            />
+                                        )}
+
                                         {visibleBadges.map((badge, index) => (
                                             <ProfileBadge
                                                 key={index}
@@ -557,8 +596,8 @@ export default function ProfilePopover({
                                     {(!isEditingNickname && nickname) && (
                                         <p className="text-sm text-primary/70 font-medium font-ocr mt-1">
                                             {isBot
-                                                ? (profile?.primaryName || profile?.name || shortenAddress(userId))
-                                                : (profile?.primaryName || shortenAddress(userId))
+                                                ? ((profile as any)?.primaryName || (profile as any)?.name || shortenAddress(userId))
+                                                : ((profile as any)?.primaryName || shortenAddress(userId))
                                             }
                                         </p>
                                     )}

@@ -1,5 +1,18 @@
+/**
+ * Member List Component
+ * 
+ * Displays server members organized by roles with proper bot support.
+ * 
+ * Bot Data Fetching Improvements:
+ * - Standardized display name logic: nickname > primaryName > shortenAddress
+ * - Reduced bot profile fetching delays from 300ms to 100ms for better performance
+ * - Proper bot profile loading through actions.bots.get()
+ * - Consistent bot detection using isBotUserId helper
+ * - Unified member/bot display with proper role support
+ */
+
 import { useGlobalState } from "@/hooks/use-global-state";
-import { useSubspace, isBotUserId } from "@/hooks/use-subspace";
+import { useSubspace, isBotUserId, getBotOrUserProfile } from "@/hooks/use-subspace";
 import { cn, shortenAddress } from "@/lib/utils";
 import { Constants } from "@/lib/constants";
 import type { Member, Role } from "@subspace-protocol/sdk";
@@ -35,16 +48,16 @@ const MemberAvatar = ({
                 "relative rounded-sm overflow-hidden bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/30",
                 sizeClasses[size]
             )}>
-                {profile?.pfp ? (
+                {(profile as any)?.pfp ? (
                     <img
-                        src={`https://arweave.net/${profile.pfp}`}
-                        alt={profile.primaryName || userId}
+                        src={`https://arweave.net/${(profile as any).pfp}`}
+                        alt={(profile as any)?.primaryName || (profile as any)?.name || userId}
                         className="w-full h-full object-cover"
                     />
-                ) : profile?.primaryLogo ? (
+                ) : (profile as any)?.primaryLogo ? (
                     <img
-                        src={`https://arweave.net/${profile.primaryLogo}`}
-                        alt={profile.primaryName || userId}
+                        src={`https://arweave.net/${(profile as any).primaryLogo}`}
+                        alt={(profile as any)?.primaryName || (profile as any)?.name || userId}
                         className="w-full h-full object-cover"
                     />
                 ) : (
@@ -75,7 +88,7 @@ const MemberItem = ({
     isBot = false
 }: {
     member: any;
-    profile?: any & { primaryName: string, primaryLogo: string };
+    profile?: any;
     isOwner?: boolean;
     roleColor?: string;
     server?: any;
@@ -83,9 +96,10 @@ const MemberItem = ({
 }) => {
     const [isHovered, setIsHovered] = useState(false)
 
+    // Use the correct profile data source for bots vs users
     const displayName = isBot
-        ? (member.nickname || profile?.primaryName || profile?.name || `${shortenAddress(member.userId)}`)
-        : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
+        ? (member.nickname || (profile as any)?.primaryName || (profile as any)?.name || `${shortenAddress(member.userId)}`)
+        : (member.nickname || (profile as any)?.primaryName || shortenAddress(member.userId))
 
     return (
         <div className="relative group">
@@ -155,6 +169,7 @@ const MemberSection = ({
     title,
     members,
     profiles,
+    bots,
     isOwnerSection = false,
     roleColor,
     server,
@@ -163,6 +178,7 @@ const MemberSection = ({
     title: string;
     members: any[];
     profiles: Record<string, any & { primaryName: string, primaryLogo: string }>;
+    bots: Record<string, any>;
     isOwnerSection?: boolean;
     roleColor?: string;
     server?: any;
@@ -226,11 +242,14 @@ const MemberSection = ({
                     const roleWithColor = (memberHighestRole as any[]).find((role: any) => role.color && role.color !== defaultColor)
                     const memberRoleColor = roleWithColor?.color || roleColor
 
+                    // Get the correct profile data for this member
+                    const profile = getBotOrUserProfile(member.userId, activeServerId)
+
                     return (
                         <MemberItem
                             key={member.userId}
                             member={member}
-                            profile={profiles[member.userId]}
+                            profile={profile}
                             isOwner={member.userId === server?.ownerId}
                             roleColor={memberRoleColor}
                             server={server}
@@ -249,7 +268,7 @@ export default function MemberList({ className, isVisible = true, style }: {
     style?: React.CSSProperties
 }) {
     const { activeServerId } = useGlobalState()
-    const { servers, actions, profiles, loadingMembers } = useSubspace()
+    const { servers, actions, profiles, bots, loadingMembers } = useSubspace()
     const [searchQuery, setSearchQuery] = useState("")
     const [loadingProfiles, setLoadingProfiles] = useState(false)
 
@@ -307,7 +326,7 @@ export default function MemberList({ className, isVisible = true, style }: {
                 const botMemberIds = members
                     .filter(member => isBotUserId(member.userId, activeServerId))
                     .map(member => member.userId)
-                    .filter(userId => !profiles[userId]) // Only fetch if not already cached
+                    .filter(userId => !bots[userId]) // Only fetch if not already cached
 
                 // Fetch regular member profiles in batches of 10 through SDK
                 if (regularMemberIds.length > 0) {
@@ -333,9 +352,10 @@ export default function MemberList({ className, isVisible = true, style }: {
                             console.error(`❌ Failed to fetch bot profile for ${botId}:`, error)
                         }
 
-                        // Add delay between bot fetches (except for the last one)
+                        // Reduced delay between bot fetches for better performance
+                        // Note: This delay is minimal to prevent overwhelming the system while maintaining good UX
                         if (i < botMemberIds.length - 1) {
-                            await new Promise(resolve => setTimeout(resolve, 300))
+                            await new Promise(resolve => setTimeout(resolve, 100))  // Reduced from 300ms to 100ms
                         }
                     }
 
@@ -354,7 +374,7 @@ export default function MemberList({ className, isVisible = true, style }: {
         if (members.length > 0 && !loadingProfiles) {
             fetchMemberProfiles()
         }
-    }, [members, activeServerId, server, actions.profile, actions.bots, profiles, loadingProfiles])
+    }, [members, activeServerId, server, actions.profile, actions.bots, profiles, bots, loadingProfiles])
 
     // Check if server has members loaded
     const hasMembers = activeServerId && server ? (server.members && Object.keys(server.members).length > 0) : false
@@ -369,16 +389,18 @@ export default function MemberList({ className, isVisible = true, style }: {
         if (!searchQuery.trim()) return members
 
         return members.filter(member => {
-            const profile = profiles[member.userId]
+            // Use getBotOrUserProfile helper to get the correct profile data
+            const profile = getBotOrUserProfile(member.userId, activeServerId)
+            // Standardized display name logic matching other components
             const displayName = member.isBot
-                ? (member.nickname || profile?.primaryName || `${shortenAddress(member.userId)}`)
-                : (member.nickname || profile?.primaryName || shortenAddress(member.userId))
+                ? (member.nickname || (profile as any)?.primaryName || (profile as any)?.name || shortenAddress(member.userId))
+                : (member.nickname || (profile as any)?.primaryName || shortenAddress(member.userId))
             const lowerQuery = searchQuery.toLowerCase()
 
             return displayName.toLowerCase().includes(lowerQuery) ||
                 member.userId.toLowerCase().includes(lowerQuery)
         })
-    }, [members, searchQuery, profiles])
+    }, [members, searchQuery, activeServerId])
 
 
 
@@ -422,7 +444,7 @@ export default function MemberList({ className, isVisible = true, style }: {
 
             // Categorization: Always use the highest priority role (regardless of color)
             const primaryRole = sortedMemberRoles[0]
-            const primaryKey = `role-${primaryRole.roleId.toString()}`
+            const primaryKey = `role-${(primaryRole as any).roleId.toString()}`
 
             if (roleGroups[primaryKey]) {
                 roleGroups[primaryKey].members.push(member)
@@ -434,13 +456,14 @@ export default function MemberList({ className, isVisible = true, style }: {
         // Sort members within each role group based on profile completeness
         Object.values(roleGroups).forEach(group => {
             group.members.sort((a, b) => {
-                const profileA = profiles[a.userId]
-                const profileB = profiles[b.userId]
+                // Use getBotOrUserProfile helper to get the correct profile data
+                const profileA = getBotOrUserProfile(a.userId, activeServerId)
+                const profileB = getBotOrUserProfile(b.userId, activeServerId)
 
                 // Helper function to get member category (1-3, where 1 is highest priority)
                 const getMemberCategory = (member: any, profile: any) => {
                     const hasPfp = profile?.pfp || profile?.primaryLogo
-                    const hasName = member.nickname || profile?.primaryName
+                    const hasName = member.nickname || (profile as any)?.primaryName || (profile as any)?.name
 
                     if (hasPfp && hasName) return 1 // Both pfp and name
                     if (hasName || hasPfp) return 2 // Either name or pfp (but not both)
@@ -456,8 +479,8 @@ export default function MemberList({ className, isVisible = true, style }: {
                 }
 
                 // Within same category, sort alphabetically by display name
-                const displayNameA = a.nickname || profileA?.primaryName || shortenAddress(a.userId)
-                const displayNameB = b.nickname || profileB?.primaryName || shortenAddress(b.userId)
+                const displayNameA = a.nickname || (profileA as any)?.primaryName || (profileA as any)?.name || shortenAddress(a.userId)
+                const displayNameB = b.nickname || (profileB as any)?.primaryName || (profileB as any)?.name || shortenAddress(b.userId)
                 return displayNameA.toLowerCase().localeCompare(displayNameB.toLowerCase())
             })
         })
@@ -465,7 +488,7 @@ export default function MemberList({ className, isVisible = true, style }: {
 
 
         return roleGroups
-    }, [filteredMembers, server?.roles, profiles])
+    }, [filteredMembers, server?.roles, activeServerId])
 
     // Sort role groups by their actual role hierarchy (lower orderId = higher priority)
     const sortedRoleGroups = useMemo(() => {
@@ -613,6 +636,7 @@ export default function MemberList({ className, isVisible = true, style }: {
                                     title={sectionTitle}
                                     members={group.members}
                                     profiles={profiles}
+                                    bots={bots}
                                     isOwnerSection={false}
                                     roleColor={group.role?.color}
                                     server={server}
