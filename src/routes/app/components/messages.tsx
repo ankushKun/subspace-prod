@@ -2229,9 +2229,9 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
         const threshold = Math.max(combinedHeight + 50, 200);
 
         // Debug logging (can be removed in production)
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`Dynamic threshold calculated: ${threshold}px (last: ${lastMessageHeight}px, second-last: ${secondLastMessageHeight}px)`);
-        }
+        // if (process.env.NODE_ENV === 'development') {
+        //     console.log(`Dynamic threshold calculated: ${threshold}px (last: ${lastMessageHeight}px, second-last: ${secondLastMessageHeight}px)`);
+        // }
 
         return threshold;
     }, []);

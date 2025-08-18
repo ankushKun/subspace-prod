@@ -404,46 +404,24 @@ export default function ProfilePopover({
         }
     }
 
-    // Fetch latest data when popover opens
+    // Only fetch data when popover opens if data is missing
     const handleOpenChange = useCallback(async (open: boolean) => {
         setIsOpen(open)
 
-        if (open && !isRefreshing) {
+        if (open && !isRefreshing && !profile) {
+            // Only fetch if we don't have profile data
             setIsRefreshing(true)
 
             try {
-                // Fetch latest profile data - different for bots vs users
                 if (isBot) {
-                    // For bots: fetch global bot profile AND server bot data
-
-                    // Fetch global bot profile
+                    // For bots: fetch global bot profile only if missing
                     await actions.bots.get(userId)
-
-                    // Fetch server data to get updated bot information including roles
-                    if (activeServerId) {
-                        try {
-                            await actions.servers.get(activeServerId, true)
-                        } catch (serverError) {
-                            console.warn('Failed to refresh server data for bot:', serverError)
-                        }
-                    }
                 } else {
-                    // For users: fetch regular member global profile and server member data
-
-                    // Fetch user profile
+                    // For users: fetch regular member global profile only if missing
                     await actions.profile.get(userId)
-
-                    // Fetch server member data
-                    if (activeServerId) {
-                        try {
-                            const memberData = await actions.servers.getMember(activeServerId, userId)
-                        } catch (memberError) {
-                            console.warn('Failed to fetch specific member data:', memberError)
-                        }
-                    }
                 }
             } catch (error) {
-                console.error('Failed to refresh profile and server data:', error)
+                console.error('Failed to fetch missing profile data:', error)
             } finally {
                 setIsRefreshing(false)
             }
@@ -454,7 +432,7 @@ export default function ProfilePopover({
             setIsEditingNickname(false)
             setEditedNickname("")
         }
-    }, [userId, activeServerId, actions, isRefreshing, isBot])
+    }, [userId, activeServerId, actions, isRefreshing, isBot, profile])
 
     return (
         <Popover open={isOpen} onOpenChange={handleOpenChange}>

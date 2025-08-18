@@ -222,17 +222,13 @@ export default function ServerMembers() {
 
         console.log(`🤖 Loading ${unloadedBotIds.length} bot profiles...`)
 
-        // Load bot profiles in small batches
-        for (let i = 0; i < unloadedBotIds.length; i += 3) {
-            const batch = unloadedBotIds.slice(i, i + 3)
-            await Promise.all(batch.map((botId: string) =>
-                subspaceActions.bots.get(botId).catch(console.error)
-            ))
-            // Small delay between batches
-            if (i + 3 < unloadedBotIds.length) {
-                await new Promise(resolve => setTimeout(resolve, 100))
-            }
-        }
+        // Load all bot profiles in parallel (request deduplication handles spam prevention)
+        await Promise.all(unloadedBotIds.map((botId: string) =>
+            subspaceActions.bots.get(botId).catch(error => {
+                console.warn(`Failed to fetch bot profile for ${botId}:`, error)
+                return null
+            })
+        ))
     }
 
     // Load members when component mounts or server changes
@@ -253,24 +249,20 @@ export default function ServerMembers() {
             const currentServer = servers[activeServerId]
             const currentMembers = currentServer?.members || {}
 
-            // Load profiles for all members to ensure we have complete data
+            // Load profiles for all members in parallel (request deduplication handles spam prevention)
             const memberUserIds = Object.values(currentMembers).map((m: Member) => m.userId)
             if (memberUserIds.length > 0) {
-                // Load profiles in small batches to avoid overwhelming the system
-                for (let i = 0; i < memberUserIds.length; i += 3) {
-                    const batch = memberUserIds.slice(i, i + 3)
-                    await Promise.all(batch.map((userId: string) => {
-                        if (isBotUserId(userId, activeServerId)) {
-                            return subspaceActions.bots.get(userId).catch(console.error)
-                        } else {
-                            return subspaceActions.profile.get(userId).catch(console.error)
-                        }
-                    }))
-                    // Small delay between batches
-                    if (i + 3 < memberUserIds.length) {
-                        await new Promise(resolve => setTimeout(resolve, 200))
-                    }
-                }
+                // Separate bots and regular users
+                const botIds = memberUserIds.filter(userId => isBotUserId(userId, activeServerId))
+                const regularUserIds = memberUserIds.filter(userId => !isBotUserId(userId, activeServerId))
+
+                // Load all profiles in parallel
+                await Promise.all([
+                    // Load regular user profiles in bulk
+                    regularUserIds.length > 0 ? subspaceActions.profile.getBulk(regularUserIds).catch(console.error) : Promise.resolve(),
+                    // Load bot profiles in parallel
+                    ...botIds.map(botId => subspaceActions.bots.get(botId).catch(console.error))
+                ])
             }
 
             // Also load profiles for any bots in the server

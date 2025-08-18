@@ -115,6 +115,8 @@ interface SubspaceState {
     loadingMembers: Set<string>   // serverIds with members currently being loaded
     loadingFriends: Set<string>   // friendIds currently being loaded
     loadingDMs: Set<string>       // friendIds with DMs currently being loaded
+    loadingBots: Set<string>      // botIds currently being loaded
+    botCacheTimestamps: Record<string, number>  // Track when bot data was last fetched
     // Track current wallet address to detect changes
     currentAddress: string
     actions: {
@@ -212,6 +214,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     loadingMembers: new Set<string>(),
     loadingFriends: new Set<string>(),
     loadingDMs: new Set<string>(),
+    loadingBots: new Set<string>(),
+    botCacheTimestamps: {},
     currentAddress: "",
     actions: {
         bots: {
@@ -240,17 +244,50 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace;
                 if (!subspace) return null;
 
+                const state = get();
+
+                // Check if request is already in progress
+                if (state.loadingBots.has(botId)) {
+                    // Wait for existing request to complete
+                    while (state.loadingBots.has(botId)) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    return state.bots[botId] || null;
+                }
+
+                // Check if we have recent cached data (within 5 minutes)
+                const cacheTimestamp = state.botCacheTimestamps[botId];
+                const now = Date.now();
+                const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+                if (cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION && state.bots[botId]) {
+                    return state.bots[botId];
+                }
+
+                // Mark as loading
+                set((state) => ({
+                    loadingBots: new Set([...state.loadingBots, botId])
+                }));
+
                 try {
                     const botInfo = await subspace.bot.getBot(botId);
                     if (botInfo) {
                         set((state) => ({
-                            bots: { ...state.bots, [botId]: botInfo }
+                            bots: { ...state.bots, [botId]: botInfo },
+                            botCacheTimestamps: { ...state.botCacheTimestamps, [botId]: now }
                         }));
                     }
                     return botInfo;
                 } catch (error) {
                     console.error("Failed to get bot:", error);
                     return null;
+                } finally {
+                    // Remove from loading state
+                    set((state) => {
+                        const newLoadingBots = new Set(state.loadingBots);
+                        newLoadingBots.delete(botId);
+                        return { loadingBots: newLoadingBots };
+                    });
                 }
             },
             getAll: async () => {
@@ -472,6 +509,8 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                         loadingMembers: new Set<string>(),
                         loadingFriends: new Set<string>(),
                         loadingDMs: new Set<string>(),
+                        loadingBots: new Set<string>(),
+                        botCacheTimestamps: {},
                         currentAddress: owner
                     })
                 } else if (!previousAddress) {
@@ -2208,6 +2247,8 @@ export function useSubspaceWalletDisconnectHandler() {
                 loadingMembers: new Set<string>(),
                 loadingFriends: new Set<string>(),
                 loadingDMs: new Set<string>(),
+                loadingBots: new Set<string>(),
+                botCacheTimestamps: {},
                 currentAddress: "",
                 subspace: null
             });

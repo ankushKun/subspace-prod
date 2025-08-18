@@ -333,23 +333,18 @@ export default function MemberList({ className, isVisible = true, style }: {
                     await actions.profile.getBulk(regularMemberIds)
                 }
 
-                // Fetch bot profiles individually with delays (since they use different API)
+                // Fetch bot profiles in parallel (request deduplication handles spam prevention)
                 if (botMemberIds.length > 0) {
-                    for (let i = 0; i < botMemberIds.length; i++) {
-                        const botId = botMemberIds[i]
-
-                        try {
-                            await actions.bots.get(botId)
-                        } catch (error) {
-                            // Failed to fetch bot profile, continue with next
-                        }
-
-                        // Reduced delay between bot fetches for better performance
-                        // Note: This delay is minimal to prevent overwhelming the system while maintaining good UX
-                        if (i < botMemberIds.length - 1) {
-                            await new Promise(resolve => setTimeout(resolve, 100))  // Reduced from 300ms to 100ms
-                        }
-                    }
+                    // Use Promise.all to fetch all bot profiles in parallel
+                    // The new request deduplication in use-subspace will prevent spam
+                    await Promise.all(
+                        botMemberIds.map(botId =>
+                            actions.bots.get(botId).catch(error => {
+                                console.warn(`Failed to fetch bot profile for ${botId}:`, error)
+                                return null
+                            })
+                        )
+                    )
                 }
             } catch (error) {
                 // Error fetching member profiles
