@@ -144,7 +144,7 @@ export default function App() {
 
             if (currentServer) {
                 setWelcomeServerName(currentServer.name || `Server ${serverId.substring(0, 8)}...`)
-                setWelcomeMemberCount(currentServer.members?.length || currentServer.memberCount || 0)
+                setWelcomeMemberCount(Object.keys(currentServer.members || {}).length || currentServer.memberCount || 0)
                 setWelcomeServerLogo(currentServer.logo ? `https://arweave.net/${currentServer.logo}` : undefined)
                 setWelcomeDialogOpen(true)
                 setPendingWelcomeServerId(null) // clear pending state
@@ -171,7 +171,7 @@ export default function App() {
             const currentServer = servers[pendingWelcomeServerId]
 
             setWelcomeServerName(currentServer.name || `Server ${pendingWelcomeServerId.substring(0, 8)}...`)
-            setWelcomeMemberCount(currentServer.members?.length || currentServer.memberCount || 0)
+            setWelcomeMemberCount(Object.keys(currentServer.members || {}).length || currentServer.memberCount || 0)
             setWelcomeServerLogo(currentServer.logo ? `https://arweave.net/${currentServer.logo}` : undefined)
             setWelcomeDialogOpen(true)
             setPendingWelcomeServerId(null) // clear pending state
