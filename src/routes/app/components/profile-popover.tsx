@@ -233,24 +233,13 @@ export default function ProfilePopover({
             return []
         }
 
-        // Debug: Log server structure for bots
-        if (isBot) {
-            console.log(`Bot ${userId} - Server data:`, {
-                hasServer: !!server,
-                hasBots: !!server.bots,
-                botsKeys: server.bots ? Object.keys(server.bots) : [],
-                botData: server.bots ? server.bots[userId] : null,
-                serverRoles: server.roles ? Object.keys(server.roles) : []
-            })
-        }
+
 
         // For bots, get roles from server.bots data
         if (isBot && server.bots && server.bots[userId]) {
             const botRoles = server.bots[userId].roles || []
-            console.log(`Bot ${userId} roles from server.bots:`, botRoles)
 
             if (!Array.isArray(botRoles) || botRoles.length === 0) {
-                console.log(`Bot ${userId} has no roles or invalid roles array`)
                 return []
             }
 
@@ -259,7 +248,6 @@ export default function ProfilePopover({
                 .filter((role: any) => botRoles.includes(role.roleId.toString()))
                 .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0))
 
-            console.log(`Bot ${userId} resolved roles:`, userRoles)
             return userRoles
         }
 

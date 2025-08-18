@@ -167,6 +167,7 @@ interface SubspaceState {
             editMessage: (serverId: string, channelId: string, messageId: string, content: string) => Promise<boolean>
             deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
             updateServerCode: (serverId: string) => Promise<boolean>
+            kickMember: (serverId: string, userId: string) => Promise<boolean>
             refreshSources: () => Promise<void>
             getSources: () => any | null
         }
@@ -1591,6 +1592,22 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 const subspace = get().subspace
                 if (!subspace) return null
                 return subspace.connectionManager.sources
+            },
+            kickMember: async (serverId: string, userId: string) => {
+                const subspace = get().subspace
+                if (!subspace) return false
+
+                try {
+                    const success = await subspace.server.kickMember(serverId, userId)
+                    if (success) {
+                        // Refresh members to update the UI
+                        await get().actions.servers.refreshMembers(serverId)
+                    }
+                    return success
+                } catch (error) {
+                    console.error("Failed to kick member:", error)
+                    return false
+                }
             }
         },
         friends: {

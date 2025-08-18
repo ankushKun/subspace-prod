@@ -508,10 +508,6 @@ export default function ServerMembers() {
     }
 
     const kickMember = async (member: ExtendedMemberOrBot) => {
-        if (member.isBot) {
-            toast.info("Use bot removal instead of kicking bots")
-            return
-        }
         if (!activeServerId || !canManageMembers) {
             toast.error("Insufficient permissions to kick members")
             return
@@ -531,30 +527,27 @@ export default function ServerMembers() {
 
         setIsKicking(member.userId)
         try {
-            // For now, we'll simulate kick by removing all roles except @everyone
-            const everyoneRole = roles.find(r => r.roleId.toString() === "1")
-            const newRoles = everyoneRole ? ["1"] : []
-
-            const success = await subspaceActions.servers.updateMember(activeServerId, {
-                userId: member.userId,
-                roles: newRoles
-            })
+            const success = await subspaceActions.servers.kickMember(activeServerId, member.userId)
 
             if (success) {
-                toast.success(`${member.displayName || member.nickname || member.userId} has been kicked from the server`)
+                const actionText = member.isBot ? "removed" : "kicked"
+                toast.success(`${member.displayName || member.nickname || member.userId} has been ${actionText} from the server`)
                 // Refresh members and update UI
-                await subspaceActions.servers.refreshMembers(activeServerId)
                 await loadMembers()
             } else {
-                toast.error("Failed to kick member")
+                const actionText = member.isBot ? "remove" : "kick"
+                toast.error(`Failed to ${actionText} ${member.isBot ? "bot" : "member"}`)
             }
         } catch (error) {
             console.error("Error kicking member:", error)
-            toast.error("Failed to kick member")
+            const actionText = member.isBot ? "removing bot" : "kicking member"
+            toast.error(`Failed to ${actionText}`)
         } finally {
             setIsKicking(null)
         }
     }
+
+
 
     const banMember = async (member: ExtendedMemberOrBot) => {
         if (member.isBot) {
@@ -589,7 +582,6 @@ export default function ServerMembers() {
             if (success) {
                 toast.success(`${member.displayName || member.nickname || member.userId} has been banned from the server`)
                 // Refresh members and update UI
-                await subspaceActions.servers.refreshMembers(activeServerId)
                 await loadMembers()
             } else {
                 toast.error("Failed to ban member")
@@ -1004,41 +996,30 @@ export default function ServerMembers() {
                                                                         Copy User ID
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuSeparator className="bg-primary/15" />
+                                                                    <DropdownMenuItem
+                                                                        className="font-ocr text-red-500/80 hover:bg-red-500/5 focus:bg-red-500/5 focus:text-red-500"
+                                                                        onClick={() => kickMember(member)}
+                                                                        disabled={isOwner || isCurrentUser || isKicking === member.userId}
+                                                                    >
+                                                                        {isKicking === member.userId ? (
+                                                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                                        ) : (
+                                                                            member.isBot ? <BotIcon className="w-4 h-4 mr-2" /> : <UserX className="w-4 h-4 mr-2" />
+                                                                        )}
+                                                                        {member.isBot ? "Remove Bot" : "Kick Member"}
+                                                                    </DropdownMenuItem>
                                                                     {!member.isBot && (
-                                                                        <>
-                                                                            <DropdownMenuItem
-                                                                                className="font-ocr text-red-500/80 hover:bg-red-500/5 focus:bg-red-500/5 focus:text-red-500"
-                                                                                onClick={() => kickMember(member)}
-                                                                                disabled={isOwner || isCurrentUser || isKicking === member.userId}
-                                                                            >
-                                                                                {isKicking === member.userId ? (
-                                                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                                                ) : (
-                                                                                    <UserX className="w-4 h-4 mr-2" />
-                                                                                )}
-                                                                                Kick Member
-                                                                            </DropdownMenuItem>
-                                                                            <DropdownMenuItem
-                                                                                className="font-ocr text-red-500/80 hover:bg-red-500/5 focus:bg-red-500/5 focus:text-red-500"
-                                                                                onClick={() => banMember(member)}
-                                                                                disabled={isOwner || isCurrentUser || isBanning === member.userId}
-                                                                            >
-                                                                                {isBanning === member.userId ? (
-                                                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                                                ) : (
-                                                                                    <Ban className="w-4 h-4 mr-2" />
-                                                                                )}
-                                                                                Ban Member
-                                                                            </DropdownMenuItem>
-                                                                        </>
-                                                                    )}
-                                                                    {member.isBot && (
                                                                         <DropdownMenuItem
                                                                             className="font-ocr text-red-500/80 hover:bg-red-500/5 focus:bg-red-500/5 focus:text-red-500"
-                                                                            disabled={true}
+                                                                            onClick={() => banMember(member)}
+                                                                            disabled={isOwner || isCurrentUser || isBanning === member.userId}
                                                                         >
-                                                                            <BotIcon className="w-4 h-4 mr-2" />
-                                                                            Remove Bot (Coming Soon)
+                                                                            {isBanning === member.userId ? (
+                                                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                                            ) : (
+                                                                                <Ban className="w-4 h-4 mr-2" />
+                                                                            )}
+                                                                            Ban Member
                                                                         </DropdownMenuItem>
                                                                     )}
                                                                 </DropdownMenuContent>

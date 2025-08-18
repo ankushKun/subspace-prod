@@ -2,7 +2,7 @@
  * Messages Component
  * 
  * IMPROVED MESSAGE FETCHING LOGIC:
- * 1. AUTOMATIC POLLING: Messages are fetched every 5 seconds when channel is active
+ * 1. AUTOMATIC POLLING: Messages are fetched every 1.5 seconds when channel is active
  * 2. INITIAL LOAD: Shows loading state while fetching initial messages
  * 3. AUTOMATIC SYNCING: Automatically refreshes after send/edit/delete operations
  * 4. BACKGROUND FETCHING: All fetching happens in background without UI indicators
@@ -10,8 +10,17 @@
  * 6. ERROR HANDLING: Graceful handling of failed message fetches
  * 7. PERFORMANCE: Efficient polling with cleanup to prevent memory leaks
  * 8. REQUEST LIMITING: Maximum 5 concurrent requests with queuing and throttling
- * 9. THROTTLING: Minimum 2 seconds between requests for the same channel
+ * 9. THROTTLING: Minimum 800ms between requests for the same channel
  * 10. PAGE VISIBILITY: Pauses fetching when page is hidden to save resources
+ * 
+ * IMPROVED AUTOSCROLL SYSTEM:
+ * 11. INITIAL SCROLL: Always scrolls to bottom when messages first load or channel changes
+ * 12. SMART DETECTION: Robust scroll position detection with race condition prevention
+ * 13. USER INTENT: Only auto-scrolls new messages when user is already at bottom
+ * 14. SMOOTH SCROLLING: Instant scroll for initial loads, smooth for new messages
+ * 15. STATE MANAGEMENT: Proper state tracking to prevent scroll fighting
+ * 16. DYNAMIC THRESHOLD: Calculates autoscroll threshold based on last 2 messages height
+ * 17. LARGE MESSAGE SUPPORT: Handles large messages by adapting scroll detection dynamically
  */
 
 import { cn } from "@/lib/utils";
@@ -132,12 +141,18 @@ const shortenAddress = (address: string) => {
 
 // Resolve a human-readable name for a user in the context of a server.
 // Priority: server nickname → bot name → profile primaryName → shortened address.
-const getDisplayName = (userId: string, profiles: Record<string, any>, activeServerId?: string, servers?: Record<string, any>) => {
-    // Priority 1: server-specific nickname
+const getDisplayName = (userId: string, profiles: Record<string, any>, activeServerId?: string, servers?: Record<string, any>, bots?: Record<string, any>) => {
+    // Priority 1: server-specific nickname (for both users and bots)
     if (activeServerId && servers?.[activeServerId]) {
         const server = servers[activeServerId]
         const member = server.members?.[userId]
         if (member?.nickname) return member.nickname
+
+        // Check for bot nickname in server
+        if (server.bots && typeof server.bots === 'object' && server.bots[userId]) {
+            const serverBotInfo = server.bots[userId]
+            if (serverBotInfo.nickname) return serverBotInfo.nickname
+        }
     }
 
     // Priority 2: bot name (if this is a bot)
@@ -153,10 +168,13 @@ const getDisplayName = (userId: string, profiles: Record<string, any>, activeSer
             botInfo = server.bots[userId] || null
         }
 
-        // For bots, prioritize nickname, then profile names, then direct bot name
+        // If we found bot info in server, get the global bot profile
         if (botInfo) {
-            if (botInfo.nickname) {
-                return botInfo.nickname
+            const globalBotProfile = bots?.[userId]
+
+            // Priority order for bots: server nickname → global bot name → server bot name → fallback
+            if (globalBotProfile?.name) {
+                return globalBotProfile.name
             }
             if (botInfo.name) {
                 return botInfo.name
@@ -164,6 +182,8 @@ const getDisplayName = (userId: string, profiles: Record<string, any>, activeSer
             if (botInfo.displayName) {
                 return botInfo.displayName
             }
+            // Fallback for bots
+            return `${userId.slice(0, 8)}`
         }
     }
 
@@ -175,6 +195,51 @@ const getDisplayName = (userId: string, profiles: Record<string, any>, activeSer
     return shortenAddress(userId)
 };
 
+// Helper function to check if a user is a bot in the current server
+const isUserBot = (userId: string, activeServerId?: string, servers?: Record<string, any>) => {
+    if (!activeServerId || !servers?.[activeServerId]) return false
+
+    const server = servers[activeServerId]
+    if (!server.bots) return false
+
+    // Check if bots is an array or object
+    if (Array.isArray(server.bots)) {
+        return server.bots.some((b: any) => (b?.userId || b?.botId || b?.process) === userId)
+    } else if (typeof server.bots === 'object' && server.bots !== null) {
+        return server.bots[userId] !== undefined
+    }
+
+    return false
+};
+
+// Helper function to get bot info for a user
+const getBotInfo = (userId: string, activeServerId?: string, servers?: Record<string, any>, bots?: Record<string, any>) => {
+    if (!activeServerId || !servers?.[activeServerId]) return null
+
+    const server = servers[activeServerId]
+    if (!server.bots) return null
+
+    let serverBotInfo = null
+
+    // Check if bots is an array or object
+    if (Array.isArray(server.bots)) {
+        serverBotInfo = server.bots.find((b: any) => (b?.userId || b?.botId || b?.process) === userId)
+    } else if (typeof server.bots === 'object' && server.bots !== null) {
+        serverBotInfo = server.bots[userId] || null
+    }
+
+    if (!serverBotInfo) return null
+
+    // Get global bot profile
+    const globalBotProfile = bots?.[userId]
+
+    return {
+        serverBotInfo,
+        globalBotProfile,
+        isBot: true
+    }
+};
+
 // Pick the highest-priority role color for a user in the active server, if any.
 const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Record<string, Server>) => {
     if (!activeServerId || !servers?.[activeServerId]) return undefined
@@ -182,13 +247,19 @@ const getUserRoleColor = (userId: string, activeServerId?: string, servers?: Rec
     const server = servers[activeServerId]
     const member = server.members?.[userId]
 
-    if (!member?.roles || !Array.isArray(member.roles) || member.roles.length === 0) {
+    // Check if this is a bot and get its roles
+    let userRoles = member?.roles
+    if (!userRoles && server.bots && typeof server.bots === 'object' && server.bots[userId]) {
+        userRoles = server.bots[userId].roles
+    }
+
+    if (!userRoles || !Array.isArray(userRoles) || userRoles.length === 0) {
         return undefined
     }
 
     const serverRoles = Object.values(server?.roles || {})
     const memberRoles = serverRoles
-        .filter((role: any) => member.roles.includes(role.roleId))
+        .filter((role: any) => userRoles.includes(role.roleId))
         .sort((a: any, b: any) => (b.orderId || b.position || 0) - (a.orderId || a.position || 0)) // Higher orderId = higher priority
 
     // Select the first role in priority order that has a non-default color
@@ -258,7 +329,12 @@ const ChannelHeader = ({ channelName, channelDescription, memberCount, onToggleM
 
 // Memoized avatar to minimize re-renders when only message data changes.
 const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?: "sm" | "md" | "lg" }) => {
-    const profile = useSubspace((state) => state.profiles[authorId])
+    const { profiles, servers, bots } = useSubspace()
+    const { activeServerId } = useGlobalState()
+
+    const profile = profiles[authorId]
+    const botInfo = getBotInfo(authorId, activeServerId, servers, bots)
+    const isBot = isUserBot(authorId, activeServerId, servers)
 
     const sizeClasses = {
         sm: "w-6 h-6",
@@ -266,15 +342,33 @@ const MessageAvatar = memo(({ authorId, size = "md" }: { authorId: string; size?
         lg: "w-12 h-12"
     }
 
+    // Determine avatar source - prioritize bot avatar over user profile
+    let avatarSrc = null
+    let avatarAlt = authorId
+
+    if (isBot && botInfo) {
+        // Try bot profile pfp first, then server bot pfp
+        if (botInfo.globalBotProfile?.pfp) {
+            avatarSrc = `https://arweave.net/${botInfo.globalBotProfile.pfp}`
+            avatarAlt = botInfo.globalBotProfile.name || `Bot ${authorId.slice(0, 8)}`
+        } else if (botInfo.serverBotInfo?.pfp) {
+            avatarSrc = `https://arweave.net/${botInfo.serverBotInfo.pfp}`
+            avatarAlt = botInfo.serverBotInfo.name || `Bot ${authorId.slice(0, 8)}`
+        }
+    } else if (profile?.pfp) {
+        avatarSrc = `https://arweave.net/${profile.pfp}`
+        avatarAlt = profile.primaryName || authorId
+    }
+
     return (
         <div className={cn(
             "relative rounded-md overflow-hidden bg-gradient-to-br from-primary/30 to-primary/15 flex-shrink-0",
             sizeClasses[size]
         )}>
-            {profile?.pfp ? (
+            {avatarSrc ? (
                 <img
-                    src={`https://arweave.net/${profile.pfp}`}
-                    alt={authorId}
+                    src={avatarSrc}
+                    alt={avatarAlt}
                     className="w-full h-full object-cover"
                 />
             ) : (
@@ -332,7 +426,7 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
     onJumpToMessage?: (messageId: string) => void;
     replyToId?: string;
 }) => {
-    const { profiles, servers } = useSubspace()
+    const { profiles, servers, bots } = useSubspace()
     const { activeServerId } = useGlobalState()
 
     if (!replyToMessage || !replyToMessage.messageId) {
@@ -346,9 +440,11 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
         )
     }
 
-    const displayName = getDisplayName(replyToMessage.authorId, profiles, activeServerId, servers)
+    const displayName = getDisplayName(replyToMessage.authorId, profiles, activeServerId, servers, bots)
     const authorProfile = profiles[replyToMessage.authorId]
     const roleColor = getUserRoleColor(replyToMessage.authorId, activeServerId, servers)
+    const isBot = isUserBot(replyToMessage.authorId, activeServerId, servers)
+    const botInfo = getBotInfo(replyToMessage.authorId, activeServerId, servers, bots)
 
     // Trim content to keep the reply line succinct
     const previewContent = replyToMessage ? replyToMessage.content?.length > 50
@@ -367,18 +463,39 @@ const ReplyPreview = ({ replyToMessage, onJumpToMessage, replyToId, ...props }: 
             <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Tiny avatar for reply context */}
                 <ProfilePopover userId={replyToMessage.authorId} side="bottom" align="start">
-                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20">
-                        {authorProfile?.pfp ? (
-                            <img
-                                src={`https://arweave.net/${authorProfile.pfp}`}
-                                alt={displayName}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            <span className="text-[8px] font-semibold text-primary">
-                                {displayName.charAt(0).toUpperCase()}
-                            </span>
-                        )}
+                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-border/20 relative">
+                        {(() => {
+                            // Determine avatar source - prioritize bot avatar
+                            let avatarSrc = null
+
+                            if (isBot && botInfo) {
+                                if (botInfo.globalBotProfile?.pfp) {
+                                    avatarSrc = `https://arweave.net/${botInfo.globalBotProfile.pfp}`
+                                } else if (botInfo.serverBotInfo?.pfp) {
+                                    avatarSrc = `https://arweave.net/${botInfo.serverBotInfo.pfp}`
+                                }
+                            } else if (authorProfile?.pfp) {
+                                avatarSrc = `https://arweave.net/${authorProfile.pfp}`
+                            }
+
+                            if (avatarSrc) {
+                                return (
+                                    <img
+                                        src={avatarSrc}
+                                        alt={displayName}
+                                        className="w-full h-full object-cover"
+                                    />
+                                )
+                            } else {
+                                return (
+                                    <span className="text-[8px] font-semibold text-primary">
+                                        {displayName.charAt(0).toUpperCase()}
+                                    </span>
+                                )
+                            }
+                        })()}
+
+
                     </div>
                 </ProfilePopover>
 
@@ -836,12 +953,13 @@ EmptyChannelState.displayName = "EmptyChannelState"
 
 const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMessage, channel, showAvatar = true, isGrouped = false, onJumpToMessage }: MessageItemProps) => {
     const [isHovered, setIsHovered] = useState(false);
-    const { profiles, servers } = useSubspace()
+    const { profiles, servers, bots } = useSubspace()
     const { activeServerId } = useGlobalState()
 
     // Highlight messages that reply to me for quick visual scanning
     const isMyReply = !!(profile?.userId && message.replyToMessage?.authorId && message.replyToMessage.authorId === profile.userId)
     const authorRoleColor = getUserRoleColor(message.authorId, activeServerId, servers)
+    const isBot = isUserBot(message.authorId, activeServerId, servers)
 
 
     return (
@@ -887,10 +1005,13 @@ const MessageItem = memo(({ message, profile, onReply, onEdit, onDelete, isOwnMe
                         <div className="flex items-baseline gap-2 mb-1">
                             <ProfilePopover userId={message.authorId} side="bottom" align="start">
                                 <span
-                                    className="hover:underline font-ocr cursor-pointer font-bold text-foreground text-sm transition-colors hover:text-primary"
+                                    className="hover:underline font-ocr cursor-pointer font-bold text-foreground text-sm transition-colors hover:text-primary flex items-center gap-1.5"
                                     style={{ color: authorRoleColor || undefined }}
                                 >
-                                    {getDisplayName(message.authorId, profiles, activeServerId, servers)}
+                                    {getDisplayName(message.authorId, profiles, activeServerId, servers, bots)}
+                                    {isBot && (
+                                        <Bot className="w-3.5 h-3.5 text-blue-500" />
+                                    )}
                                 </span>
                             </ProfilePopover>
                             <MessageTimestamp timestamp={message.timestamp} showDate={new Date(message.timestamp).toDateString() !== new Date().toDateString()} />
@@ -1029,16 +1150,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                 return
             }
 
-            // Debug: Log the entire server object to see its structure
             const server = servers[activeServerId]
-            console.log('=== DEBUG: Server Data ===')
-            console.log('Server ID:', activeServerId)
-            console.log('Full server object:', server)
-            console.log('Server members:', server?.members)
-            console.log('Server bots:', server?.bots)
-            console.log('Server bots type:', typeof server?.bots)
-            console.log('Server bots isArray:', Array.isArray(server?.bots))
-            console.log('========================')
 
             // Safely extract server members with proper type checking
             let serverMembers: any[] = []
@@ -1047,17 +1159,10 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                 // Handle different possible data structures
                 if (Array.isArray(server.members)) {
                     serverMembers = server.members
-                    console.log(`Found ${serverMembers.length} server members (array format)`)
                 } else if (typeof server.members === 'object' && server.members !== null) {
                     // If members is an object with userId keys, convert to array
                     serverMembers = Object.values(server.members)
-                    console.log(`Found ${serverMembers.length} server members (object format)`)
-                } else {
-                    console.warn('Unexpected members data structure:', typeof server.members, server.members)
-                    serverMembers = []
                 }
-            } else {
-                console.log('No server members found for server:', activeServerId)
             }
 
             // Safely extract server bots
@@ -1065,7 +1170,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             if (server?.bots) {
                 if (Array.isArray(server.bots)) {
                     serverBots = server.bots
-                    console.log(`Found ${serverBots.length} server bots (array format):`, serverBots)
                 } else if (typeof server.bots === 'object' && server.bots !== null) {
                     // If bots is an object with process IDs as keys, convert to array
                     // This matches the structure used in member-list.tsx
@@ -1078,20 +1182,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         approved: (botInfo as any).approved || false,
                         isBot: true
                     }))
-                    console.log(`Found ${serverBots.length} server bots (object format):`, serverBots)
-                } else {
-                    console.warn('Unexpected bots data structure:', typeof server.bots, server.bots)
-                    serverBots = []
                 }
-            } else {
-                console.log('No server bots found for server:', activeServerId)
-                // Debug: Check if bots might be in a different location
-                console.log('Checking for bots in other server properties...')
-                Object.keys(server || {}).forEach(key => {
-                    if (key.toLowerCase().includes('bot')) {
-                        console.log(`Found potential bot-related property: ${key} =`, server[key])
-                    }
-                })
             }
 
             // Use recent participants to surface likely targets
@@ -1099,7 +1190,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             messagesInChannel.forEach(message => {
                 chatParticipants.add(message.authorId)
             })
-            console.log(`Found ${chatParticipants.size} chat participants`)
 
             // Merge members, bots, and participants into a single map
             const allUsers = new Map<string, {
@@ -1124,30 +1214,17 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             isBot: false,
                             isChatParticipant: chatParticipants.has(member.userId),
                         })
-                    } else {
-                        console.warn('Invalid member object:', member)
                     }
                 })
             }
 
             // Add server bots
             if (Array.isArray(serverBots)) {
-                console.log('Processing bots array:', serverBots)
-                serverBots.forEach((bot: any, index: number) => {
-                    console.log(`Processing bot ${index}:`, bot)
-                    // Check for bot identifier - now using userId which we set in the mapping above
+                serverBots.forEach((bot: any) => {
                     const botId = bot.userId
                     if (bot && botId) {
                         // Get bot profile data to access PFP and proper name
                         const botProfile = profiles[botId] || bots[botId]
-
-                        // Debug: Log what bot profile data we have
-                        console.log(`Bot ${botId} profile data:`, {
-                            fromProfiles: profiles[botId],
-                            fromBots: bots[botId],
-                            botProfile: botProfile,
-                            botData: bot
-                        })
 
                         // Use nickname if available, otherwise try profile name, then generate fallback
                         let botName = bot.nickname
@@ -1167,17 +1244,9 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             botName = `Bot ${botId.slice(0, 8)}`
                         }
 
-                        console.log(`Adding bot to suggestions: ${botName} (${botId}) with profile:`, botProfile)
-                        console.log(`Bot display name resolution:`, {
-                            nickname: bot.nickname,
-                            botName: bot.name,
-                            profileName: botProfile && 'primaryName' in botProfile ? botProfile.primaryName :
-                                botProfile && 'name' in botProfile ? botProfile.name : 'N/A',
-                            finalDisplayName: botName
-                        })
                         allUsers.set(botId, {
                             id: botId,
-                            display: botName, // This should now be the bot's actual name
+                            display: botName,
                             isServerMember: false,
                             isBot: true,
                             isChatParticipant: chatParticipants.has(botId),
@@ -1185,18 +1254,14 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                             botProfile: botProfile,
                             botData: bot
                         })
-                    } else {
-                        console.warn('Invalid bot object - missing identifier:', bot)
                     }
                 })
-            } else {
-                console.log('No bots array to process')
             }
 
             // Add chat participants who may not be listed as members (edge cache cases)
             chatParticipants.forEach(userId => {
                 if (!allUsers.has(userId)) {
-                    const displayName = getDisplayName(userId, profiles, activeServerId, servers)
+                    const displayName = getDisplayName(userId, profiles, activeServerId, servers, bots)
                     allUsers.set(userId, {
                         id: userId,
                         display: displayName,
@@ -1208,9 +1273,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             })
 
             const allUsersArray = Array.from(allUsers.values())
-            const botCount = allUsersArray.filter(u => u.isBot).length
-            console.log(`Total users for suggestions: ${allUsersArray.length} (including ${botCount} bots)`)
-            console.log('All users array:', allUsersArray)
 
             if (!query.trim()) {
                 const sortedUsers = allUsersArray
@@ -1230,7 +1292,6 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         display: user.display
                     }))
 
-                console.log('Final sorted users (no query):', sortedUsers)
                 callback(sortedUsers)
                 return
             }
@@ -1268,10 +1329,8 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                     display: user.display
                 }))
 
-            console.log('Final filtered users:', filteredUsers)
             callback(filteredUsers)
         } catch (error) {
-            console.error('Error in getMembersData:', error)
             // Return empty array on error to prevent crashes
             callback([])
         }
@@ -1313,15 +1372,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
             isBot = !!botInfo
         }
 
-        // Debug: Log bot info when rendering
-        if (isBot) {
-            console.log(`Rendering bot suggestion for ${suggestion.id}:`, {
-                botInfo,
-                profiles: profiles[suggestion.id],
-                bots: bots[suggestion.id],
-                suggestion
-            })
-        }
+
 
         const isChatParticipant = messagesInChannel.some(m => m.authorId === suggestion.id)
         const roleColor = getUserRoleColor(suggestion.id, activeServerId, servers)
@@ -1628,7 +1679,7 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                         <span className="text-sm text-muted-foreground">
                             Replying to <ProfilePopover userId={replyingTo.authorId} side="top" align="start">
                                 <span className="cursor-pointer hover:underline transition-colors hover:text-primary">
-                                    {getDisplayName(replyingTo.authorId, profiles, activeServerId, servers)}
+                                    {getDisplayName(replyingTo.authorId, profiles, activeServerId, servers, bots)}
                                 </span>
                             </ProfilePopover>
                         </span>
@@ -1798,25 +1849,8 @@ const MessageInput = React.forwardRef<MessageInputRef, MessageInputProps>(({
                                 trigger="@"
                                 markup="@[__display__](__id__)"
                                 displayTransform={(id) => {
-                                    // Get the display name from our suggestions data
-                                    // For bots, check bot data first, then fall back to getDisplayName
-                                    const server = servers[activeServerId]
-                                    let displayName = id // fallback to ID
-
-                                    if (server?.bots && typeof server.bots === 'object') {
-                                        const serverBotInfo = server.bots[id]
-                                        const botInfo = bots[id]
-                                        if (botInfo) {
-                                            // Bot found - use nickname, name, or fallback
-                                            displayName = serverBotInfo.nickname || botInfo.name || `${id.slice(0, 8)}`
-                                        }
-                                    }
-
-                                    // If not a bot or no bot name found, try getDisplayName
-                                    if (displayName === id) {
-                                        displayName = getDisplayName(id, profiles, activeServerId, servers)
-                                    }
-
+                                    // Use the updated getDisplayName function which handles bots properly
+                                    const displayName = getDisplayName(id, profiles, activeServerId, servers, bots)
                                     return `@${displayName}`
                                 }}
                                 appendSpaceOnAdd
@@ -2075,7 +2109,7 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
     const pendingRequestsRef = useRef<Set<string>>(new Set()); // Track pending requests to prevent duplicates
     const MAX_CONCURRENT_REQUESTS = 5;
     const REQUEST_TIMEOUT = 30000; // 30 seconds timeout for requests
-    const MIN_REQUEST_INTERVAL = 1000; // Minimum 1 second between requests for the same channel
+    const MIN_REQUEST_INTERVAL = 250; // Minimum 250ms between requests for faster responsiveness
     const lastRequestTimeRef = useRef<number>(0);
 
     // Expose focusInput method to parent component
@@ -2090,23 +2124,35 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
 
     // State for scroll position tracking
     const [isAtBottom, setIsAtBottom] = useState(true);
+    const [hasScrolledToBottomOnLoad, setHasScrolledToBottomOnLoad] = useState(false);
+    const [previousMessageCount, setPreviousMessageCount] = useState(0);
+    const [dynamicThreshold, setDynamicThreshold] = useState(200); // Dynamic threshold based on message heights
 
     // Clear reply state when channel changes
     useEffect(() => {
         setReplyingTo(null);
         setEditingMessage(null);
         setInitialMessagesLoaded(false); // Reset initial load state when channel changes
+        setIsAtBottom(true); // Always assume we want to be at bottom when switching channels
+        setHasScrolledToBottomOnLoad(false); // Reset scroll state for new channel
+        setPreviousMessageCount(0); // Reset message count for new channel
 
         // Clear any pending requests when channel changes
         pendingRequestsRef.current.clear();
         lastRequestTimeRef.current = 0;
+
+        // Immediately scroll to bottom when channel becomes active
+        // This ensures instant positioning even before messages load
+        const container = messagesContainerRef.current;
+        if (container && activeChannelId) {
+            container.scrollTop = container.scrollHeight;
+        }
     }, [activeChannelId]);
 
     // Request management functions
     const executeRequest = async (requestId: string, requestFn: () => Promise<void>) => {
         // Check if we're already at max concurrent requests
         if (activeRequestsRef.current.size >= MAX_CONCURRENT_REQUESTS) {
-            console.log(`Request ${requestId} queued - max concurrent requests (${MAX_CONCURRENT_REQUESTS}) reached`);
             // Queue this request for later execution
             return new Promise<void>((resolve, reject) => {
                 requestQueueRef.current.push(async () => {
@@ -2122,25 +2168,21 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
 
         // Add to active requests
         activeRequestsRef.current.add(requestId);
-        console.log(`Request ${requestId} started. Active requests: ${activeRequestsRef.current.size}/${MAX_CONCURRENT_REQUESTS}`);
 
         // Set timeout to prevent hanging requests
         const timeoutId = setTimeout(() => {
-            console.warn(`Request ${requestId} timed out after ${REQUEST_TIMEOUT}ms`);
             activeRequestsRef.current.delete(requestId);
             processQueue(); // Process next queued request
         }, REQUEST_TIMEOUT);
 
         try {
             await requestFn();
-            console.log(`Request ${requestId} completed successfully`);
         } catch (error) {
-            console.error(`Request ${requestId} failed:`, error);
+            // Request failed, but continue processing
         } finally {
             // Clean up
             clearTimeout(timeoutId);
             activeRequestsRef.current.delete(requestId);
-            console.log(`Request ${requestId} cleaned up. Active requests: ${activeRequestsRef.current.size}/${MAX_CONCURRENT_REQUESTS}`);
             processQueue(); // Process next queued request
         }
     };
@@ -2150,7 +2192,6 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
         while (requestQueueRef.current.length > 0 && activeRequestsRef.current.size < MAX_CONCURRENT_REQUESTS) {
             const nextRequest = requestQueueRef.current.shift();
             if (nextRequest) {
-                console.log(`Processing queued request. Queue length: ${requestQueueRef.current.length}`);
                 nextRequest();
             }
         }
@@ -2162,22 +2203,51 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
     const shouldThrottleRequest = () => {
         const now = Date.now();
         const timeSinceLastRequest = now - lastRequestTimeRef.current;
-        const shouldThrottle = timeSinceLastRequest < MIN_REQUEST_INTERVAL;
-        if (shouldThrottle) {
-            console.log(`Throttling request - ${Math.ceil((MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000)}s remaining`);
-        }
-        return shouldThrottle;
+        return timeSinceLastRequest < MIN_REQUEST_INTERVAL;
     };
 
-    // Debug function to log current request state
-    const logRequestState = () => {
-        console.log('=== Request State ===');
-        console.log(`Active requests: ${activeRequestsRef.current.size}/${MAX_CONCURRENT_REQUESTS}`);
-        console.log(`Queued requests: ${requestQueueRef.current.length}`);
-        console.log(`Pending channel requests: ${pendingRequestsRef.current.size}`);
-        console.log(`Time since last request: ${Date.now() - lastRequestTimeRef.current}ms`);
-        console.log('===================');
-    };
+    // Calculate dynamic threshold based on the height of the last 2 messages
+    const calculateDynamicThreshold = useCallback(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return 200; // fallback to default
+
+        const messageElements = container.querySelectorAll('[data-message-id]');
+        if (messageElements.length < 2) return 200; // fallback if not enough messages
+
+        // Get the last 2 message elements
+        const lastMessage = messageElements[messageElements.length - 1] as HTMLElement;
+        const secondLastMessage = messageElements[messageElements.length - 2] as HTMLElement;
+
+        if (!lastMessage || !secondLastMessage) return 200;
+
+        // Calculate combined height of last 2 messages with some padding
+        const lastMessageHeight = lastMessage.offsetHeight;
+        const secondLastMessageHeight = secondLastMessage.offsetHeight;
+        const combinedHeight = lastMessageHeight + secondLastMessageHeight;
+
+        // Add 50px padding and ensure minimum of 200px for safety
+        const threshold = Math.max(combinedHeight + 50, 200);
+
+        // Debug logging (can be removed in production)
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`Dynamic threshold calculated: ${threshold}px (last: ${lastMessageHeight}px, second-last: ${secondLastMessageHeight}px)`);
+        }
+
+        return threshold;
+    }, []);
+
+    // Update dynamic threshold when messages change
+    useEffect(() => {
+        // Small delay to ensure DOM elements are properly rendered
+        const timeoutId = setTimeout(() => {
+            const newThreshold = calculateDynamicThreshold();
+            setDynamicThreshold(newThreshold);
+        }, 50);
+
+        return () => clearTimeout(timeoutId);
+    }, [messages, calculateDynamicThreshold]);
+
+
 
     // MESSAGE FETCHING: Activate message fetching loop when channel becomes active
     useEffect(() => {
@@ -2204,13 +2274,13 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
         // Initial fetch
         fetchMessages()
 
-        // Set up polling interval (every 5 seconds instead of 1 second to reduce load)
+        // Set up polling interval (every 1.1 seconds instead of 1 second to reduce load)
         messageFetchIntervalRef.current = setInterval(() => {
             // Only fetch if we still have the required conditions and not throttled
             if (activeServerId && activeChannelId && subspace && server && channel && !shouldThrottleRequest()) {
                 fetchMessages()
             }
-        }, 5000) // Increased from 1000ms to 5000ms
+        }, 1100) // Optimized to 1.1s for better responsiveness with bots
 
         // Cleanup function
         return () => {
@@ -2234,16 +2304,8 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
             }
         }, 30000) // Increased from 10000ms to 30000ms
 
-        // Set up periodic request state logging for debugging
-        const debugInterval = setInterval(() => {
-            if (process.env.NODE_ENV === 'development') {
-                logRequestState();
-            }
-        }, 60000) // Log every minute in development
-
         return () => {
             clearInterval(heartbeatInterval)
-            clearInterval(debugInterval)
         }
     }, [isMessageFetchingActive, activeServerId, activeChannelId, subspace, server, channel])
 
@@ -2259,9 +2321,7 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
             // Clear any pending requests
             activeRequestsRef.current.clear()
             requestQueueRef.current.length = 0
-            pendingRequestsRef.current.clear()
-
-            console.log('Messages component unmounted - all requests cleared');
+            pendingRequestsRef.current.clear();
         }
     }, [])
 
@@ -2269,23 +2329,25 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
-                console.log('Page hidden - pausing message fetching');
                 setIsMessageFetchingActive(false);
                 if (messageFetchIntervalRef.current) {
                     clearInterval(messageFetchIntervalRef.current);
                     messageFetchIntervalRef.current = null;
                 }
             } else {
-                console.log('Page visible - resuming message fetching');
                 if (activeServerId && activeChannelId && subspace && server && channel) {
                     setIsMessageFetchingActive(true);
+                    // Immediately fetch messages when page becomes visible to catch up
+                    if (!shouldThrottleRequest()) {
+                        fetchMessages();
+                    }
                     // Restart the interval
                     if (!messageFetchIntervalRef.current) {
                         messageFetchIntervalRef.current = setInterval(() => {
                             if (activeServerId && activeChannelId && subspace && server && channel && !shouldThrottleRequest()) {
                                 fetchMessages()
                             }
-                        }, 5000);
+                        }, 1500);
                     }
                 }
             }
@@ -2301,20 +2363,17 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
     // Fetch messages for the current channel with request limiting
     const fetchMessages = async () => {
         if (!activeServerId || !activeChannelId || !subspace) {
-            console.log('Skipping message fetch - missing required parameters');
             return
         }
 
         // Check if we should throttle this request
         if (shouldThrottleRequest()) {
-            console.log('Throttling message fetch request - too soon since last request');
             return;
         }
 
         // Check if there's already a pending request for this channel
         const channelKey = `${activeServerId}-${activeChannelId}`;
         if (pendingRequestsRef.current.has(channelKey)) {
-            console.log('Skipping message fetch - request already pending for this channel');
             return;
         }
 
@@ -2329,28 +2388,24 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
                     // Update last request time
                     lastRequestTimeRef.current = Date.now();
 
-                    console.log(`Fetching messages for channel ${activeChannelId} in server ${activeServerId}`);
-                    await actions.servers.getMessages(activeServerId, activeChannelId, 50)
+                    await actions.servers.getMessages(activeServerId, activeChannelId, 100)
 
                     // Mark initial load as complete
                     if (!initialMessagesLoaded) {
                         setInitialMessagesLoaded(true)
                         setLoading(false)
-                        console.log('Initial messages loaded successfully');
                     }
                 } catch (error) {
-                    console.warn("Failed to fetch messages:", error)
                     // Still mark as loaded to avoid infinite loading state
                     if (!initialMessagesLoaded) {
                         setInitialMessagesLoaded(true)
                         setLoading(false)
-                        console.log('Marked as loaded despite error to prevent infinite loading');
                     }
                     // Don't let errors stop the loop - it will continue trying
                 }
             });
         } catch (error) {
-            console.error('Failed to execute message fetch request:', error);
+            // Failed to execute message fetch request
         } finally {
             // Remove from pending requests
             pendingRequestsRef.current.delete(channelKey);
@@ -2373,42 +2428,84 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
 
         const handleScroll = () => {
             const { scrollTop, scrollHeight, clientHeight } = container;
-            const threshold = 100; // pixels from bottom
-            const atBottom = scrollHeight - scrollTop - clientHeight <= threshold;
-            setIsAtBottom(atBottom);
+            // Use dynamic threshold based on last 2 messages height
+            const atBottom = scrollHeight - scrollTop - clientHeight <= dynamicThreshold;
+
+            // Only update state if it actually changed to prevent unnecessary re-renders
+            setIsAtBottom(prev => {
+                if (prev !== atBottom) {
+                    return atBottom;
+                }
+                return prev;
+            });
         };
 
-        container.addEventListener('scroll', handleScroll);
+        // Use passive listener for better performance
+        container.addEventListener('scroll', handleScroll, { passive: true });
 
-        // Initial check
+        // Immediate initial check when channel changes - no delay needed
         handleScroll();
 
         return () => {
             container.removeEventListener('scroll', handleScroll);
         };
-    }, []);
+    }, [activeChannelId, dynamicThreshold]); // Re-run when channel changes or threshold updates
+
+    // Initial scroll to bottom when messages first load
+    useEffect(() => {
+        const messageCount = Object.keys(messages).length;
+
+        // Scroll to bottom on initial load or when switching to a channel with messages
+        if (messageCount > 0 && !hasScrolledToBottomOnLoad && initialMessagesLoaded) {
+            // Immediate scroll without delay for instant response
+            const container = messagesContainerRef.current;
+            if (container) {
+                // Force immediate scroll to bottom
+                container.scrollTop = container.scrollHeight;
+                setHasScrolledToBottomOnLoad(true);
+                setIsAtBottom(true);
+
+                // Double-check with requestAnimationFrame in case DOM isn't fully ready
+                requestAnimationFrame(() => {
+                    if (container.scrollHeight > container.clientHeight) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                });
+            }
+        }
+    }, [messages, hasScrolledToBottomOnLoad, initialMessagesLoaded]);
 
     // Auto-scroll to bottom when new messages arrive (only if already at bottom)
     useEffect(() => {
-        if (isAtBottom && Object.keys(messages).length > 0) {
+        const currentMessageCount = Object.keys(messages).length;
+
+        // Only auto-scroll if:
+        // 1. We have messages
+        // 2. Initial scroll has been done
+        // 3. User was near bottom
+        // 4. Message count has increased (new messages arrived)
+        if (currentMessageCount > 0 && hasScrolledToBottomOnLoad && isAtBottom && currentMessageCount > previousMessageCount) {
             // Use a small delay to ensure the DOM has updated with new messages
             const timeoutId = setTimeout(() => {
                 const container = messagesContainerRef.current;
-                if (container && isAtBottom) {
-                    // Double-check that we're still at bottom before scrolling
+                if (container) {
+                    // Check current scroll position with the dynamic threshold
                     const { scrollTop, scrollHeight, clientHeight } = container;
-                    const threshold = 100;
-                    const stillAtBottom = scrollHeight - scrollTop - clientHeight <= threshold;
+                    const stillNearBottom = scrollHeight - scrollTop - clientHeight <= dynamicThreshold;
 
-                    if (stillAtBottom) {
-                        scrollToBottom();
+                    // If user is still near bottom (including 2nd last message), auto-scroll
+                    if (stillNearBottom) {
+                        scrollToBottom(true); // Smooth scroll for new messages
                     }
                 }
-            }, 50);
+            }, 100); // Slightly longer delay to ensure DOM is fully updated
 
             return () => clearTimeout(timeoutId);
         }
-    }, [messages, isAtBottom]);
+
+        // Update previous message count
+        setPreviousMessageCount(currentMessageCount);
+    }, [messages, isAtBottom, hasScrolledToBottomOnLoad, previousMessageCount, dynamicThreshold]);
 
     // Focus input when replying or editing
     useEffect(() => {
@@ -2419,10 +2516,21 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
         }
     }, [replyingTo, editingMessage]);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        // Don't immediately set isAtBottom to true - let the scroll event handler detect it
-        // This prevents race conditions with the auto-scroll logic
+    const scrollToBottom = (smooth: boolean = true) => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        if (smooth) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        } else {
+            // Instant scroll for initial loads
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Set isAtBottom to true after scrolling
+        setTimeout(() => {
+            setIsAtBottom(true);
+        }, smooth ? 300 : 50); // Wait for smooth scroll to complete
     };
 
     const sendMessage = async (content: string, attachments: string[] = []) => {
@@ -2445,16 +2553,15 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
             if (success) {
                 setReplyingTo(null);
                 // Always scroll to bottom when user sends a message
+                setIsAtBottom(true); // Immediately set to true since user is sending
                 setTimeout(() => {
-                    scrollToBottom();
-                    // Force set isAtBottom to true since user just sent a message
-                    setTimeout(() => setIsAtBottom(true), 100);
+                    scrollToBottom(true); // Smooth scroll for user's own message
                 }, 100);
 
-                // Refresh messages after sending to show the new message
+                // Immediately fetch messages after sending to reduce perceived delay
                 setTimeout(() => {
                     fetchMessages()
-                }, 1000)
+                }, 200) // Reduced from 1000ms to 200ms for faster feedback
             } else {
                 toast.error("Failed to send message");
             }
@@ -2481,10 +2588,10 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
                 setEditingMessage(null);
                 toast.success("Message updated!");
 
-                // Refresh messages after editing to get the latest state
+                // Immediately refresh messages after editing to show changes
                 setTimeout(() => {
                     fetchMessages()
-                }, 500)
+                }, 200) // Reduced from 500ms to 200ms for faster feedback
             } else {
                 toast.error("Failed to update message");
             }
@@ -2510,10 +2617,10 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
                 throw new Error("Failed to delete message");
             }
 
-            // Refresh messages after deletion to get the latest state
+            // Immediately refresh messages after deletion to show changes
             setTimeout(() => {
                 fetchMessages()
-            }, 500)
+            }, 200) // Reduced from 500ms to 200ms for faster feedback
         } catch (error) {
             console.error("Failed to delete message:", error);
             throw error; // Re-throw to be handled by the toast.promise
@@ -2735,9 +2842,8 @@ function Messages({ className, onToggleMemberList, showMemberList, ref }: { clas
                                 <TooltipTrigger asChild>
                                     <Button
                                         onClick={() => {
-                                            scrollToBottom();
-                                            // Set isAtBottom to true after user clicks scroll button
-                                            setTimeout(() => setIsAtBottom(true), 100);
+                                            setIsAtBottom(true); // Immediately set to true since user wants to go to bottom
+                                            scrollToBottom(true); // Smooth scroll when user clicks button
                                         }}
                                         size="sm"
                                         className="h-9 w-9 rounded-full shadow-lg bg-background/80 backdrop-blur-sm border border-border/50 hover:bg-background/90 transition-all duration-200"

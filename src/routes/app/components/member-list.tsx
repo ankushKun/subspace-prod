@@ -67,11 +67,11 @@ const MemberAvatar = ({
                 )}
             </div>
             {/* Bot indicator */}
-            {isBot && (
+            {/* {isBot && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center border border-background">
                     <Bot className="w-1.5 h-1.5 text-white" />
                 </div>
-            )}
+            )} */}
             {/* Subtle glow effect */}
             <div className="absolute inset-0 rounded-sm bg-primary/20 blur-sm scale-110 -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
@@ -135,9 +135,9 @@ const MemberItem = ({
                                 </span>
 
                                 {/* Bot indicator */}
-                                {/* {isBot && (
-                                    <Bot className="w-3 h-3 text-purple-500 flex-shrink-0" />
-                                )} */}
+                                {isBot && (
+                                    <Bot className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" />
+                                )}
 
                                 {/* Owner indicator */}
                                 {isOwner && !isBot && (
@@ -330,26 +330,18 @@ export default function MemberList({ className, isVisible = true, style }: {
 
                 // Fetch regular member profiles in batches of 10 through SDK
                 if (regularMemberIds.length > 0) {
-                    console.log(`👥 Starting to fetch ${regularMemberIds.length} member profiles...`)
-                    const profileResults = await actions.profile.getBulk(regularMemberIds)
-                    const successCount = Object.values(profileResults).filter(p => p !== null).length
-                    console.log(`✅ Completed member profile fetching: ${successCount}/${regularMemberIds.length} successful`)
+                    await actions.profile.getBulk(regularMemberIds)
                 }
 
                 // Fetch bot profiles individually with delays (since they use different API)
                 if (botMemberIds.length > 0) {
-                    console.log(`🤖 Starting to fetch ${botMemberIds.length} bot profiles...`)
-                    let botSuccessCount = 0
-
                     for (let i = 0; i < botMemberIds.length; i++) {
                         const botId = botMemberIds[i]
-                        console.log(`🤖 Fetching bot profile ${i + 1}/${botMemberIds.length}: ${botId}`)
 
                         try {
                             await actions.bots.get(botId)
-                            botSuccessCount++
                         } catch (error) {
-                            console.error(`❌ Failed to fetch bot profile for ${botId}:`, error)
+                            // Failed to fetch bot profile, continue with next
                         }
 
                         // Reduced delay between bot fetches for better performance
@@ -358,13 +350,9 @@ export default function MemberList({ className, isVisible = true, style }: {
                             await new Promise(resolve => setTimeout(resolve, 100))  // Reduced from 300ms to 100ms
                         }
                     }
-
-                    console.log(`✅ Completed bot profile fetching: ${botSuccessCount}/${botMemberIds.length} successful`)
                 }
-
-                console.log(`🎉 All profile fetching completed for server ${activeServerId}`)
             } catch (error) {
-                console.error('❌ Error fetching member profiles:', error)
+                // Error fetching member profiles
             } finally {
                 setLoadingProfiles(false)
             }
