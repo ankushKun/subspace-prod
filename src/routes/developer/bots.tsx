@@ -69,7 +69,8 @@ export default function BotsPage() {
             const botId = await subspace.bot.createBot({
                 name: newBotName.trim(),
                 description: newBotDescription.trim() || undefined,
-                publicBot: true
+                publicBot: true,
+                pfp: undefined // Could be extended to support pfp upload in the future
             })
 
             if (botId) {
@@ -93,18 +94,20 @@ export default function BotsPage() {
         }
     }
 
-    // const handleDeleteBot = async (botId: string) => {
-    //     if (!subspace) return
+    const handleDeleteBot = async (botId: string) => {
+        if (!subspace) return
 
-    //     try {
-    //         const success = await subspace.bot.deleteBot(botId)
-    //         if (success) {
-    //             // Remove bot from local state
-    //             setMyBots(prevBots => prevBots.filter(bot => bot.process !== botId))
-    //         }
-    //     } catch (error) {
-    //     }
-    // }
+        try {
+            const success = await subspace.bot.deleteBot(botId)
+            if (success) {
+                // Remove bot from local state
+                setMyBots(prevBots => prevBots.filter(bot => bot.process !== botId))
+            }
+        } catch (error) {
+            console.error("Failed to delete bot:", error)
+            setError("Failed to delete bot. Please try again.")
+        }
+    }
 
     const renderBotCard = (bot: Bot) => (
         <Link to={`/developer/bots/${bot.process}`}>
@@ -125,9 +128,9 @@ export default function BotsPage() {
                             {bot.name}
                         </h3>
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{bot.description}</p>
-                        {/* <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {bot.botPublic ? "Public Bot" : "Private Bot"}
-                    </p> */}
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {bot.public ? "Public Bot" : "Private Bot"}
+                        </p>
                     </div>
                 </div>
             </Card>
