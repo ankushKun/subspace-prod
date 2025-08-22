@@ -20,7 +20,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.1.1",
-    "@permaweb/aoconnect": "^0.0.85",
+    "@permaweb/aoconnect": "^0.0.89",
     "@permaweb/libs": "^0.0.43",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
