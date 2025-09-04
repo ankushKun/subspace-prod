@@ -431,6 +431,7 @@ export const useSubspace2 = create<SubspaceState>()(persist((set, get) => ({
     partialize: (state) => ({
         profiles: state.profiles,
         servers: state.servers,
+        members: state.members,
     })
 }))
 
