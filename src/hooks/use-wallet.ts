@@ -78,7 +78,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
     connectionStrategy: null,
     provider: null,
     wanderInstance: null,
-    wauthInstance: new WAuth({ dev: process.env.NODE_ENV === "development" }),
+    wauthInstance: new WAuth({ dev: false }),
     jwk: undefined,
 
 
@@ -348,7 +348,7 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
                     if (state.wauthInstance) {
                         state.wauthInstance.logout();
                     }
-                    state.wauthInstance = new WAuth({ dev: process.env.NODE_ENV === "development" })
+                    state.wauthInstance = new WAuth({ dev: false })
 
                     const data = await state.wauthInstance.connect({ provider })
                     if (!data) return

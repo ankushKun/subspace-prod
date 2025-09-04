@@ -7,8 +7,8 @@ import Arweave from "arweave"
 import { ArconnectSigner, ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
 import { dryrun } from "@permaweb/aoconnect"
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
-import type { Member, Role } from "@subspace-protocol/sdk"
-import { EPermissions } from "@subspace-protocol/sdk"
+import type { IMember, IRole, EPermissions } from "@subspace-protocol/sdk/types"
+// import { EPermissions } from "@subspace-protocol/sdk/types"
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -68,7 +68,7 @@ export function isPermissionValid(permission: number): boolean {
 }
 
 // Check if a role has a specific permission
-export function roleHasPermission(role: Role, permission: number): boolean {
+export function roleHasPermission(role: IRole, permission: number): boolean {
     if (!role || !isPermissionValid(role.permissions) || !isPermissionValid(permission)) {
         return false
     }
@@ -77,7 +77,7 @@ export function roleHasPermission(role: Role, permission: number): boolean {
 }
 
 // Check if a member has a specific permission
-export function memberHasPermission(member: Member, permission: number, server: { roles: Record<string, Role>, ownerId: string }): boolean {
+export function memberHasPermission(member: IMember, permission: number, server: { roles: Record<string, IRole>, ownerId: string }): boolean {
     console.log('\nDebug - memberHasPermission check:')
     console.log('Debug - Member:', member)
     console.log('Debug - Permission requested:', permission)
@@ -128,7 +128,7 @@ export function memberHasPermission(member: Member, permission: number, server: 
 }
 
 // Get all permissions a member has
-export function getMemberPermissions(member: Member, server: { roles: Record<string, Role>, ownerId: string }): number {
+export function getMemberPermissions(member: IMember, server: { roles: Record<string, IRole>, ownerId: string }): number {
     if (!member) return 0
 
     // Server owner has all permissions

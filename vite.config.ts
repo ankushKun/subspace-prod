@@ -99,7 +99,9 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src")
+      "@": path.resolve(__dirname, "./src"),
+      "@subspace-protocol/sdk": path.resolve(__dirname, "./subspace-sdk/src/index.ts"),
+      "@subspace-protocol/sdk/types": path.resolve(__dirname, "./subspace-sdk/src/types/subspace.ts"),
     },
   },
   base: "./",

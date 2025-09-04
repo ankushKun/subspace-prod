@@ -34,7 +34,7 @@ export function setCuUrl(url: string): void {
 // Helper function to get Hyperbeam URL from localStorage
 function getHyperbeamUrl(): string {
     const storedUrl = localStorage.getItem('subspace-hyperbeam-url');
-    return storedUrl || WebConstants.HyperbeamEndpoints.PermaDAO; // Default to BetterIDEa
+    return storedUrl || WebConstants.HyperbeamEndpoints.BetterIDEa; // Default to BetterIDEa
 }
 
 // Helper function to set Hyperbeam URL in localStorage
@@ -2192,11 +2192,9 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
     if (!owner) return null
 
-    const cuUrl = getCuUrl();
     const hyperbeamUrl = getHyperbeamUrl();
 
     const config: ConnectionConfig = {
-        CU_URL: cuUrl,
         GATEWAY_URL: 'https://arweave.net',
         HYPERBEAM_URL: hyperbeamUrl,
         owner: owner

@@ -6,13 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress"
 import { useWallet } from "@/hooks/use-wallet"
 import { useSubspace } from "@/hooks/use-subspace"
-import type { Bot, Server } from "@subspace-protocol/sdk"
+import type { IBot, IServer } from "@subspace-protocol/sdk/types"
 import { toast } from "sonner"
 import { Loader2, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react"
 import LoginDialog from "@/components/login-dialog"
 import alien from "@/assets/subspace/alien-black.svg"
 import { memberHasPermission } from "@/lib/utils"
-import { EPermissions } from "@subspace-protocol/sdk"
+import type { EPermissions } from "@subspace-protocol/sdk/types"
 
 export default function AddBot() {
     const { botId } = useParams()
@@ -21,7 +21,7 @@ export default function AddBot() {
     const { servers, actions: subspaceActions, profile, subspace } = useSubspace()
 
     // State management
-    const [botInfo, setBotInfo] = useState<Bot | null>(null)
+    const [botInfo, setBotInfo] = useState<IBot | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [isAdding, setIsAdding] = useState(false)
     const [selectedServer, setSelectedServer] = useState<string | null>(null)

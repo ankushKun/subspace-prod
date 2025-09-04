@@ -29,11 +29,13 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import alien from '@/assets/subspace/alien-green.svg';
 import { Toaster } from 'sonner';
-import Invite from '@/routes/invite';
-import Developer from '@/routes/developer';
-import Bots from '@/routes/developer/bots';
-import BotSettings from './routes/developer/bot-settings';
-import AddBot from './routes/addbot';
+// import Invite from '@/routes/invite';
+// import Developer from '@/routes/developer';
+// import Bots from '@/routes/developer/bots';
+// import BotSettings from '@/routes/developer/bot-settings';
+// import AddBot from '@/routes/addbot';
+
+import Dev from '@/routes/dev';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -460,7 +462,7 @@ function Main() {
                 <ThemedToaster />
                 <HashRouter>
                     <Routes>
-                        <Route path="/" element={<SubspaceLanding />} />
+                        {/* <Route path="/" element={<SubspaceLanding />} />
                         <Route path="/app" element={<App />} />
                         <Route path="/invite/:invite" element={<Invite />} />
                         <Route path="/app/settings" element={<Settings />} />
@@ -472,7 +474,9 @@ function Main() {
                         <Route path="/developer" element={<Developer />} />
                         <Route path="/developer/bots" element={<Bots />} />
                         <Route path="/developer/bots/:botId" element={<BotSettings />} />
-                        <Route path="/addbot/:botId" element={<AddBot />} />
+                        <Route path="/addbot/:botId" element={<AddBot />} /> */}
+
+                        <Route path="/dev" element={<Dev />} />
                     </Routes>
                 </HashRouter>
             </ThemeProvider>

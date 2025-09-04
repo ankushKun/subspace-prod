@@ -78,16 +78,16 @@ export class Constants {
     static readonly DEFAULT_ROLE_COLOR = "#99AAB5";
 
     static readonly CuEndpoints = {
+        BetterIDEa: "https://cu.arweave.tech",
         Legacynet: "https://cu.ao-testnet.xyz",
-        BetterIDEa: "https://cu.arnode.asia",
         Ardrive: "https://cu.ardrive.io",
         RandAO: "https://ur-cu.randao.net",
         "Localhost ⚠️": "http://localhost:6363"
     }
 
     static readonly HyperbeamEndpoints = {
+        BetterIDEa: "https://hb.arweave.tech",
         Forward: "https://forward.computer",
-        BetterIDEa: "https://hb.arnode.asia",
         PermaDAO: "https://hb.arweave.asia",
         "Localhost ⚠️": "http://localhost:8173"
     }
@@ -99,4 +99,5 @@ export class Constants {
     ]
 
     static readonly SubspaceServer = "7Aesf5GpkoBBE8fwuizGRB7yhu65ncO-hFSFZkE1LGk"
+    static readonly subspaceProcess = "7Aesf5GpkoBBE8fwuizGRB7yhu65ncO-hFSFZkE1LGk"
 }
