@@ -1,9 +1,6 @@
 [submodule "sdk"]
 	path = subspace-sdk
 	url = git@github.com:subspace-dev/sdk.git
-[submodule "wauth"]
-	path = wauth
-	url = https://github.com/subspace-dev/wauth.git
 [submodule "subspace-sdk"]
 	path = subspace-sdk
 	url = https://github.com/subspace-dev/sdk.git
