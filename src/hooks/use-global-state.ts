@@ -31,7 +31,7 @@ export const useGlobalState = create<GlobalState>()(persist((set, get) => ({
         }
     }
 }), {
-    name: "global-state",
+    name: "subspace-global-state",
     storage: createJSONStorage(() => localStorage),
     partialize: state => ({
         activeServerId: state.activeServerId,

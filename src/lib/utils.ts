@@ -5,10 +5,10 @@ import { Constants } from "@/lib/constants"
 import type { JWKInterface } from "arweave/web/lib/wallet"
 import Arweave from "arweave"
 import { ArconnectSigner, ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
-import { dryrun } from "@permaweb/aoconnect"
-import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet"
-import type { IMember, IRole, EPermissions } from "@subspace-protocol/sdk/types"
-// import { EPermissions } from "@subspace-protocol/sdk/types"
+import type { IMember, IRole } from "@subspace-protocol/sdk/types"
+import { EPermissions } from "@subspace-protocol/sdk"
+import { TIER_ID_TO_NAME, type IWanderTier } from "./types"
+
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
@@ -89,19 +89,19 @@ export function memberHasPermission(member: IMember, permission: number, server:
     }
 
     // Server owner has all permissions
-    if (member.userId === server.ownerId) {
+    if (member.id === server.ownerId) {
         console.log('Debug - Is server owner, granting all permissions')
         return true
     }
 
-    if (!member.roles || member.roles.length === 0) {
+    if (!member.roles || Object.keys(member.roles).length === 0) {
         console.log('Debug - No roles found')
         return false
     }
 
     console.log('Debug - Checking roles:', member.roles)
     let totalPermissions = 0
-    for (const roleId of member.roles) {
+    for (const roleId of Object.keys(member.roles)) {
         const role = server.roles[roleId]
         console.log('Debug - Checking role:', { roleId, role })
 
@@ -132,19 +132,19 @@ export function getMemberPermissions(member: IMember, server: { roles: Record<st
     if (!member) return 0
 
     // Server owner has all permissions
-    if (member.userId === server.ownerId) {
+    if (member.id === server.ownerId) {
         // Calculate all permissions by combining all enum values
         return Object.values(EPermissions)
             .filter(val => typeof val === 'number')
             .reduce((acc, val) => acc | (val as number), 0)
     }
 
-    if (!member.roles || member.roles.length === 0) {
+    if (!member.roles || Object.keys(member.roles).length === 0) {
         return 0
     }
 
     let totalPermissions = 0
-    for (const roleId of member.roles) {
+    for (const roleId of Object.keys(member.roles)) {
         const role = server.roles[roleId]
         if (role && isPermissionValid(role.permissions)) {
             totalPermissions = totalPermissions | role.permissions
@@ -209,4 +209,31 @@ export async function uploadFileTurbo(file: File, jwk?: JWKInterface, customSign
         console.error("Failed to upload file to Turbo:", error)
         return undefined
     }
+}
+
+export async function getPrimaryName(address: string) {
+    const ario = ARIO.init({})
+    try {
+        const { name } = await ario.getPrimaryName({ address })
+        return name
+    } catch (error) {
+        console.error("No primary name found:", error)
+        return null
+    }
+}
+
+export async function getWanderTier(address: string): Promise<IWanderTier> {
+    const url = `https://cache.wander.app/api/tier-info?address=${address}`
+    const response = await fetch(url)
+    const data = await response.json()
+    const tier: IWanderTier = {
+        balance: data.balance,
+        rank: data.rank,
+        tier: data.tier,
+        progress: data.progress,
+        snapshotTimestamp: data.snapshotTimestamp,
+        totalHolders: data.totalHolders,
+        tierString: TIER_ID_TO_NAME[data.tier as keyof typeof TIER_ID_TO_NAME],
+    }
+    return tier
 }

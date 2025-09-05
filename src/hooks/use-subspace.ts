@@ -1,2261 +1,595 @@
-import { create } from "zustand";
-import { Subspace } from "@subspace-protocol/sdk"
-import type {
-    ConnectionConfig,
-    Profile,
-    Server,
-    Member,
-    AoSigner,
-    Message,
-    Friend,
-    DMMessage,
-    DMResponse,
-    Bot
-} from "@subspace-protocol/sdk"
-import { createJSONStorage, persist } from "zustand/middleware";
-import { createSigner } from "@permaweb/aoconnect";
-import { useWallet } from "./use-wallet";
-import { useGlobalState } from "./use-global-state";
-import { Constants as WebConstants } from "@/lib/constants";
-import { useEffect } from "react";
-// Remove the import since we're now using SDK methods directly
+import { create } from "zustand"
+import { createJSONStorage, persist } from "zustand/middleware"
 
-// Helper function to get CU URL from localStorage
-function getCuUrl(): string {
-    const storedUrl = localStorage.getItem('subspace-cu-url');
-    return storedUrl || WebConstants.CuEndpoints.BetterIDEa; // Default to BetterIDEa
-}
-
-// Helper function to set CU URL in localStorage
-export function setCuUrl(url: string): void {
-    localStorage.setItem('subspace-cu-url', url);
-}
-
-// Helper function to get Hyperbeam URL from localStorage
-function getHyperbeamUrl(): string {
-    const storedUrl = localStorage.getItem('subspace-hyperbeam-url');
-    return storedUrl || WebConstants.HyperbeamEndpoints.BetterIDEa; // Default to BetterIDEa
-}
-
-// Helper function to set Hyperbeam URL in localStorage
-export function setHyperbeamUrl(url: string): void {
-    localStorage.setItem('subspace-hyperbeam-url', url);
-}
-
-// Helper function to check if a userId is a bot
-export function isBotUserId(userId: string, activeServerId?: string): boolean {
-    const state = useSubspace.getState()
-
-    // Check if it's in the global bots store
-    if (state.bots[userId]) {
-        return true
-    }
-
-    // Check if it's in the server's bot list
-    if (activeServerId && state.servers[activeServerId]?.bots?.[userId]) {
-        return true
-    }
-
-    return false
-}
-
-// Helper function to get bot or user profile
-export function getBotOrUserProfile(userId: string, activeServerId?: string): Profile | Bot | null {
-    const state = useSubspace.getState()
-
-    // Check if it's a bot first
-    if (isBotUserId(userId, activeServerId)) {
-        return state.bots[userId] || null
-    }
-
-    // Return user profile
-    return state.profiles[userId] || null
-}
-
-
-interface CreateServerParams {
-    name: string;
-    logo?: string;
-    description?: string;
-}
-
-export interface ExtendedFriend extends Friend {
-    profile?: Profile;
-    lastMessageTime?: number;
-    unreadCount?: number;
-}
-
-interface DMConversation {
-    friendId: string;
-    dmProcessId: string;
-    messages: Record<string, DMMessage>;
-    lastMessageTime?: number;
-    unreadCount?: number;
-}
+import { SubspaceProfiles, SubspaceServers, Utils } from "@subspace-protocol/sdk"
+import type { IMember, IProfile, IServer, ICategory, IChannel, IRole, IMessage } from "@subspace-protocol/sdk/types"
+import type { Inputs } from "@subspace-protocol/sdk/types"
+import type { IWanderTier } from "@/lib/types"
+import { getPrimaryName, getWanderTier } from "@/lib/utils"
 
 interface SubspaceState {
-    subspace: Subspace | null
-    profile: Profile | null
-    profiles: Record<string, Profile>
-    servers: Record<string, Server>
-    messages: Record<string, Record<string, Record<string, any>>>  // serverId -> channelId -> messageId -> message
-    // Friends and DMs state
-    friends: Record<string, ExtendedFriend>  // userId -> friend info
-    dmConversations: Record<string, DMConversation>  // friendId -> conversation
-    // Bot state
-    bots: Record<string, Bot>
-    // Server approval state
-    pendingServerApprovals: Set<string> // serverIds that have been approved but not yet joined
-    isCreatingProfile: boolean
-    isLoadingProfile: boolean
-    isLoadingBots: boolean
-    // ✅ ADDED: Loading guards to prevent duplicate calls
-    loadingProfiles: Set<string>  // userIds currently being loaded
-    loadingServers: Set<string>   // serverIds currently being loaded
-    loadingMembers: Set<string>   // serverIds with members currently being loaded
-    loadingFriends: Set<string>   // friendIds currently being loaded
-    loadingDMs: Set<string>       // friendIds with DMs currently being loaded
-    loadingBots: Set<string>      // botIds currently being loaded
-    botCacheTimestamps: Record<string, number>  // Track when bot data was last fetched
-    // Track current wallet address to detect changes
-    currentAddress: string
-    actions: {
-        init: () => void
-        bots: {
-            create: (params: { name: string; description?: string; pfp?: string; publicBot?: boolean }) => Promise<string | null>;
-            get: (botId: string) => Promise<Bot | null>;
-            getAll: () => Promise<Record<string, Bot>>;
-            getByOwner: (ownerId: string) => Promise<Bot[]>;
-            delete: (botId: string) => Promise<boolean>;
-            addToServer: (params: { serverId: string; botId: string; permissions?: any }, onStatusUpdate?: (status: string, progress?: number) => void) => Promise<boolean>;
-            removeFromServer: (params: { serverId: string; botId: string }) => Promise<boolean>;
-            updateSource: (botId: string, source: string) => Promise<boolean>;
-            update: (botId: string, params: { name?: string; pfp?: string; publicBot?: boolean }) => Promise<boolean>;
-        }
-        profile: {
-            get: (userId?: string) => Promise<Profile | null>
-            getBulk: (userIds: string[]) => Promise<Record<string, Profile | null>>
-            getBulkPrimaryNames: (userIds: string[]) => Promise<Record<string, Profile | null>>
-            updateProfile: (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => Promise<boolean>
-        }
-        servers: {
-            get: (serverId: string, forceRefresh?: boolean) => Promise<Server | null>
-            create: (data: CreateServerParams) => Promise<Server>
-            update: (serverId: string, params: { name?: string; logo?: string; description?: string }) => Promise<boolean>
-            createCategory: (serverId: string, params: { name: string; orderId?: number }) => Promise<boolean>
-            createChannel: (serverId: string, params: { name: string; categoryId?: string; orderId?: number; type?: 'text' | 'voice' }) => Promise<boolean>
-            updateChannel: (serverId: string, params: { channelId: string; name?: string; categoryId?: string | null; orderId?: number; allowMessaging?: 0 | 1; allowAttachments?: 0 | 1 }) => Promise<boolean>
-            deleteChannel: (serverId: string, channelId: string) => Promise<boolean>
-            updateCategory: (serverId: string, params: { categoryId: string; name?: string; orderId?: number }) => Promise<boolean>
-            deleteCategory: (serverId: string, categoryId: string) => Promise<boolean>
-            join: (serverId: string) => Promise<boolean>
-            leave: (serverId: string) => Promise<boolean>
-            getMembers: (serverId: string) => Promise<Record<string, Member>>
-            refreshMembers: (serverId: string) => Promise<Record<string, Member>>
-            refreshMemberProfiles: (serverId: string) => Promise<boolean>
-            getMember: (serverId: string, userId: string) => Promise<Member | null>
-            updateMember: (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => Promise<boolean>
-            createRole: (serverId: string, params: { name: string; color?: string; permissions?: number | string; position?: number }) => Promise<boolean>
-            updateRole: (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number; orderId?: number }) => Promise<boolean>
-            reorderRole: (serverId: string, roleId: string, newOrderId: number) => Promise<boolean>
-            moveRoleAbove: (serverId: string, roleId: string, targetRoleId: string) => Promise<boolean>
-            moveRoleBelow: (serverId: string, roleId: string, targetRoleId: string) => Promise<boolean>
-            deleteRole: (serverId: string, roleId: string) => Promise<boolean>
-            assignRole: (serverId: string, params: { userId: string; roleId: string }) => Promise<boolean>
-            unassignRole: (serverId: string, params: { userId: string; roleId: string }) => Promise<boolean>
-            getMessages: (serverId: string, channelId: string, limit?: number) => Promise<any[]>
-            getMessage: (serverId: string, channelId: string, messageId: string) => Promise<any | null>
-            sendMessage: (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => Promise<boolean>
-            editMessage: (serverId: string, channelId: string, messageId: string, content: string) => Promise<boolean>
-            deleteMessage: (serverId: string, channelId: string, messageId: string) => Promise<boolean>
-            updateServerCode: (serverId: string) => Promise<boolean>
-            kickMember: (serverId: string, userId: string) => Promise<boolean>
-            refreshSources: () => Promise<void>
-            getSources: () => any | null
-        }
-        friends: {
-            getFriends: () => Promise<ExtendedFriend[]>
-            sendFriendRequest: (userId: string) => Promise<boolean>
-            acceptFriendRequest: (userId: string) => Promise<boolean>
-            rejectFriendRequest: (userId: string) => Promise<boolean>
-            removeFriend: (userId: string) => Promise<boolean>
-            refreshFriends: () => Promise<void>
-        }
-        dms: {
-            getConversation: (friendId: string) => Promise<DMConversation | null>
-            getMessages: (friendId: string, limit?: number) => Promise<DMMessage[]>
-            sendMessage: (friendId: string, params: { content: string; attachments?: string; replyTo?: number }) => Promise<boolean>
-            editMessage: (friendId: string, messageId: string, content: string) => Promise<boolean>
-            deleteMessage: (friendId: string, messageId: string) => Promise<boolean>
-            markAsRead: (friendId: string) => void
-        }
-        // internal: {
-        //     rehydrateServers: () => void
-        //     loadUserServersSequentially: (profile: ExtendedProfile) => void
-        // }
-    }
+    profiles: Record<string, IProfile>
+    servers: Record<string, IServer> // this will contain all server metadata like channels, roles, server info etc
+    members: Record<string, Record<string, IMember>> // a seperate mapping for server members
+    primaryNames: Record<string, string> // address -> primary name
+    wanderTiers: Record<string, IWanderTier> // address -> wander tier
+    actions: SubspaceActions
+}
+
+interface SubspaceActions {
+    servers: {
+        // Core server functions
+        get: (serverId: string) => Promise<IServer | null>
+        create: (data: Inputs.ICreateServer) => Promise<IServer | null>
+        update: (data: Inputs.IUpdateServer) => Promise<IServer | null>
+        join: (serverId: string) => Promise<boolean>
+
+        // Category functions
+        createCategory: (data: Inputs.ICreateCategory) => Promise<ICategory | null>
+        updateCategory: (data: Inputs.IUpdateCategory) => Promise<ICategory | null>
+        deleteCategory: (data: Inputs.IDeleteCategory) => Promise<boolean>
+
+        // Channel functions
+        createChannel: (data: Inputs.ICreateChannel) => Promise<IChannel | null>
+        updateChannel: (data: Inputs.IUpdateChannel) => Promise<IChannel | null>
+        deleteChannel: (data: Inputs.IDeleteChannel) => Promise<boolean>
+
+        // Role functions
+        createRole: (data: Inputs.ICreateRole) => Promise<IRole | null>
+        updateRole: (data: Inputs.IUpdateRole) => Promise<IRole | null>
+        deleteRole: (data: Inputs.IDeleteRole) => Promise<boolean>
+        assignRole: (data: Inputs.IAssignRole) => Promise<boolean>
+        unassignRole: (data: Inputs.IUnassignRole) => Promise<boolean>
+
+        // Message functions
+        sendMessage: (data: Inputs.ISendMessage) => Promise<IMessage | null>
+        updateMessage: (data: Inputs.IUpdateMessage) => Promise<IMessage | null>
+        deleteMessage: (data: Inputs.IDeleteMessage) => Promise<boolean>
+
+        // Member functions
+        getMember: (data: Inputs.IGetMember) => Promise<IMember | null>
+        getAllMembers: (serverId: string) => Promise<Record<string, IMember> | null>
+        updateMember: (data: Inputs.IUpdateMember) => Promise<IMember | null>
+        kickMember: (data: Inputs.IKickMember) => Promise<boolean>
+        banMember: (data: Inputs.IBanMember) => Promise<boolean>
+        unbanMember: (data: Inputs.IUnbanMember) => Promise<boolean>
+    },
+    profiles: {
+        get: (profileId: string) => Promise<IProfile | null>
+        create: (data: Inputs.ICreateProfile) => Promise<IProfile | null>
+        update: (data: Inputs.ICreateProfile) => Promise<IProfile | null>
+
+        // Friend functions
+        addFriend: (userId: string) => Promise<boolean>
+        acceptFriend: (userId: string) => Promise<boolean>
+        rejectFriend: (userId: string) => Promise<boolean>
+        removeFriend: (userId: string) => Promise<boolean>
+
+        // DM functions
+        sendDM: (data: Inputs.ISendDM) => Promise<boolean>
+        editDM: (data: Inputs.IEditDM) => Promise<boolean>
+        deleteDM: (data: Inputs.IDeleteDM) => Promise<boolean>
+    },
+    // Utility functions
+    clearAllStates: () => void
 }
 
 export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
-    subspace: getSubspace(null, null),
-    profile: null,
     profiles: {},
+    primaryNames: {},
+    wanderTiers: {},
     servers: {},
-    messages: {},
-    friends: {},
-    dmConversations: {},
-    bots: {},
-    pendingServerApprovals: new Set<string>(),
-    isCreatingProfile: false,
-    isLoadingProfile: false,
-    isLoadingBots: false,
-    loadingProfiles: new Set<string>(),
-    loadingServers: new Set<string>(),
-    loadingMembers: new Set<string>(),
-    loadingFriends: new Set<string>(),
-    loadingDMs: new Set<string>(),
-    loadingBots: new Set<string>(),
-    botCacheTimestamps: {},
-    currentAddress: "",
+    members: {},
     actions: {
-        bots: {
-            create: async (params) => {
-                const subspace = get().subspace;
-                if (!subspace) return null;
-
+        profiles: {
+            get: async (profileId: string) => {
+                Utils.log({ type: "debug", label: "Getting Profile", data: profileId })
                 try {
-                    const botId = await subspace.bot.createBot(params);
-                    if (botId) {
-                        // Get bot info and cache it
-                        const botInfo = await subspace.bot.getBot(botId);
-                        if (botInfo) {
-                            set((state) => ({
-                                bots: { ...state.bots, [botId]: botInfo }
-                            }));
-                        }
-                    }
-                    return botId;
-                } catch (error) {
-                    console.error("Failed to create bot:", error);
-                    return null;
-                }
-            },
-            get: async (botId) => {
-                const subspace = get().subspace;
-                if (!subspace) return null;
-
-                const state = get();
-
-                // Check if request is already in progress
-                if (state.loadingBots.has(botId)) {
-                    // Wait for existing request to complete
-                    while (state.loadingBots.has(botId)) {
-                        await new Promise(resolve => setTimeout(resolve, 50));
-                    }
-                    return state.bots[botId] || null;
-                }
-
-                // Check if we have recent cached data (within 5 minutes)
-                const cacheTimestamp = state.botCacheTimestamps[botId];
-                const now = Date.now();
-                const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-                if (cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION && state.bots[botId]) {
-                    return state.bots[botId];
-                }
-
-                // Mark as loading
-                set((state) => ({
-                    loadingBots: new Set([...state.loadingBots, botId])
-                }));
-
-                try {
-                    const botInfo = await subspace.bot.getBot(botId);
-                    if (botInfo) {
-                        set((state) => ({
-                            bots: { ...state.bots, [botId]: botInfo },
-                            botCacheTimestamps: { ...state.botCacheTimestamps, [botId]: now }
-                        }));
-                    }
-                    return botInfo;
-                } catch (error) {
-                    console.error("Failed to get bot:", error);
-                    return null;
-                } finally {
-                    // Remove from loading state
-                    set((state) => {
-                        const newLoadingBots = new Set(state.loadingBots);
-                        newLoadingBots.delete(botId);
-                        return { loadingBots: newLoadingBots };
-                    });
-                }
-            },
-            getAll: async () => {
-                const subspace = get().subspace;
-                if (!subspace) return {};
-
-                try {
-                    const bots = await subspace.bot.getAllBots();
-                    const convertedBots = Object.entries(bots).reduce((acc, [id, bot]) => {
-                        acc[id] = bot;
-                        return acc;
-                    }, {} as Record<string, Bot>);
-
-                    // Also update profiles cache with bot data
-                    const botProfiles = Object.entries(bots).reduce((acc, [id, bot]) => {
-                        acc[id] = {
-                            userId: id,
-                            name: bot.name,
-                            primaryName: bot.name,
-                            pfp: bot.pfp,
-                            primaryLogo: bot.pfp,
-                            isBot: true,
-                            ...bot
-                        };
-                        return acc;
-                    }, {} as Record<string, any>);
-
-                    set((state) => ({
-                        bots: convertedBots,
-                        profiles: { ...state.profiles, ...botProfiles }
-                    }));
-                    return bots;
-                } catch (error) {
-                    console.error("Failed to get all bots:", error);
-                    return {};
-                }
-            },
-            update: async (botId, params) => {
-                const subspace = get().subspace;
-                if (!subspace) return false;
-
-                try {
-                    const success = await subspace.bot.updateBot(botId, params);
-                    if (success) {
-                        // Get updated bot info and cache it
-                        const botInfo = await subspace.bot.getBot(botId);
-                        if (botInfo) {
-                            set((state) => ({
-                                bots: { ...state.bots, [botId]: botInfo }
-                            }));
-                        }
-                    }
-                    return success;
-                } catch (error) {
-                    console.error("Failed to update bot:", error);
-                    return false;
-                }
-            },
-            getByOwner: async (ownerId) => {
-                const subspace = get().subspace;
-                if (!subspace) return [];
-
-                try {
-                    const bots = await subspace.bot.getBotsByOwner(ownerId);
-                    // Update the store with these bots
-                    const botsMap = bots.reduce((acc, bot) => {
-                        acc[bot.process] = bot;
-                        return acc;
-                    }, {} as Record<string, Bot>);
-
-                    // Also update profiles cache with bot data
-                    const botProfiles = bots.reduce((acc, bot) => {
-                        acc[bot.process] = {
-                            userId: bot.process,
-                            name: bot.name,
-                            primaryName: bot.name,
-                            pfp: bot.pfp,
-                            primaryLogo: bot.pfp,
-                            isBot: true,
-                            ...bot
-                        };
-                        return acc;
-                    }, {} as Record<string, any>);
-
-                    set((state) => ({
-                        bots: { ...state.bots, ...botsMap },
-                        profiles: { ...state.profiles, ...botProfiles }
-                    }));
-                    return bots;
-                } catch (error) {
-                    console.error("Failed to get bots by owner:", error);
-                    return [];
-                }
-            },
-            delete: async (botId) => {
-                const subspace = get().subspace;
-                if (!subspace) return false;
-
-                try {
-                    const success = await subspace.bot.deleteBot(botId);
-                    if (success) {
-                        // Remove from both bots and profiles store
-                        set((state) => {
-                            const { [botId]: removedBot, ...remainingBots } = state.bots;
-                            const { [botId]: removedProfile, ...remainingProfiles } = state.profiles;
-                            return {
-                                bots: remainingBots,
-                                profiles: remainingProfiles
-                            };
-                        });
-                    }
-                    return success;
-                } catch (error) {
-                    console.error("Failed to delete bot:", error);
-                    return false;
-                }
-            },
-            addToServer: async (params, onStatusUpdate?: (status: string, progress?: number) => void) => {
-                const subspace = get().subspace;
-                if (!subspace) return false;
-
-                try {
-                    // Step 1: Send the addBotToServer request
-                    onStatusUpdate?.("Sending bot addition request...", 10);
-                    const success = await subspace.bot.addBotToServer(params);
-
-                    if (!success) {
-                        onStatusUpdate?.("Failed to send bot addition request", 0);
-                        return false;
-                    }
-
-                    onStatusUpdate?.("Request sent, waiting for processing...", 25);
-
-                    // Step 2: Use the bot manager's polling function with increasing intervals
-                    const pollSuccess = await subspace.bot.pollBotAdditionStatus(
-                        params,
-                        onStatusUpdate,
-                        20,     // maxRetries: 20 attempts  
-                        60000   // maxTotalTime: 60 seconds
-                    );
-
-                    // Always try to update local bot cache regardless of polling result
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getProfile(profileId))
+                    Utils.log({ type: result ? "success" : "error", label: "Got Profile", data: result, duration })
+                    result && set((state) => ({ profiles: { ...state.profiles, [profileId]: result } }))
+                    const address = result.id
+                    // primary name
                     try {
-                        await get().actions.bots.get(params.botId);
-                    } catch (error) {
-                        console.error("Failed to refresh bot cache:", error);
+                        Utils.log({ type: "debug", label: "Getting Primary Name", data: address })
+                        const primaryName = await getPrimaryName(address)
+                        set((state) => ({ primaryNames: { ...state.primaryNames, [address]: primaryName } }))
+                        Utils.log({ type: "success", label: "Got Primary Name", data: primaryName })
+                    } catch (e) {
+                        Utils.log({ type: "error", label: "Error Getting Primary Name", data: e })
                     }
-
-                    if (pollSuccess) {
-                        onStatusUpdate?.("Bot addition completed successfully!", 100);
+                    // wander tier
+                    try {
+                        Utils.log({ type: "debug", label: "Getting Wander Tier", data: address })
+                        const wanderTier = await getWanderTier(address)
+                        set((state) => ({ wanderTiers: { ...state.wanderTiers, [address]: wanderTier } }))
+                        Utils.log({ type: "success", label: "Got Wander Tier", data: wanderTier })
+                    } catch (e) {
+                        Utils.log({ type: "error", label: "Error Getting Wander Tier", data: e })
                     }
-
-                    return pollSuccess;
-
-                } catch (error) {
-                    console.error("Failed to add bot to server:", error);
-                    onStatusUpdate?.("Failed to add bot to server", 0);
-                    return false;
-                }
-            },
-            removeFromServer: async (params) => {
-                const subspace = get().subspace;
-                if (!subspace) return false;
-
-                try {
-                    const success = await subspace.bot.removeBotFromServer(params);
-                    if (success) {
-                        // Update bot info to reflect removed server
-                        await get().actions.bots.get(params.botId);
-                    }
-                    return success;
-                } catch (error) {
-                    console.error("Failed to remove bot from server:", error);
-                    return false;
-                }
-            },
-            updateSource: async (botId, source) => {
-                const subspace = get().subspace;
-                if (!subspace) return false;
-
-                try {
-                    const success = await subspace.bot.updateBotSource(botId, source);
-                    if (success) {
-                        // Update bot info to reflect changes
-                        await get().actions.bots.get(botId);
-                    }
-                    return success;
-                } catch (error) {
-                    console.error("Failed to update bot source:", error);
-                    return false;
-                }
-            }
-        },
-        init: async () => {
-            try {
-                const signer = await useWallet.getState().actions.getSigner()
-                let owner = useWallet.getState().address
-
-                if (!owner) {
-                    owner = "0x69420"
-                    return
-                }
-
-                const currentState = get()
-                const previousAddress = currentState.currentAddress
-
-                // Check if address has changed (wallet switch)
-                if (previousAddress && previousAddress !== owner) {
-                    // Clear all user-specific data from state on wallet change
-                    set({
-                        profile: null,
-                        profiles: {},
-                        servers: {},
-                        messages: {},
-                        friends: {},
-                        dmConversations: {},
-                        loadingProfiles: new Set<string>(),
-                        loadingServers: new Set<string>(),
-                        loadingMembers: new Set<string>(),
-                        loadingFriends: new Set<string>(),
-                        loadingDMs: new Set<string>(),
-                        loadingBots: new Set<string>(),
-                        botCacheTimestamps: {},
-                        currentAddress: owner
-                    })
-                } else if (!previousAddress) {
-                    // First time initialization
-                    set({ currentAddress: owner })
-                }
-
-                const subspace = getSubspace(signer, owner)
-                set({ subspace })
-            } catch (error) {
-                console.error("Failed to initialize Subspace:", error)
-                // Don't throw here, just log the error
-            }
-        },
-        profile: {
-            get: async (userId?: string) => {
-                const subspace = get().subspace
-                const walletAddress = useWallet.getState().address
-
-                if (!subspace) return null
-
-                // Don't run get profile if wallet address doesn't exist and no userId is provided
-                if (!userId && !walletAddress) {
-                    console.warn("[hooks/use-subspace] No wallet address available for profile get")
-                    return null
-                }
-
-                const targetUserId = userId || walletAddress
-
-                try {
-                    const profile = await subspace.user.getProfile(targetUserId)
-                    if (profile) {
-                        // Only set as global profile if this is the current user's profile
-                        if (targetUserId === walletAddress) {
-                            set({ profile })
-                        }
-                        // Always update the profiles cache regardless
-                        set({ profiles: { ...get().profiles, [targetUserId]: profile } })
-                        // a possibility that this was a migrated profile and even tho is exists, dmProcess wont exist,
-                        // meaning user has not yet initialised their profile, so throw and error here to trigger profile creation
-                        if (!profile.dmProcess) {
-                            throw new Error("dm process not found, initialise profile first")
-                        }
-                    }
+                    return result
                 } catch (e) {
-                    // Only show creating profile dialog if this is our own profile
-                    // and we don't already have a profile in the store
-                    if (targetUserId === walletAddress) {
-                        const profileId = await subspace.user.createProfile()
-                        if (profileId) {
-                            const profile = await subspace.user.getProfile(profileId)
-                            if (profile) {
-                                // Set as global profile since this is the current user's newly created profile
-                                set({ profile })
-                                // Also update the profiles cache
-                                set({ profiles: { ...get().profiles, [profileId]: profile } })
-                            }
-                            return profile
-                        }
-                    } else {
-                        throw e
-                    }
-
+                    Utils.log({ type: "error", label: "Error Getting Profile", data: e })
+                    return null
                 }
             },
-            getBulk: async (userIds: string[]) => {
-                const subspace = get().subspace
-                if (!subspace) return {}
-
+            create: async (data: Inputs.ICreateProfile) => {
+                Utils.log({ type: "debug", label: "Creating Profile", data: data })
                 try {
-                    // Use the SDK's bulk profile method
-                    const results = await subspace.user.getBulkProfiles(userIds)
-
-                    // Update the profiles cache with successful results
-                    const successfulProfiles = Object.entries(results)
-                        .filter(([_, profile]) => profile !== null)
-                        .reduce((acc, [userId, profile]) => {
-                            acc[userId] = profile!
-                            return acc
-                        }, {} as Record<string, Profile>)
-
-                    if (Object.keys(successfulProfiles).length > 0) {
-                        set({ profiles: { ...get().profiles, ...successfulProfiles } })
-                    }
-
-                    return results
-                } catch (error) {
-                    console.error("Failed to get bulk profiles:", error)
-                    return {}
-                }
-            },
-            getBulkPrimaryNames: async (userIds: string[]) => {
-                const subspace = get().subspace
-                if (!subspace) return {}
-
-                try {
-                    // Use the SDK's bulk primary names method
-                    const results = await subspace.user.getBulkPrimaryNames(userIds)
-
-                    // Update the profiles cache with successful results
-                    const successfulProfiles = Object.entries(results)
-                        .filter(([_, profile]) => profile !== null)
-                        .reduce((acc, [userId, profile]) => {
-                            acc[userId] = profile!
-                            return acc
-                        }, {} as Record<string, Profile>)
-
-                    if (Object.keys(successfulProfiles).length > 0) {
-                        set({ profiles: { ...get().profiles, ...successfulProfiles } })
-                    }
-
-                    return results
-                } catch (error) {
-                    console.error("Failed to get bulk primary names:", error)
-                    return {}
-                }
-            },
-            updateProfile: async (params: { pfp?: string; displayName?: string; bio?: string; banner?: string }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.user.updateProfile(params)
-                    return success
-                } catch (error) {
-                    console.error("[hooks/use-subspace] Failed to update profile:", error)
-                    return false
-                }
-            }
-        },
-        servers: {
-            get: async (serverId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return null
-
-                try {
-                    const server = await subspace.server.getServer(serverId)
-
-                    if (server) {
-                        const stateServer = get().servers[serverId]
-                        if (stateServer) {
-                            server.members = stateServer.members || {}
-                        } else {
-                            server.members = {}
-                        }
-                    }
-
-                    set({
-                        servers: {
-                            ...get().servers,
-                            [serverId]: server
-                        }
-                    })
-
-                    // Automatically fetch members if they don't exist and we're not already loading them
-                    if (server && (!server.members || Object.keys(server.members).length === 0)) {
-                        const currentLoadingMembers = new Set(get().loadingMembers)
-                        if (!currentLoadingMembers.has(serverId)) {
-                            currentLoadingMembers.add(serverId)
-                            set({ loadingMembers: currentLoadingMembers })
-
-                            try {
-                                // Fetch members in the background
-                                await get().actions.servers.getMembers(serverId)
-                            } catch (error) {
-                                console.error(`Failed to fetch members for server ${serverId}:`, error)
-                            } finally {
-                                // Remove from loading state
-                                const updatedLoadingMembers = new Set(get().loadingMembers)
-                                updatedLoadingMembers.delete(serverId)
-                                set({ loadingMembers: updatedLoadingMembers })
-                            }
-                        }
-                    }
-
-                    return server
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.createProfile(data))
+                    Utils.log({ type: result ? "success" : "error", label: "Created Profile", data: result, duration })
+                    result && set((state) => ({ profiles: { ...state.profiles, [result.id]: result } }))
+                    return result
                 } catch (e) {
-                    console.error("[hooks/use-subspace] Failed to get server:", e)
+                    Utils.log({ type: "error", label: "Error Creating Profile", data: e })
                     return null
                 }
             },
-            create: async (data: CreateServerParams) => {
-                const subspace = get().subspace
-                if (!subspace) return
-
-                const serverId = await subspace.server.createServer(data)
-                if (!serverId) throw new Error("Failed to create server")
-
-                // Get the created server
-                const server = await subspace.server.getServer(serverId)
-                server.members = {}
-                if (!server) throw new Error("Failed to retrieve created server")
-
-                set({ servers: { ...get().servers, [serverId]: server } })
-
-                // join the server and wait for completion
-                await get().actions.servers.join(serverId)
-                return server
-            },
-            update: async (serverId: string, params: { name?: string; logo?: string; description?: string }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
+            update: async (data: Inputs.ICreateProfile) => {
+                Utils.log({ type: "debug", label: "Updating Profile", data: data })
                 try {
-                    const success = await subspace.server.updateServer(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated data while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after profile update:", refreshError)
-                            // Don't fail the operation just because refresh failed
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to update server:", error)
-                    return false
-                }
-            },
-            createCategory: async (serverId: string, params: { name: string; orderId?: number }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.createCategory(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated categories while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after category creation:", refreshError)
-                            // Don't fail the operation just because refresh failed
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to create category:", error)
-                    return false
-                }
-            },
-            createChannel: async (serverId: string, params: { name: string; categoryId?: string; orderId?: number; type?: 'text' | 'voice' }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.createChannel(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated channels while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after channel creation:", refreshError)
-                            // Don't fail the operation just because refresh failed
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to create channel:", error)
-                    return false
-                }
-            },
-            updateChannel: async (serverId: string, params: { channelId: string; name?: string; categoryId?: string | null; orderId?: number; allowMessaging?: 0 | 1; allowAttachments?: 0 | 1 }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.updateChannel(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated channels while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after channel update:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to update channel:", error)
-                    return false
-                }
-            },
-            deleteChannel: async (serverId: string, channelId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.deleteChannel(serverId, channelId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated channels while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after channel deletion:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to delete channel:", error)
-                    return false
-                }
-            },
-            updateCategory: async (serverId: string, params: { categoryId: string; name?: string; orderId?: number }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.updateCategory(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated categories while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after category update:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to update category:", error)
-                    return false
-                }
-            },
-            deleteCategory: async (serverId: string, categoryId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.deleteCategory(serverId, categoryId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated categories while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after category deletion:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to delete category:", error)
-                    return false
-                }
-            },
-            approveJoin: async (serverId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.user.approveJoinServer(serverId)
-                    if (success) {
-                        console.log(`Successfully approved join request for server ${serverId}`)
-                        // Track that this server has been approved but not yet joined
-                        const currentApprovals = get().pendingServerApprovals
-                        set({
-                            pendingServerApprovals: new Set([...currentApprovals, serverId])
-                        })
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to approve join server:", error)
-                    return false
-                }
-            },
-            join: async (serverId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    // Use the new two-step join process
-                    const success = await subspace.user.joinServerWithApproval(serverId)
-                    if (success) {
-                        // Remove from pending approvals since we've successfully joined
-                        const currentApprovals = get().pendingServerApprovals
-                        currentApprovals.delete(serverId)
-                        set({
-                            pendingServerApprovals: new Set(currentApprovals)
-                        })
-
-                        // Refresh the user's profile to get updated serverApproved status
-                        // Add a small delay to ensure the server notification is processed
-                        setTimeout(async () => {
-                            try {
-                                const walletAddress = useWallet.getState().address
-                                if (walletAddress) {
-                                    const updatedProfile = await subspace.user.getProfile(walletAddress)
-                                    if (updatedProfile) {
-                                        set({ profile: updatedProfile })
-                                        console.log(`Profile refreshed after joining server ${serverId}. ServerApproved status:`, updatedProfile.serversJoined[serverId]?.serverApproved)
-                                    }
-                                }
-                            } catch (error) {
-                                console.error(`Failed to refresh profile after joining server ${serverId}:`, error)
-                            }
-                        }, 2000) // 2 second delay to allow server notification to be processed
-
-                        // After successfully joining, we need to fetch the server details
-                        // and add it to our local state
-                        try {
-                            const server = await subspace.server.getServer(serverId)
-                            if (server) {
-                                set({
-                                    servers: { ...get().servers, [serverId]: server },
-                                })
-                            } else {
-                                console.error(`Successfully joined server ${serverId} but failed to fetch server details`)
-                            }
-                        } catch (error) {
-                            console.error(`Successfully joined server ${serverId} but failed to fetch server details:`, error)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to join server:", error)
-                    return false
-                }
-            },
-            joinDirect: async (serverId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    // Direct join (Step 2 only) - for cases where approval was already done
-                    const success = await subspace.user.joinServer(serverId)
-                    if (success) {
-                        // Remove from pending approvals since we've successfully joined
-                        const currentApprovals = get().pendingServerApprovals
-                        currentApprovals.delete(serverId)
-                        set({
-                            pendingServerApprovals: new Set(currentApprovals)
-                        })
-
-                        // After successfully joining, we need to fetch the server details
-                        // and add it to our local state
-                        try {
-                            const server = await subspace.server.getServer(serverId)
-                            if (server) {
-                                set({
-                                    servers: { ...get().servers, [serverId]: server },
-                                })
-                            } else {
-                                console.error(`Successfully joined server ${serverId} but failed to fetch server details`)
-                            }
-                        } catch (error) {
-                            console.error(`Successfully joined server ${serverId} but failed to fetch server details:`, error)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to join server directly:", error)
-                    return false
-                }
-            },
-            leave: async (serverId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.user.leaveServer(serverId)
-                    if (success) {
-                        // Remove the server from local state
-                        const { [serverId]: removedServer, ...remainingServers } = get().servers
-                        set({
-                            servers: remainingServers,
-                        })
-
-                        // Clear active server/channel if user was viewing the left server
-                        const globalState = useGlobalState.getState()
-                        if (globalState.activeServerId === serverId) {
-                            globalState.actions.setActiveServerId("")
-                            globalState.actions.setActiveChannelId("")
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to leave server:", error)
-                    return false
-                }
-            },
-            getMembers: async (serverId: string): Promise<Record<string, Member>> => {
-                const subspace = get().subspace
-                if (!subspace) return {}
-
-                // Get the server instance from current state, don't call servers.get to avoid recursion
-                const server = get().servers[serverId]
-                if (!server) {
-                    console.error("Server not found for getMembers")
-                    return {}
-                }
-
-                try {
-                    const membersData = await subspace.server.getAllMembers(serverId)
-                    const members = membersData
-
-                    set({
-                        servers: {
-                            ...get().servers,
-                            [serverId]: {
-                                ...server,
-                                members: members
-                            }
-                        }
-                    })
-
-                    return members
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.updateProfile(data))
+                    Utils.log({ type: "success", label: "Updated Profile", data: result, duration })
+                    result && set((state) => ({ profiles: { ...state.profiles, [result.id]: result } }))
+                    return result
                 } catch (e) {
-                    console.log("error", e)
-                    return {}
-                }
-            },
-
-            refreshMembers: async (serverId: string) => {
-                return get().actions.servers.getMembers(serverId)
-            },
-            refreshMembersWithProfiles: async (serverId: string) => {
-                // First refresh members, then refresh their profiles
-                const members = await get().actions.servers.getMembers(serverId)
-                if (members && Object.keys(members).length > 0) {
-                    await get().actions.servers.refreshMemberProfiles(serverId)
-                }
-                return members
-            },
-            hasMembers: (serverId: string): boolean => {
-                const server = get().servers[serverId]
-                return !!(server?.members && Object.keys(server.members).length > 0)
-            },
-            refreshMemberProfiles: async (serverId: string) => {
-                console.log(`[hooks/use-subspace] 🔄 Refreshing member profiles for server ${serverId}`)
-
-                const server = get().servers[serverId]
-                if (!server || !(server as any).members) {
-                    console.warn(`[hooks/use-subspace] ⚠️ No members found for server ${serverId}`)
-                    return false
-                }
-
-                try {
-                    const members = (server as any).members || []
-                    const memberUserIds = members.map((m: any) => m.userId).filter(Boolean)
-
-                    if (memberUserIds.length > 0) {
-                        console.log(`[hooks/use-subspace] 📊 Force refreshing ${memberUserIds.length} member profiles`)
-
-                        // Force refresh all member profiles (including primary names/logos)
-                        await get().actions.profile.getBulk(memberUserIds)
-
-                        // Enrich members with updated profile data using reactive pattern
-                        const updatedProfiles = get().profiles
-                        const enrichedMembers = members.map((member: any) => ({
-                            ...member,
-                            profile: updatedProfiles[member.userId] || null
-                        }))
-
-                        const currentServer = get().servers[serverId]
-                        if (currentServer) {
-                            // Create new server object to trigger reactivity
-                            const updatedServer = {
-                                ...currentServer,
-                                members: enrichedMembers
-                            }
-
-                            set((state) => ({
-                                servers: {
-                                    ...state.servers,
-                                    [serverId]: updatedServer
-                                }
-                            }))
-                            console.log(`[hooks/use-subspace] ✅ Member profiles refreshed for server ${serverId}`)
-                            return true
-                        }
-                    }
-                    return false
-                } catch (error) {
-                    console.error(`[hooks/use-subspace] ❌ Failed to refresh member profiles for server ${serverId}:`, error)
-                    return false
-                }
-            },
-            getMember: async (serverId: string, userId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return
-
-                try {
-                    const member = await subspace.server.getMember(serverId, userId)
-                    if (member) {
-                        // Merge into server cache so UI sees the update
-                        const servers = get().servers
-                        const server = servers[serverId]
-                        if (server) {
-                            const existingMembers: any = (server as any).members
-                            let updatedMembers: any
-                            if (Array.isArray(existingMembers)) {
-                                let replaced = false
-                                updatedMembers = existingMembers.map((m: any) => {
-                                    if (m.userId === userId) {
-                                        replaced = true
-                                        return { ...m, ...member }
-                                    }
-                                    return m
-                                })
-                                if (!replaced) updatedMembers = [...updatedMembers, member]
-                            } else if (existingMembers && typeof existingMembers === 'object') {
-                                updatedMembers = { ...existingMembers, [userId]: { ...(existingMembers?.[userId] || {}), ...member } }
-                            } else {
-                                updatedMembers = [member]
-                            }
-
-                            set({
-                                servers: {
-                                    ...servers,
-                                    [serverId]: {
-                                        ...server,
-                                        members: updatedMembers
-                                    }
-                                }
-                            })
-                        }
-                    }
-                    return member
-                } catch (error) {
-                    console.error("Failed to get member:", error)
+                    Utils.log({ type: "error", label: "Error Updating Profile", data: e })
                     return null
                 }
             },
-            updateMember: async (serverId: string, params: { userId: string; nickname?: string; roles?: string[] }) => {
-                const subspace = get().subspace
-                if (!subspace) return
 
+            // Friend functions
+            addFriend: async (userId: string) => {
+                Utils.log({ type: "debug", label: "Adding Friend", data: userId })
                 try {
-                    const success = await subspace.server.updateMember(serverId, params)
-                    return success
-                } catch (error) {
-                    console.error("Failed to update member:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.addFriend(userId))
+                    Utils.log({ type: "success", label: "Added Friend", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Adding Friend", data: e })
                     return false
                 }
             },
-            createRole: async (serverId: string, params: { name: string; color?: string; permissions?: number | string; position?: number }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
+            acceptFriend: async (userId: string) => {
+                Utils.log({ type: "debug", label: "Accepting Friend", data: userId })
                 try {
-                    const success = await subspace.server.createRole(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated roles
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after role creation:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to create role:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.acceptFriend(userId))
+                    Utils.log({ type: "success", label: "Accepted Friend", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Accepting Friend", data: e })
                     return false
                 }
             },
-            updateRole: async (serverId: string, params: { roleId: string; name?: string; color?: string; permissions?: number | string; position?: number; orderId?: number }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
+            rejectFriend: async (userId: string) => {
+                Utils.log({ type: "debug", label: "Rejecting Friend", data: userId })
                 try {
-                    const success = await subspace.server.updateRole(serverId, params)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated roles
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after role update:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to update role:", error)
-                    return false
-                }
-            },
-            reorderRole: async (serverId: string, roleId: string, newOrderId: number) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await (subspace.server as any).reorderRole(serverId, roleId, newOrderId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated role order
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after role reorder:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to reorder role:", error)
-                    return false
-                }
-            },
-            moveRoleAbove: async (serverId: string, roleId: string, targetRoleId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await (subspace.server as any).moveRoleAbove(serverId, roleId, targetRoleId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated role order
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after moving role above:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to move role above:", error)
-                    return false
-                }
-            },
-            moveRoleBelow: async (serverId: string, roleId: string, targetRoleId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await (subspace.server as any).moveRoleBelow(serverId, roleId, targetRoleId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated role order
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after moving role below:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to move role below:", error)
-                    return false
-                }
-            },
-            deleteRole: async (serverId: string, roleId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.deleteRole(serverId, roleId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated roles
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after role deletion:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to delete role:", error)
-                    return false
-                }
-            },
-            assignRole: async (serverId: string, params: { userId: string; roleId: string }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.assignRole(serverId, params)
-                    if (success) {
-                        // Refresh members to update role assignments
-                        try {
-                            await get().actions.servers.refreshMembers(serverId)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh members after role assignment:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to assign role:", error)
-                    return false
-                }
-            },
-            unassignRole: async (serverId: string, params: { userId: string; roleId: string }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.unassignRole(serverId, params)
-                    if (success) {
-                        // Refresh members to update role assignments
-                        try {
-                            await get().actions.servers.refreshMembers(serverId)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh members after role unassignment:", refreshError)
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to unassign role:", error)
-                    return false
-                }
-            },
-            getMessages: async (serverId: string, channelId: string, limit: number = 50) => {
-                const subspace = get().subspace
-                if (!subspace) return []
-
-                try {
-                    const response = await subspace.server.getMessages(serverId, {
-                        channelId: channelId,
-                        limit
-                    })
-
-                    if (response?.messages) {
-                        // Process messages to ensure proper data types and sort by timestamp (oldest first)
-                        const processedMessages = response.messages
-                            .map((rawMessage: any) => {
-                                const authorId = rawMessage.authorId ?? rawMessage.senderId;
-                                return ({
-                                    messageId: rawMessage.messageId,
-                                    content: rawMessage.content,
-                                    authorId,
-                                    timestamp: Number(rawMessage.timestamp),
-                                    edited: Boolean(rawMessage.edited),
-                                    attachments: rawMessage.attachments || "[]",
-                                    replyTo: rawMessage.replyTo,
-                                    messageTxId: rawMessage.messageTxId,
-                                    replyToMessage: null // Will be populated below
-                                } as any)
-                            })
-                            .sort((a: any, b: any) => a.timestamp - b.timestamp)
-
-                        // Get current cached messages to help populate replyToMessage
-                        const currentMessages = get().messages
-                        const serverMessages = currentMessages[serverId] || {}
-                        const channelMessages = serverMessages[channelId] || {}
-
-                        // Create a combined lookup map of all messages (current + new)
-                        const allMessagesMap: Record<string, any> = { ...channelMessages }
-                        processedMessages.forEach(msg => {
-                            allMessagesMap[msg.messageId] = msg
-                        })
-
-                        // Populate replyToMessage field for messages that have replyTo
-                        for (const message of processedMessages) {
-                            if (message.replyTo) {
-                                let replyToMessage = allMessagesMap[message.replyTo]
-
-                                // If reply message is not in cache, fetch it
-                                if (!replyToMessage) {
-                                    try {
-                                        const fetchedReplyMessage = await subspace.server.getMessage(serverId, String(message.replyTo))
-                                        if (fetchedReplyMessage) {
-                                            replyToMessage = fetchedReplyMessage
-                                            // Cache the fetched message
-                                            allMessagesMap[message.replyTo] = fetchedReplyMessage
-                                        }
-                                    } catch (error) {
-                                        console.warn(`Failed to fetch reply message ${message.replyTo}:`, error)
-                                    }
-                                }
-
-                                if (replyToMessage) {
-                                    message.replyToMessage = replyToMessage
-                                }
-                            }
-                        }
-
-                        // Convert array to messageId-keyed object for caching
-                        const messageMap = processedMessages.reduce((acc: Record<string, any>, message: any) => {
-                            acc[message.messageId] = message
-                            return acc
-                        }, {})
-
-                        set({
-                            messages: {
-                                ...currentMessages,
-                                [serverId]: {
-                                    ...serverMessages,
-                                    [channelId]: { ...channelMessages, ...messageMap }
-                                }
-                            }
-                        })
-
-                        return processedMessages
-                    }
-                    return []
-                } catch (error) {
-                    console.error("Failed to get messages:", error)
-                    return []
-                }
-            },
-            getMessage: async (serverId: string, channelId: string, messageId: string) => {
-                // First check cache
-                const cachedMessage = get().messages[serverId]?.[channelId]?.[messageId]
-                if (cachedMessage) {
-                    return cachedMessage
-                }
-
-                const subspace = get().subspace
-                if (!subspace) return null
-
-                try {
-                    const message = await subspace.server.getMessage(serverId, messageId)
-                    if (message) {
-                        // Normalize to always have authorId for UI components
-                        (message as any).authorId = (message as any).authorId ?? (message as any).senderId
-                        // Get current cached messages to help populate replyToMessage
-                        const currentMessages = get().messages
-                        const serverMessages = currentMessages[serverId] || {}
-                        const channelMessages = serverMessages[channelId] || {}
-
-                        // Populate replyToMessage field if this message has replyTo
-                        if (message.replyTo) {
-                            let replyToMessage = channelMessages[message.replyTo]
-
-                            // If reply message is not in cache, fetch it
-                            if (!replyToMessage) {
-                                try {
-                                    const fetchedReplyMessage = await subspace.server.getMessage(String(serverId), String(message.replyTo))
-                                    console.log("fetchedReplyMessage", fetchedReplyMessage)
-                                    if (fetchedReplyMessage) {
-                                        // Normalize reply message as well
-                                        replyToMessage = {
-                                            ...fetchedReplyMessage,
-                                            authorId: (fetchedReplyMessage as any).authorId ?? (fetchedReplyMessage as any).senderId
-                                        }
-                                        // Cache the fetched message
-                                        channelMessages[message.replyTo] = fetchedReplyMessage
-                                    }
-                                } catch (error) {
-                                    console.warn(`Failed to fetch reply message ${message.replyTo}:`, error)
-                                }
-                            }
-
-                            if (replyToMessage) {
-                                (message as any).replyToMessage = replyToMessage
-                            }
-                        }
-
-                        set({
-                            messages: {
-                                ...currentMessages,
-                                [serverId]: {
-                                    ...serverMessages,
-                                    [channelId]: {
-                                        ...channelMessages,
-                                        [messageId]: message
-                                    }
-                                }
-                            }
-                        })
-                    }
-                    return message
-                } catch (error) {
-                    console.error("Failed to get message:", error)
-                    return null
-                }
-            },
-            sendMessage: async (serverId: string, params: { channelId: string; content: string; replyTo?: string; attachments?: string }) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.sendMessage(serverId, params)
-                    if (success) {
-                        // Refresh messages for this channel after sending
-                        setTimeout(() => {
-                            get().actions.servers.getMessages(serverId, params.channelId)
-                        }, 500)
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to send message:", error)
-                    return false
-                }
-            },
-            editMessage: async (serverId: string, channelId: string, messageId: string, content: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.editMessage(serverId, channelId, messageId, content)
-
-                    if (success) {
-                        // Update the cached message
-                        const currentMessages = get().messages
-                        const cachedMessage = currentMessages[serverId]?.[channelId]?.[messageId]
-
-                        if (cachedMessage) {
-                            const updatedMessage = {
-                                ...cachedMessage,
-                                content,
-                                edited: true
-                            }
-
-                            set({
-                                messages: {
-                                    ...currentMessages,
-                                    [serverId]: {
-                                        ...currentMessages[serverId],
-                                        [channelId]: {
-                                            ...currentMessages[serverId][channelId],
-                                            [messageId]: updatedMessage
-                                        }
-                                    }
-                                }
-                            })
-                        }
-
-                        // Also refresh messages to get the latest state
-                        setTimeout(() => {
-                            get().actions.servers.getMessages(serverId, channelId)
-                        }, 500)
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to edit message:", error)
-                    return false
-                }
-            },
-            deleteMessage: async (serverId: string, channelId: string, messageId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.deleteMessage(serverId, channelId, messageId)
-
-                    if (success) {
-                        // Remove message from cache
-                        const currentMessages = get().messages
-                        const serverMessages = currentMessages[serverId]
-                        const channelMessages = serverMessages?.[channelId]
-
-                        if (channelMessages && channelMessages[messageId]) {
-                            const { [messageId]: removedMessage, ...remainingMessages } = channelMessages
-
-                            set({
-                                messages: {
-                                    ...currentMessages,
-                                    [serverId]: {
-                                        ...serverMessages,
-                                        [channelId]: remainingMessages
-                                    }
-                                }
-                            })
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to delete message:", error)
-                    return false
-                }
-            },
-            updateServerCode: async (serverId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.updateServerCode(serverId)
-                    if (success) {
-                        // Wait a moment for the server to process the change
-                        await new Promise(resolve => setTimeout(resolve, 200))
-
-                        // Force refresh the server to get updated version while preserving members
-                        try {
-                            const updatedServer = await get().actions.servers.get(serverId, true)
-                        } catch (refreshError) {
-                            console.error("❌ Failed to refresh server after code update:", refreshError)
-                            // Don't fail the operation just because refresh failed
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to update server code:", error)
-                    return false
-                }
-            },
-            refreshSources: async () => {
-                const subspace = get().subspace
-                if (!subspace) return
-
-                try {
-                    await subspace.connectionManager.refreshSources()
-                } catch (error) {
-                    console.error("Failed to refresh sources:", error)
-                }
-            },
-            getSources: () => {
-                const subspace = get().subspace
-                if (!subspace) return null
-                return subspace.connectionManager.sources
-            },
-            kickMember: async (serverId: string, userId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.server.kickMember(serverId, userId)
-                    if (success) {
-                        // Refresh members to update the UI
-                        await get().actions.servers.refreshMembers(serverId)
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to kick member:", error)
-                    return false
-                }
-            }
-        },
-        friends: {
-            getFriends: async () => {
-                const subspace = get().subspace
-                const profile = get().profile
-                if (!subspace || !profile) return []
-
-                try {
-                    // Parse friends from profile
-                    const friendsList: ExtendedFriend[] = []
-
-                    if (profile.friends) {
-                        // Add accepted friends
-                        for (const friendId of profile.friends.accepted || []) {
-                            // Create placeholder friend entry immediately
-                            const placeholderFriend: ExtendedFriend = {
-                                userId: friendId,
-                                status: 'accepted',
-                                profile: undefined
-                            }
-                            friendsList.push(placeholderFriend)
-
-                            // Update state immediately with placeholder - SAFE UPDATE
-                            set((state) => ({
-                                friends: { ...state.friends, [friendId]: placeholderFriend }
-                            }))
-
-                            // Fetch profile and update state as soon as it's received
-                            const friendProfile = await get().actions.profile.get(friendId)
-                            if (friendProfile) {
-                                const updatedFriend: ExtendedFriend = {
-                                    userId: friendId,
-                                    status: 'accepted',
-                                    profile: friendProfile
-                                }
-                                // Update the friend in the list
-                                const friendIndex = friendsList.findIndex(f => f.userId === friendId)
-                                if (friendIndex !== -1) {
-                                    friendsList[friendIndex] = updatedFriend
-                                }
-                                // Update state immediately with full profile data - SAFE UPDATE
-                                set((state) => ({
-                                    friends: { ...state.friends, [friendId]: updatedFriend }
-                                }))
-                            }
-                        }
-
-                        // Add sent friend requests
-                        for (const friendId of profile.friends.sent || []) {
-                            // Create placeholder friend entry immediately
-                            const placeholderFriend: ExtendedFriend = {
-                                userId: friendId,
-                                status: 'sent',
-                                profile: undefined
-                            }
-                            friendsList.push(placeholderFriend)
-
-                            // Update state immediately with placeholder - SAFE UPDATE
-                            set((state) => ({
-                                friends: { ...state.friends, [friendId]: placeholderFriend }
-                            }))
-
-                            // Fetch profile and update state as soon as it's received
-                            const friendProfile = await get().actions.profile.get(friendId)
-                            if (friendProfile) {
-                                const updatedFriend: ExtendedFriend = {
-                                    userId: friendId,
-                                    status: 'sent',
-                                    profile: friendProfile
-                                }
-                                // Update the friend in the list
-                                const friendIndex = friendsList.findIndex(f => f.userId === friendId)
-                                if (friendIndex !== -1) {
-                                    friendsList[friendIndex] = updatedFriend
-                                }
-                                // Update state immediately with full profile data - SAFE UPDATE
-                                set((state) => ({
-                                    friends: { ...state.friends, [friendId]: updatedFriend }
-                                }))
-                            }
-                        }
-
-                        // Add received friend requests
-                        for (const friendId of profile.friends.received || []) {
-                            // Create placeholder friend entry immediately
-                            const placeholderFriend: ExtendedFriend = {
-                                userId: friendId,
-                                status: 'received',
-                                profile: undefined
-                            }
-                            friendsList.push(placeholderFriend)
-
-                            // Update state immediately with placeholder - SAFE UPDATE
-                            set((state) => ({
-                                friends: { ...state.friends, [friendId]: placeholderFriend }
-                            }))
-
-                            // Fetch profile and update state as soon as it's received
-                            const friendProfile = await get().actions.profile.get(friendId)
-                            if (friendProfile) {
-                                const updatedFriend: ExtendedFriend = {
-                                    userId: friendId,
-                                    status: 'received',
-                                    profile: friendProfile
-                                }
-                                // Update the friend in the list
-                                const friendIndex = friendsList.findIndex(f => f.userId === friendId)
-                                if (friendIndex !== -1) {
-                                    friendsList[friendIndex] = updatedFriend
-                                }
-                                // Update state immediately with full profile data - SAFE UPDATE
-                                set((state) => ({
-                                    friends: { ...state.friends, [friendId]: updatedFriend }
-                                }))
-                            }
-                        }
-                    }
-
-                    return friendsList
-                } catch (error) {
-                    console.error("Failed to get friends:", error)
-                    return []
-                }
-            },
-            sendFriendRequest: async (userId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.user.sendFriendRequest(userId)
-                    if (success) {
-                        // Refresh profile to update friends list
-                        await get().actions.friends.getFriends()
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to send friend request:", error)
-                    return false
-                }
-            },
-            acceptFriendRequest: async (userId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.user.acceptFriendRequest(userId)
-                    if (success) {
-                        // Refresh profile to update friends list
-                        await get().actions.friends.getFriends()
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to accept friend request:", error)
-                    return false
-                }
-            },
-            rejectFriendRequest: async (userId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
-                try {
-                    const success = await subspace.user.rejectFriendRequest(userId)
-                    if (success) {
-                        // Refresh profile to update friends list
-                        await get().actions.friends.getFriends()
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to reject friend request:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.rejectFriend(userId))
+                    Utils.log({ type: "success", label: "Rejected Friend", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Rejecting Friend", data: e })
                     return false
                 }
             },
             removeFriend: async (userId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
+                Utils.log({ type: "debug", label: "Removing Friend", data: userId })
                 try {
-                    const success = await subspace.user.removeFriend(userId)
-                    if (success) {
-                        // Remove from local state
-                        const currentFriends = get().friends
-                        const { [userId]: removedFriend, ...remainingFriends } = currentFriends
-                        set({ friends: remainingFriends })
-
-                        // Also remove DM conversation
-                        const currentConversations = get().dmConversations
-                        const { [userId]: removedConvo, ...remainingConvos } = currentConversations
-                        set({ dmConversations: remainingConvos })
-
-                        // Refresh profile to update friends list
-                        await get().actions.friends.getFriends()
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to remove friend:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.removeFriend(userId))
+                    Utils.log({ type: "success", label: "Removed Friend", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Removing Friend", data: e })
                     return false
                 }
             },
-            refreshFriends: async () => {
+
+            // DM functions
+            sendDM: async (data: Inputs.ISendDM) => {
+                Utils.log({ type: "debug", label: "Sending DM", data: data })
                 try {
-                    await get().actions.friends.getFriends()
-                } catch (error) {
-                    console.error("Failed to refresh friends:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.sendDM(data))
+                    Utils.log({ type: "success", label: "Sent DM", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Sending DM", data: e })
+                    return false
+                }
+            },
+            editDM: async (data: Inputs.IEditDM) => {
+                Utils.log({ type: "debug", label: "Editing DM", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.editDM(data))
+                    Utils.log({ type: "success", label: "Edited DM", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Editing DM", data: e })
+                    return false
+                }
+            },
+            deleteDM: async (data: Inputs.IDeleteDM) => {
+                Utils.log({ type: "debug", label: "Deleting DM", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.deleteDM(data))
+                    Utils.log({ type: "success", label: "Deleted DM", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Deleting DM", data: e })
+                    return false
                 }
             }
         },
-        dms: {
-            getConversation: async (friendId: string) => {
-                const subspace = get().subspace
-                const profile = get().profile
-                if (!subspace || !profile) return null
-
-                // Check if conversation already exists
-                const existingConversation = get().dmConversations[friendId]
-                if (existingConversation) {
-                    return existingConversation
-                }
-
+        servers: {
+            // Core server functions
+            get: async (serverId: string) => {
+                Utils.log({ type: "debug", label: "Getting Server", data: serverId })
                 try {
-                    // Use current user's DM process (not friend's DM process!)
-                    if (!profile?.dmProcess) {
-                        console.error("Current user doesn't have a DM process")
-                        return null
-                    }
-
-                    // Create conversation object
-                    const conversation: DMConversation = {
-                        friendId,
-                        dmProcessId: profile.dmProcess, // Use current user's DM process
-                        messages: {},
-                        unreadCount: 0
-                    }
-
-                    // Cache the conversation
-                    set({
-                        dmConversations: { ...get().dmConversations, [friendId]: conversation }
-                    })
-
-                    return conversation
-                } catch (error) {
-                    console.error("Failed to get conversation:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.getServer(serverId))
+                    Utils.log({ type: result ? "success" : "error", label: "Got Server", data: result, duration })
+                    result && set((state) => ({ servers: { ...state.servers, [serverId]: result } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting Server", data: e })
                     return null
                 }
             },
-            getMessages: async (friendId: string, limit: number = 50) => {
-                const subspace = get().subspace
-                if (!subspace) return []
-
+            create: async (data: Inputs.ICreateServer) => {
+                Utils.log({ type: "debug", label: "Creating Server", data: data })
                 try {
-                    // Mark as loading
-                    const currentLoadingDMs = new Set(get().loadingDMs)
-                    currentLoadingDMs.add(friendId)
-                    set({ loadingDMs: currentLoadingDMs })
-
-                    // Always use current user's DM process (not cached conversation)
-                    const profile = get().profile
-                    if (!profile?.dmProcess) {
-                        console.error("Current user doesn't have a DM process")
-                        return []
-                    }
-
-                    // Use current user's DM process directly (bypass cached conversation)
-                    const dmProcessId = profile.dmProcess
-
-                    // Get messages from the DM process (using current user's DM process)
-                    const response = await subspace.user.getDMs(dmProcessId, { friendId, limit } as any)
-                    if (!response?.messages) return []
-
-                    // Process and cache messages
-                    const messageMap = response.messages.reduce((acc, message) => {
-                        acc[message.id] = message
-                        return acc
-                    }, {} as Record<string, DMMessage>)
-
-                    // Get existing cached messages to help populate replyToMessage
-                    const existingMessages = get().dmConversations[friendId]?.messages || {}
-
-                    // Create a combined lookup map of all messages (existing + new)
-                    const allMessagesMap: Record<string, DMMessage> = { ...existingMessages, ...messageMap }
-
-                    // Populate replyToMessage field for DM messages that have replyTo
-                    for (const message of response.messages) {
-                        if (message.replyTo) {
-                            // Find the referenced message (DM messages use numeric IDs)
-                            let replyToMessage = Object.values(allMessagesMap).find(m => {
-                                // Try to match by converting to numbers since DM message IDs might be stored differently
-                                return String(m.id) === String(message.replyTo) || Number(m.id) === Number(message.replyTo)
-                            })
-
-                            // If reply message is not found in current messages, try to fetch it
-                            if (!replyToMessage) {
-                                try {
-                                    // For DMs, we need to use the user's DM process to fetch the message
-                                    const profile = get().profile
-                                    if (profile?.dmProcess) {
-                                        const dmResponse = await subspace.user.getDMs(profile.dmProcess, {
-                                            friendId,
-                                            limit: 1,
-                                            messageId: message.replyTo
-                                        } as any)
-
-                                        if (dmResponse?.messages?.length > 0) {
-                                            replyToMessage = dmResponse.messages[0]
-                                            // Cache the fetched message
-                                            allMessagesMap[replyToMessage.id] = replyToMessage
-                                        }
-                                    }
-                                } catch (error) {
-                                    console.warn(`Failed to fetch DM reply message ${message.replyTo}:`, error)
-                                }
-                            }
-
-                            if (replyToMessage) {
-                                (message as any).replyToMessage = replyToMessage
-                                // Update the messageMap as well
-                                messageMap[message.id] = { ...message, replyToMessage } as any
-                            }
-                        }
-                    }
-
-                    // Get or create conversation for caching
-                    let existingConversation = get().dmConversations[friendId]
-                    if (!existingConversation) {
-                        existingConversation = {
-                            friendId,
-                            dmProcessId: profile.dmProcess, // Always use current user's DM process
-                            messages: {},
-                            unreadCount: 0
-                        }
-                    }
-
-                    // Update conversation with new messages
-                    const updatedConversation = {
-                        ...existingConversation,
-                        dmProcessId: profile.dmProcess, // Force update to current user's DM process
-                        messages: { ...existingConversation.messages, ...messageMap },
-                        lastMessageTime: Math.max(...response.messages.map(m => m.timestamp))
-                    }
-
-                    set({
-                        dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
-                    })
-
-                    return response.messages.sort((a, b) => a.timestamp - b.timestamp)
-                } catch (error) {
-                    console.error("Failed to get DM messages:", error)
-                    return []
-                } finally {
-                    // Clear loading state
-                    const currentLoadingDMs = new Set(get().loadingDMs)
-                    currentLoadingDMs.delete(friendId)
-                    set({ loadingDMs: currentLoadingDMs })
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.createServer(data))
+                    Utils.log({ type: "success", label: "Created Server", data: result, duration })
+                    result && set((state) => ({ servers: { ...state.servers, [result.profile.id]: result } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Creating Server", data: e })
+                    return null
                 }
             },
-            sendMessage: async (friendId: string, params: { content: string; attachments?: string; replyTo?: number }) => {
-                const subspace = get().subspace
-                const profile = get().profile
-                if (!subspace || !profile) return false
-
+            update: async (data: Inputs.IUpdateServer) => {
+                Utils.log({ type: "debug", label: "Updating Server", data: data })
                 try {
-                    // Send message via main Subspace process (it will forward to both DM processes)
-                    const success = await (subspace.user as any).sendDMToFriend(friendId, params)
-                    if (success) {
-                        // Refresh messages after sending
-                        setTimeout(() => {
-                            get().actions.dms.getMessages(friendId)
-                        }, 500)
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to send DM:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateServer(data as any))
+                    Utils.log({ type: "success", label: "Updated Server", data: result, duration })
+                    result && set((state) => ({ servers: { ...state.servers, [result.profile.id]: result } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Server", data: e })
+                    return null
+                }
+            },
+            join: async (serverId: string) => {
+                Utils.log({ type: "debug", label: "Joining Server", data: serverId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.joinServer(serverId))
+                    Utils.log({ type: "success", label: "Joined Server", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Joining Server", data: e })
                     return false
                 }
             },
-            editMessage: async (friendId: string, messageId: string, content: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
-
+            // Category functions
+            createCategory: async (data: Inputs.ICreateCategory) => {
+                Utils.log({ type: "debug", label: "Creating Category", data: data })
                 try {
-                    const success = await (subspace.user as any).editDMToFriend(friendId, { messageId, content })
-                    if (success) {
-                        // Update cached message
-                        const conversation = get().dmConversations[friendId]
-                        if (conversation) {
-                            const updatedMessage = { ...conversation.messages[messageId], content, edited: true }
-                            const updatedConversation = {
-                                ...conversation,
-                                messages: { ...conversation.messages, [messageId]: updatedMessage }
-                            }
-
-                            set({
-                                dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
-                            })
-                        }
-
-                        // Refresh messages to get latest state
-                        setTimeout(() => {
-                            get().actions.dms.getMessages(friendId)
-                        }, 500)
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to edit DM:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.createCategory(data))
+                    Utils.log({ type: "success", label: "Created Category", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Creating Category", data: e })
+                    return null
+                }
+            },
+            updateCategory: async (data: Inputs.IUpdateCategory) => {
+                Utils.log({ type: "debug", label: "Updating Category", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateCategory(data))
+                    Utils.log({ type: "success", label: "Updated Category", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Category", data: e })
+                    return null
+                }
+            },
+            deleteCategory: async (data: Inputs.IDeleteCategory) => {
+                Utils.log({ type: "debug", label: "Deleting Category", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.deleteCategory(data))
+                    Utils.log({ type: "success", label: "Deleted Category", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Deleting Category", data: e })
                     return false
                 }
             },
-            deleteMessage: async (friendId: string, messageId: string) => {
-                const subspace = get().subspace
-                if (!subspace) return false
 
+            // Channel functions
+            createChannel: async (data: Inputs.ICreateChannel) => {
+                Utils.log({ type: "debug", label: "Creating Channel", data: data })
                 try {
-                    const success = await (subspace.user as any).deleteDMToFriend(friendId, messageId)
-                    if (success) {
-                        // Remove from cached messages
-                        const conversation = get().dmConversations[friendId]
-                        if (conversation) {
-                            const { [messageId]: removedMessage, ...remainingMessages } = conversation.messages
-                            const updatedConversation = {
-                                ...conversation,
-                                messages: remainingMessages
-                            }
-
-                            set({
-                                dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
-                            })
-                        }
-                    }
-                    return success
-                } catch (error) {
-                    console.error("Failed to delete DM:", error)
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.createChannel(data))
+                    Utils.log({ type: "success", label: "Created Channel", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Creating Channel", data: e })
+                    return null
+                }
+            },
+            updateChannel: async (data: Inputs.IUpdateChannel) => {
+                Utils.log({ type: "debug", label: "Updating Channel", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateChannel(data))
+                    Utils.log({ type: "success", label: "Updated Channel", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Channel", data: e })
+                    return null
+                }
+            },
+            deleteChannel: async (data: Inputs.IDeleteChannel) => {
+                Utils.log({ type: "debug", label: "Deleting Channel", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.deleteChannel(data))
+                    Utils.log({ type: "success", label: "Deleted Channel", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Deleting Channel", data: e })
                     return false
                 }
             },
-            markAsRead: (friendId: string) => {
-                const conversation = get().dmConversations[friendId]
-                if (!conversation) return
 
-                const updatedConversation = { ...conversation, unreadCount: 0 }
-                set({
-                    dmConversations: { ...get().dmConversations, [friendId]: updatedConversation }
-                })
-            }
+            // Role functions
+            createRole: async (data: Inputs.ICreateRole) => {
+                Utils.log({ type: "debug", label: "Creating Role", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.createRole(data))
+                    Utils.log({ type: "success", label: "Created Role", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Creating Role", data: e })
+                    return null
+                }
+            },
+            updateRole: async (data: Inputs.IUpdateRole) => {
+                Utils.log({ type: "debug", label: "Updating Role", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateRole(data))
+                    Utils.log({ type: "success", label: "Updated Role", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Role", data: e })
+                    return null
+                }
+            },
+            deleteRole: async (data: Inputs.IDeleteRole) => {
+                Utils.log({ type: "debug", label: "Deleting Role", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.deleteRole(data))
+                    Utils.log({ type: "success", label: "Deleted Role", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Deleting Role", data: e })
+                    return false
+                }
+            },
+            assignRole: async (data: Inputs.IAssignRole) => {
+                Utils.log({ type: "debug", label: "Assigning Role", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.assignRole(data))
+                    Utils.log({ type: "success", label: "Assigned Role", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Assigning Role", data: e })
+                    return false
+                }
+            },
+            unassignRole: async (data: Inputs.IUnassignRole) => {
+                Utils.log({ type: "debug", label: "Unassigning Role", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.unassignRole(data))
+                    Utils.log({ type: "success", label: "Unassigned Role", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Unassigning Role", data: e })
+                    return false
+                }
+            },
+
+            // Message functions
+            sendMessage: async (data: Inputs.ISendMessage) => {
+                Utils.log({ type: "debug", label: "Sending Message", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.sendMessage(data))
+                    Utils.log({ type: "success", label: "Sent Message", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Sending Message", data: e })
+                    return null
+                }
+            },
+            updateMessage: async (data: Inputs.IUpdateMessage) => {
+                Utils.log({ type: "debug", label: "Updating Message", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateMessage(data))
+                    Utils.log({ type: "success", label: "Updated Message", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Message", data: e })
+                    return null
+                }
+            },
+            deleteMessage: async (data: Inputs.IDeleteMessage) => {
+                Utils.log({ type: "debug", label: "Deleting Message", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.deleteMessage(data))
+                    Utils.log({ type: "success", label: "Deleted Message", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Deleting Message", data: e })
+                    return false
+                }
+            },
+            // Member functions
+            getAllMembers: async (serverId: string) => {
+                Utils.log({ type: "debug", label: "Getting Server Members", data: serverId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.getServerMembers(serverId))
+                    Utils.log({ type: "success", label: "Got Server Members", data: result, duration })
+                    result && set((state) => ({ members: { ...state.members, [serverId]: result } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting Server Members", data: e })
+                    return null
+                }
+            },
+            getMember: async (data: Inputs.IGetMember) => {
+                Utils.log({ type: "debug", label: "Getting Server Member", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.getServerMember(data))
+                    Utils.log({ type: "success", label: "Got Server Member", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting Server Member", data: e })
+                    return null
+                }
+            },
+            updateMember: async (data: Inputs.IUpdateMember) => {
+                Utils.log({ type: "debug", label: "Updating Server Member", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateMember(data))
+                    Utils.log({ type: "success", label: "Updated Server Member", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Server Member", data: e })
+                    return null
+                }
+            },
+            kickMember: async (data: Inputs.IKickMember) => {
+                Utils.log({ type: "debug", label: "Kicking Server Member", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.kickMember(data))
+                    Utils.log({ type: "success", label: "Kicked Server Member", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Kicking Server Member", data: e })
+                    return false
+                }
+            },
+            banMember: async (data: Inputs.IBanMember) => {
+                Utils.log({ type: "debug", label: "Banning Server Member", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.banMember(data))
+                    Utils.log({ type: "success", label: "Banned Server Member", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Banning Server Member", data: e })
+                    return false
+                }
+            },
+            unbanMember: async (data: Inputs.IUnbanMember) => {
+                Utils.log({ type: "debug", label: "Unbanning Server Member", data: data })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.unbanMember(data))
+                    Utils.log({ type: "success", label: "Unbanned Server Member", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Unbanning Server Member", data: e })
+                    return false
+                }
+            },
         },
-        // internal: {
-        //     rehydrateServers: () => {
-        //         const subspace = get().subspace
-        //         if (!subspace) return
 
-        //         const persistedServers = get().servers
-        //         const rehydratedServers: Record<string, Server> = {}
-
-        //         // Recreate server instances from persisted data
-        //         for (const [serverId, data] of Object.entries(persistedServers)) {
-        //             try {
-        //                 // Just use the persisted data as server data
-        //                 rehydratedServers[serverId] = data
-        //             } catch (e) {
-        //                 console.error(`Failed to rehydrate server ${serverId}:`, e)
-        //             }
-        //         }
-
-        //         if (Object.keys(rehydratedServers).length > 0) {
-        //         }
-        //         set({ servers: rehydratedServers })
-        //     },
-        //     loadUserServersSequentially: (profile: ExtendedProfile) => {
-        //         const subspace = get().subspace
-        //         if (!subspace) return
-
-        //         const userJoinedServers = profile.serversJoined || [];
-        //         if (userJoinedServers.length === 0) {
-        //             return;
-        //         }
-
-        //         console.log(`[hooks/use-subspace] Starting to load ${userJoinedServers.length} servers sequentially...`);
-
-        //         const loadNextServer = async (index: number) => {
-        //             if (index >= userJoinedServers.length) {
-        //                 console.log(`[hooks/use-subspace] ✅ Finished loading all ${userJoinedServers.length} servers`);
-        //                 return;
-        //             }
-
-        //             // Handle both string and object server identifiers
-        //             const serverEntry = userJoinedServers[index];
-        //             const serverId = typeof serverEntry === 'string' ? serverEntry : (serverEntry as any).serverId;
-
-        //             if (!serverId) {
-        //                 console.warn(`Invalid server entry at index ${index}, skipping.`);
-        //                 loadNextServer(index + 1);
-        //                 return;
-        //             }
-
-        //             console.log(`[hooks/use-subspace] Loading server ${serverId} (${index + 1}/${userJoinedServers.length})...`);
-
-        //             // ✅ IMMEDIATE UPDATE: Mark this server as being loaded in the loadingServers set
-        //             const currentLoadingServers = new Set(get().loadingServers)
-        //             currentLoadingServers.add(serverId)
-        //             set({ loadingServers: currentLoadingServers })
-
-        //             try {
-        //                 const server = await get().actions.servers.get(serverId, true); // Force refresh
-        //                 if (server) {
-        //                     console.log(`[hooks/use-subspace] ✅ Successfully loaded server ${serverId}`);
-        //                 }
-        //             } catch (error) {
-        //                 console.error(`[hooks/use-subspace] ❌ Failed to load server ${serverId}:`, error);
-        //             } finally {
-        //                 // ✅ IMMEDIATE UPDATE: Remove from loading set when done (success or failure)
-        //                 const updatedLoadingServers = new Set(get().loadingServers)
-        //                 updatedLoadingServers.delete(serverId)
-        //                 set({ loadingServers: updatedLoadingServers })
-
-        //                 // Wait a short delay before loading the next server to avoid overwhelming the system
-        //                 setTimeout(() => {
-        //                     loadNextServer(index + 1);
-        //                 }, 100);
-        //             }
-        //         };
-
-        //         loadNextServer(0);
-        //     }
-        // }
+        // Utility functions
+        clearAllStates: () => {
+            Utils.log({ type: "debug", label: "Clearing All States", data: "Resetting profiles, servers, and members" })
+            set(() => ({
+                profiles: {},
+                primaryNames: {},
+                wanderTiers: {},
+                servers: {},
+                members: {}
+            }))
+            // Also clear localStorage
+            localStorage.removeItem("subspace2-dev")
+            Utils.log({ type: "success", label: "Cleared All States", data: "All states and storage cleared" })
+        }
     },
 }), {
-    name: "subspace",
+    name: "subspace2-dev",
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({
-        servers: state.servers,
-        messages: state.messages,
-        profile: state.profile,
         profiles: state.profiles,
-        bots: state.bots,
-        friends: state.friends,
-        dmConversations: state.dmConversations,
-        // ✅ EXCLUDED: Loading states and currentAddress don't need to be persisted
-        // loadingProfiles, loadingServers, loadingFriends, loadingDMs, currentAddress are excluded from persistence
+        primaryNames: state.primaryNames,
+        wanderTiers: state.wanderTiers,
+        servers: state.servers,
+        members: state.members,
     })
 }))
 
-// ------------------------------------------------------------
+// Helper fns to access data from state
 
-export function getSubspace(signer: AoSigner | null, owner: string): Subspace {
-    if (!owner) return null
-
-    const hyperbeamUrl = getHyperbeamUrl();
-
-    const config: ConnectionConfig = {
-        GATEWAY_URL: 'https://arweave.net',
-        HYPERBEAM_URL: hyperbeamUrl,
-        owner: owner
-    };
-
-    if (signer) {
-        config.signer = signer;
+export function useProfiles(): Record<string, IProfile>
+export function useProfiles(userId: string): IProfile | undefined
+export function useProfiles(userId?: string): Record<string, IProfile> | IProfile | undefined {
+    if (userId) {
+        return useSubspace((state) => state.profiles[userId] ? state.profiles[userId] : null)
     }
-
-    try {
-        return new Subspace(config);
-    } catch (error) {
-        console.error("Failed to initialize Subspace:", error);
-
-        const walletState = useWallet.getState();
-        const strategy = walletState.connectionStrategy;
-
-        if (strategy === 'guest_user') {
-            throw new Error('Guest user mode has limited functionality. Please connect a wallet for full features.');
-        } else {
-            throw new Error('Failed to initialize Subspace client. Please check your connection and try again.');
-        }
-    }
+    return useSubspace((state) => state.profiles)
 }
 
+export function useServers(): Record<string, IServer>
+export function useServers(serverId: string): IServer | undefined
+export function useServers(serverId?: string): Record<string, IServer> | IServer | undefined {
+    if (serverId) {
+        return useSubspace((state) => state.servers[serverId] ? state.servers[serverId] : null)
+    }
+    return useSubspace((state) => state.servers)
+}
 
+export function useMembers(): Record<string, Record<string, IMember>>
+export function useMembers(serverId: string): Record<string, IMember> | undefined
+export function useMembers(serverId: string, memberId: string): IMember | undefined
+export function useMembers(serverId?: string, memberId?: string): Record<string, Record<string, IMember>> | Record<string, IMember> | IMember | undefined {
+    if (serverId && memberId) {
+        return useSubspace((state) => state.members[serverId]?.[memberId] || null)
+    }
+    if (serverId) {
+        return useSubspace((state) => state.members[serverId] ? state.members[serverId] : null)
+    }
+    return useSubspace((state) => state.members)
+}
 
-// Custom hook to handle wallet disconnect events and clear subspace state
-export function useSubspaceWalletDisconnectHandler() {
-    const { actions } = useSubspace();
+export function useRoles(serverId: string): Record<string, IRole> | undefined
+export function useRoles(serverId: string, roleId: string): IRole | undefined
+export function useRoles(serverId: string, roleId?: string): Record<string, IRole> | Record<string, IRole> | IRole | undefined {
+    if (serverId && roleId) {
+        return useSubspace((state) => state.servers[serverId]?.roles[roleId] || null)
+    }
+    if (serverId) {
+        return useSubspace((state) => state.servers[serverId]?.roles ? state.servers[serverId]?.roles : null)
+    }
+    return null
+}
 
-    useEffect(() => {
-        const handleWalletDisconnected = () => {
-            console.log("🔌 Wallet disconnected, clearing subspace state");
+export function usePrimaryNames(): Record<string, string>
+export function usePrimaryNames(address: string): string | undefined
+export function usePrimaryNames(address?: string): Record<string, string> | string | undefined {
+    if (address) {
+        return useSubspace((state) => state.primaryNames[address] ? state.primaryNames[address] : null)
+    }
+    return useSubspace((state) => state.primaryNames)
+}
 
-            // Clear all user-specific data from subspace state
-            // Use the store's set method directly to clear state
-            useSubspace.setState({
-                profile: null,
-                profiles: {},
-                servers: {},
-                bots: {},
-                messages: {},
-                friends: {},
-                dmConversations: {},
-                loadingProfiles: new Set<string>(),
-                loadingServers: new Set<string>(),
-                loadingMembers: new Set<string>(),
-                loadingFriends: new Set<string>(),
-                loadingDMs: new Set<string>(),
-                loadingBots: new Set<string>(),
-                botCacheTimestamps: {},
-                currentAddress: "",
-                subspace: null
-            });
-        };
+export function useWanderTiers(): Record<string, IWanderTier>
+export function useWanderTiers(address: string): IWanderTier | undefined
+export function useWanderTiers(address?: string): Record<string, IWanderTier> | IWanderTier | undefined {
+    if (address) {
+        return useSubspace((state) => state.wanderTiers[address] ? state.wanderTiers[address] : null)
+    }
+    return useSubspace((state) => state.wanderTiers)
+}
 
-        window.addEventListener("subspace-wallet-disconnected", handleWalletDisconnected);
-
-        return () => {
-            window.removeEventListener("subspace-wallet-disconnected", handleWalletDisconnected);
-        };
-    }, [actions]);
+// Helper function to access actions
+export function useSubspaceActions() {
+    return useSubspace((state) => state.actions)
 }

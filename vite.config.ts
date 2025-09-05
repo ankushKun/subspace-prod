@@ -5,7 +5,6 @@ import react from '@vitejs/plugin-react-swc'
 import fs from "fs"
 import { execSync } from "child_process"
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
-import { VitePWA } from "vite-plugin-pwa"
 import opengraph from "vite-plugin-open-graph"
 
 
@@ -13,64 +12,64 @@ import opengraph from "vite-plugin-open-graph"
 const commitHash = execSync("git rev-parse --short HEAD").toString().trim()
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf-8"));
 
-const vitePWA = VitePWA({
-  registerType: "autoUpdate",
-  includeAssets: ['/favicon.ico', '/alien-rounded.svg', '/alien.svg', '/alien-small.svg', '/icon.png', 'notification.wav', '/x_banner.png'],
-  devOptions: {
-    enabled: process.env.NODE_ENV === "development"
-  },
-  workbox: {
-    maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB
-    runtimeCaching: [{ urlPattern: "arweave.net", handler: "CacheFirst" }]
-  },
-  manifest: {
-    name: 'Subspace Chat',
-    short_name: 'Subspace',
-    description: 'Subspace is an intergalactic communication app built on the Permaweb. It allows you to chat in online communities without the fear of censorship.',
-    theme_color: '#17181c',
-    background_color: '#17181c',
-    display: "standalone",
-    orientation: "any",
-    scope: "./",
-    start_url: "/#/app",
-    categories: ["social", "communication"],
-    shortcuts: [
-      {
-        name: "Settings",
-        short_name: "Settings",
-        description: "Subspace settings",
-        url: "/#/app/settings"
-      }
-    ],
-    icons: [
-      {
-        src: './alien-small.svg',
-        sizes: '512x512',
-        type: 'image/svg+xml',
-      },
-      {
-        src: './alien-small.svg',
-        sizes: '192x192',
-        type: 'image/svg+xml',
-      },
-      {
-        src: './alien-small.svg',
-        sizes: '512x512',
-        type: 'image/svg+xml',
-        purpose: 'maskable',
-      }, {
-        src: './alien-small.svg',
-        sizes: '192x192',
-        type: 'image/svg+xml',
-        purpose: 'maskable',
-      }, {
-        src: './alien-small.svg',
-        sizes: '800x800',
-        type: 'image/svg+xml',
-      }
-    ],
-  }
-})
+// const vitePWA = VitePWA({
+//   registerType: "autoUpdate",
+//   includeAssets: ['/favicon.ico', '/alien-rounded.svg', '/alien.svg', '/alien-small.svg', '/icon.png', 'notification.wav', '/x_banner.png'],
+//   devOptions: {
+//     enabled: process.env.NODE_ENV === "development"
+//   },
+//   workbox: {
+//     maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB
+//     runtimeCaching: [{ urlPattern: "arweave.net", handler: "CacheFirst" }]
+//   },
+//   manifest: {
+//     name: 'Subspace Chat',
+//     short_name: 'Subspace',
+//     description: 'Subspace is an intergalactic communication app built on the Permaweb. It allows you to chat in online communities without the fear of censorship.',
+//     theme_color: '#17181c',
+//     background_color: '#17181c',
+//     display: "standalone",
+//     orientation: "any",
+//     scope: "./",
+//     start_url: "/#/app",
+//     categories: ["social", "communication"],
+//     shortcuts: [
+//       {
+//         name: "Settings",
+//         short_name: "Settings",
+//         description: "Subspace settings",
+//         url: "/#/app/settings"
+//       }
+//     ],
+//     icons: [
+//       {
+//         src: './alien-small.svg',
+//         sizes: '512x512',
+//         type: 'image/svg+xml',
+//       },
+//       {
+//         src: './alien-small.svg',
+//         sizes: '192x192',
+//         type: 'image/svg+xml',
+//       },
+//       {
+//         src: './alien-small.svg',
+//         sizes: '512x512',
+//         type: 'image/svg+xml',
+//         purpose: 'maskable',
+//       }, {
+//         src: './alien-small.svg',
+//         sizes: '192x192',
+//         type: 'image/svg+xml',
+//         purpose: 'maskable',
+//       }, {
+//         src: './alien-small.svg',
+//         sizes: '800x800',
+//         type: 'image/svg+xml',
+//       }
+//     ],
+//   }
+// })
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -95,7 +94,7 @@ export default defineConfig({
         description: "Subspace is a communication app built on a permanent, censorship resistant and open network. It allows you to chat in online communities without the fear of censorship.",
       }
     }),
-    process.env.NODE_ENV === "development" ? null : vitePWA
+    // process.env.NODE_ENV === "development" ? null : vitePWA
   ],
   resolve: {
     alias: {

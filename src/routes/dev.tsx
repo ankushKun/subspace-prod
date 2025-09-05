@@ -5,14 +5,14 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useProfiles, useSubspace2, useSubspaceActions } from "@/hooks/use-subspace2"
+import { useProfiles, useSubspace, useSubspaceActions } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { Subspace } from "@subspace-protocol/sdk"
 import { useEffect, useState } from "react"
 import { User, Server, Plus, Search, UserPlus, Code2, Wallet, Hash, Users, Shield, MessageSquare, Mail, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 
 export default function Dev() {
-    const { profiles, servers, members, actions: subspaceActions } = useSubspace2()
+    const { profiles, servers, members, actions: subspaceActions } = useSubspace()
     const { connected, address, actions: walletActions } = useWallet()
     const profile = useProfiles(address)
     const [serverId, setServerId] = useState("server-id")
@@ -262,7 +262,7 @@ export default function Dev() {
                                 Join Server
                             </Button>
                             <Button
-                                onClick={() => subspaceActions.servers.getMembers(serverId)}
+                                onClick={() => subspaceActions.servers.getAllMembers(serverId)}
                                 variant="outline"
                                 className="w-full justify-start gap-2"
                                 disabled={!connected || !serverId.trim()}

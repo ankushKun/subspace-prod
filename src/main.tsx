@@ -13,14 +13,11 @@ import './index.css'
 import { HashRouter, Route, Routes, useParams } from "react-router";
 import { ThemeProvider, useTheme } from '@/components/theme-provider';
 import SubspaceLanding from './routes/landing';
-import App from '@/routes/app';
-import Settings from '@/routes/settings';
-import ServerSettings from '@/routes/app/server-settings';
 import { ConnectionStrategies, useWallet } from '@/hooks/use-wallet';
 import { useEffect, useState } from 'react';
 import { useCallback } from 'react';
 import { useGlobalState } from '@/hooks/use-global-state';
-import { useSubspace, useSubspaceWalletDisconnectHandler } from '@/hooks/use-subspace';
+import { useSubspace } from '@/hooks/use-subspace';
 import React, { Component } from 'react';
 import type { ReactNode } from 'react';
 import { PostHogProvider } from 'posthog-js/react';
@@ -29,13 +26,10 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import alien from '@/assets/subspace/alien-green.svg';
 import { Toaster } from 'sonner';
-// import Invite from '@/routes/invite';
-// import Developer from '@/routes/developer';
-// import Bots from '@/routes/developer/bots';
-// import BotSettings from '@/routes/developer/bot-settings';
-// import AddBot from '@/routes/addbot';
 
 import Dev from '@/routes/dev';
+import { Subspace } from '@subspace-protocol/sdk';
+import App from '@/routes/app/app';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -330,9 +324,6 @@ function Main() {
     const { actions: globalStateActions } = useGlobalState()
     const [errorBoundary, setErrorBoundary] = useState<ErrorBoundary | null>(null);
 
-    // Handle wallet disconnect events and clear subspace state
-    useSubspaceWalletDisconnectHandler();
-
     // Set the global error boundary reference
     useEffect(() => {
         errorBoundaryRef = errorBoundary;
@@ -441,12 +432,14 @@ function Main() {
 
     useEffect(() => {
         if (connected && address) {
-            try {
-                subspaceActions.init()
-            } catch (error) {
-                console.error("Subspace initialization failed:", error)
-                handleAsyncError(error as Error)
-            }
+            walletActions.getSigner().then(signer => {
+                try {
+                    Subspace.init({ address, signer })
+                } catch (error) {
+                    console.error("Subspace initialization failed:", error)
+                    handleAsyncError(error as Error)
+                }
+            })
         } else if (!connected && !address) {
             // Clear state when wallet becomes disconnected
             globalStateActions.clear()
@@ -462,19 +455,20 @@ function Main() {
                 <ThemedToaster />
                 <HashRouter>
                     <Routes>
-                        {/* <Route path="/" element={<SubspaceLanding />} />
+                        <Route path="/" element={<SubspaceLanding />} />
                         <Route path="/app" element={<App />} />
-                        <Route path="/invite/:invite" element={<Invite />} />
-                        <Route path="/app/settings" element={<Settings />} />
                         <Route path="/app/dm/:friendId" element={<App />} />
                         <Route path="/app/:serverId" element={<App />} />
                         <Route path="/app/:serverId/:channelId" element={<App />} />
-                        <Route path="/app/:serverId/settings" element={<ServerSettings />} />
 
-                        <Route path="/developer" element={<Developer />} />
-                        <Route path="/developer/bots" element={<Bots />} />
-                        <Route path="/developer/bots/:botId" element={<BotSettings />} />
-                        <Route path="/addbot/:botId" element={<AddBot />} /> */}
+                        {/* <Route path="/invite/:invite" element={<Invite />} /> */}
+                        {/* <Route path="/app/settings" element={<Settings />} /> */}
+                        {/* <Route path="/app/:serverId/settings" element={<ServerSettings />} /> */}
+
+                        {/* <Route path="/developer" element={<Developer />} /> */}
+                        {/* <Route path="/developer/bots" element={<Bots />} /> */}
+                        {/* <Route path="/developer/bots/:botId" element={<BotSettings />} /> */}
+                        {/* <Route path="/addbot/:botId" element={<AddBot />} /> */}
 
                         <Route path="/dev" element={<Dev />} />
                     </Routes>
