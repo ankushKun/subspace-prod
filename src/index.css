@@ -87,8 +87,6 @@ body {
     unicode-range: U+1F000-1FFFF;
 }
 
-
-
 :root {
     --background: oklch(0.9750 0.0120 281.0864);
     --foreground: oklch(0 0 0);
@@ -463,4 +461,140 @@ body {
     100% {
         transform: translateX(100%);
     }
+}
+
+/* Discord-style popover animations */
+@keyframes discord-slide-up {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.95);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes discord-slide-down {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.95);
+    }
+}
+
+/* Discord-style popover classes */
+.discord-popover {
+    /* Override default popover styling with Discord colors */
+    background: #111214 !important;
+    border: 1px solid #2b2d31 !important;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24) !important;
+    animation: discord-slide-up 0.15s cubic-bezier(0.2, 0, 0.13, 1.5);
+    min-width: 200px;
+    max-width: 320px;
+    padding: 8px;
+}
+
+.discord-popover[data-state="closed"] {
+    animation: discord-slide-down 0.15s cubic-bezier(0.2, 0, 0.13, 1.5);
+}
+
+.discord-menu-item {
+    /* Discord menu item styling */
+    border-radius: 4px !important;
+    padding: 6px 8px !important;
+    margin: 0 !important;
+    font-weight: 500 !important;
+    transition: all 0.1s ease !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 32px !important;
+}
+
+.discord-menu-item:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Discord-style separators */
+.discord-separator {
+    height: 1px;
+    background: #2b2d31;
+    margin: 4px 0;
+    border: none;
+}
+
+/* Discord-style edit profile dialog */
+.discord-edit-profile-dialog {
+    background: #111214 !important;
+    border: 1px solid #2b2d31 !important;
+    color: white !important;
+    padding: 24px !important;
+}
+
+.discord-edit-profile-dialog .discord-textarea {
+    background: #1e1f22 !important;
+    border: 1px solid #2b2d31 !important;
+    color: white !important;
+    resize: none !important;
+}
+
+.discord-edit-profile-dialog .discord-textarea:focus {
+    border-color: #4752c4 !important;
+    box-shadow: 0 0 0 2px rgba(71, 82, 196, 0.2) !important;
+}
+
+.discord-edit-profile-dialog .discord-textarea::placeholder {
+    color: #72767d !important;
+}
+
+/* Discord-style buttons */
+.discord-primary-button {
+    background: #4752c4 !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 500 !important;
+    transition: background-color 0.15s ease !important;
+}
+
+.discord-primary-button:hover {
+    background: #3c47a3 !important;
+}
+
+.discord-primary-button:disabled {
+    background: #2b2d31 !important;
+    color: #72767d !important;
+    cursor: not-allowed !important;
+}
+
+.discord-secondary-button {
+    background: transparent !important;
+    color: #b9bbbe !important;
+    border: 1px solid #2b2d31 !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+}
+
+.discord-secondary-button:hover {
+    background: #2b2d31 !important;
+    color: white !important;
+}
+
+/* File dropzone Discord styling */
+.discord-edit-profile-dialog .file-dropzone {
+    background: #1e1f22 !important;
+    border: 2px dashed #2b2d31 !important;
+    color: #b9bbbe !important;
+}
+
+.discord-edit-profile-dialog .file-dropzone:hover {
+    border-color: #4752c4 !important;
+    background: rgba(71, 82, 196, 0.05) !important;
 }

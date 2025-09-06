@@ -9,6 +9,7 @@
   <link rel="icon" href="/icon.png" type="image/png" sizes="any">
   <link rel="apple-touch-icon" href="/icon.png">
   <link rel="apple-touch-icon" sizes="any" href="/icon.png">
+  <link rel="manifest" href="/manifest.json">
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 
@@ -95,6 +96,11 @@
       }
       originalConsoleWarn.apply(console, args);
     };
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
   </script>
 </head>
 

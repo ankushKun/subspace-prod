@@ -1,0 +1,449 @@
+import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useMember, usePrimaryName, useProfile, useProfiles, useSubspace } from "@/hooks/use-subspace";
+import { useWallet } from "@/hooks/use-wallet";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Button } from "./ui/button";
+import { Avatar } from "./ui/avatar";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { FileDropzone } from "./ui/file-dropzone";
+import { SubspaceValidation } from "@subspace-protocol/sdk";
+import React, { useState, useRef, type HTMLAttributes } from "react";
+import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils";
+import alienGreen from "@/assets/subspace/alien-green.svg";
+import LoginDialog from "./login-dialog";
+import { ArrowLeftFromLineIcon, Edit2, Edit3, SettingsIcon, UserIcon, Save, X, Camera, Upload } from "lucide-react";
+import { useGlobalState } from "@/hooks/use-global-state";
+import type { PopoverContentProps } from "@radix-ui/react-popover";
+
+export function ProfileAvatar(props: HTMLAttributes<HTMLDivElement> & { tx: string }) {
+    // validate tx is a valid arweave transaction
+    const valid = SubspaceValidation.isValidTxId(props.tx)
+
+    return <Avatar {...props} className={cn("border border-primary/20 items-center justify-center !rounded w-10 h-10", props.className)} >
+        {valid ? <img src={`https://arweave.net/${props.tx}`} alt={`${props.tx}`} /> : <img src={alienGreen} alt="alien" className="p-2 bg-primary/10 opacity-40" />}
+    </Avatar>
+}
+
+export function MyProfileDialog({ children }: { children: React.ReactNode }) {
+    const [open, setOpen] = useState(false)
+    const [isLoading, setIsLoading] = useState(false)
+    const [uploadStatus, setUploadStatus] = useState<string>("")
+    const { address, connected } = useWallet()
+    const profile = useProfile(address)
+    const primaryName = usePrimaryName(address)
+    const { actions } = useSubspace()
+
+    // File input refs
+    const bannerInputRef = useRef<HTMLInputElement>(null)
+    const pfpInputRef = useRef<HTMLInputElement>(null)
+
+    // Form state
+    const [pfpFile, setPfpFile] = useState<File | null>(null)
+    const [bannerFile, setBannerFile] = useState<File | null>(null)
+    const [bio, setBio] = useState(profile?.bio || "")
+
+    // Reset form when profile changes or dialog opens
+    React.useEffect(() => {
+        if (open && profile) {
+            setBio(profile.bio || "")
+        }
+    }, [open, profile])
+
+    // File handling functions
+    const handleBannerClick = () => {
+        bannerInputRef.current?.click()
+    }
+
+    const handlePfpClick = () => {
+        pfpInputRef.current?.click()
+    }
+
+    const handleBannerFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            setBannerFile(file)
+        }
+    }
+
+    const handlePfpFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            setPfpFile(file)
+        }
+    }
+
+    // Get preview URLs for uploaded files
+    const bannerPreviewUrl = bannerFile ? URL.createObjectURL(bannerFile) : null
+    const pfpPreviewUrl = pfpFile ? URL.createObjectURL(pfpFile) : null
+
+    // Cleanup object URLs when component unmounts or files change
+    React.useEffect(() => {
+        return () => {
+            if (bannerPreviewUrl) URL.revokeObjectURL(bannerPreviewUrl)
+            if (pfpPreviewUrl) URL.revokeObjectURL(pfpPreviewUrl)
+        }
+    }, [bannerPreviewUrl, pfpPreviewUrl])
+
+    const handleSave = async () => {
+        if (!connected) return
+
+        setIsLoading(true)
+        setUploadStatus("")
+
+        try {
+            const updateData: any = {}
+
+            // Upload profile picture if changed
+            if (pfpFile) {
+                setUploadStatus("Uploading profile picture...")
+                console.log("Uploading profile picture...")
+                const pfpTxId = await uploadFileTurbo(pfpFile)
+                if (pfpTxId) {
+                    updateData.pfp = pfpTxId
+                    console.log("Profile picture uploaded:", pfpTxId)
+                } else {
+                    throw new Error("Failed to upload profile picture")
+                }
+            }
+
+            // Upload banner if changed
+            if (bannerFile) {
+                setUploadStatus("Uploading banner image...")
+                console.log("Uploading banner image...")
+                const bannerTxId = await uploadFileTurbo(bannerFile)
+                if (bannerTxId) {
+                    updateData.banner = bannerTxId
+                    console.log("Banner uploaded:", bannerTxId)
+                } else {
+                    throw new Error("Failed to upload banner image")
+                }
+            }
+
+            // Update bio if changed
+            if (bio !== (profile?.bio || "")) {
+                updateData.bio = bio
+            }
+
+            // Only update if there are changes
+            if (Object.keys(updateData).length > 0) {
+                setUploadStatus("Updating profile...")
+                console.log("Updating profile with data:", updateData)
+                await actions.profiles.update(updateData)
+                setUploadStatus("Profile updated successfully!")
+
+                // Brief success message before closing
+                setTimeout(() => {
+                    setOpen(false)
+                    setUploadStatus("")
+                    // Reset form
+                    setPfpFile(null)
+                    setBannerFile(null)
+                    // Clear file inputs
+                    if (bannerInputRef.current) bannerInputRef.current.value = ""
+                    if (pfpInputRef.current) pfpInputRef.current.value = ""
+                }, 1000)
+            } else {
+                // No changes, just close
+                setOpen(false)
+            }
+        } catch (error) {
+            console.error("Failed to update profile:", error)
+            setUploadStatus("Failed to update profile. Please try again.")
+
+            // Clear error message after 3 seconds
+            setTimeout(() => {
+                setUploadStatus("")
+            }, 3000)
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    const handleCancel = () => {
+        // Reset form to original values
+        setBio(profile?.bio || "")
+        setPfpFile(null)
+        setBannerFile(null)
+        setUploadStatus("")
+        // Clear file inputs
+        if (bannerInputRef.current) bannerInputRef.current.value = ""
+        if (pfpInputRef.current) pfpInputRef.current.value = ""
+        setOpen(false)
+    }
+
+    return <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>{children}</DialogTrigger>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-border">
+            <DialogHeader className="pb-4">
+                <DialogTitle className="text-xl font-semibold text-primary flex items-center gap-2">
+                    <Edit2 size={20} />
+                    Edit Profile
+                </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6">
+                {/* Hidden file inputs */}
+                <input
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerFileChange}
+                    className="hidden"
+                />
+                <input
+                    ref={pfpInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePfpFileChange}
+                    className="hidden"
+                />
+
+                {/* Integrated Banner and Profile Picture Section */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Profile</h3>
+
+                    {/* Banner and PFP Container */}
+                    <div className="relative">
+                        {/* Banner */}
+                        <div
+                            className="relative w-full h-32 bg-gradient-to-br from-primary/20 to-muted rounded-lg overflow-hidden cursor-pointer group"
+                            onClick={handleBannerClick}
+                        >
+                            {/* Banner Image */}
+                            {(bannerPreviewUrl || profile?.banner) && (
+                                <img
+                                    src={bannerPreviewUrl || `https://arweave.net/${profile?.banner}`}
+                                    alt="Banner"
+                                    className="w-full h-full object-cover"
+                                />
+                            )}
+
+                            {/* Banner Overlay */}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <div className="bg-black/60 rounded-full p-2">
+                                    <Camera size={20} className="text-white" />
+                                </div>
+                            </div>
+
+                            {/* Banner Upload Hint */}
+                            {!bannerPreviewUrl && !profile?.banner && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="text-center text-muted-foreground">
+                                        <Upload size={24} className="mx-auto mb-1" />
+                                        <div className="text-xs">Click to upload banner</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Profile Picture */}
+                        <div
+                            className="absolute -bottom-8 left-6 cursor-pointer group"
+                            onClick={handlePfpClick}
+                        >
+                            <div className="relative">
+                                {/* PFP Container */}
+                                <div className="w-20 h-20 rounded border-4 border-background overflow-hidden bg-muted">
+                                    {(pfpPreviewUrl || profile?.pfp) ? (
+                                        <img
+                                            src={pfpPreviewUrl || `https://arweave.net/${profile?.pfp}`}
+                                            alt="Profile"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <img src={alienGreen} alt="alien" className="w-12 h-12 opacity-40" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* PFP Overlay */}
+                                <div className="absolute inset-0 rounded bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="bg-black/60 rounded-full p-1.5">
+                                        <Camera size={16} className="text-white" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Spacing for overlapping PFP */}
+                    <div className="h-8"></div>
+                </div>
+
+                {/* Bio Section */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Bio</h3>
+                    <Textarea
+                        value={bio}
+                        onChange={(e) => setBio(e.target.value)}
+                        placeholder="Tell us about yourself..."
+                        className="min-h-24 max-h-32 resize-none bg-muted border-border"
+                        maxLength={300}
+                    />
+                    <div className="text-xs text-muted-foreground text-right">
+                        {bio.length}/300 characters
+                    </div>
+                </div>
+            </div>
+
+            {/* Upload Status */}
+            {uploadStatus && (
+                <div className={cn(
+                    "p-3 rounded-lg text-sm font-medium text-center",
+                    uploadStatus.includes("Failed") || uploadStatus.includes("error")
+                        ? "bg-red-900/20 text-red-400 border border-red-900/30"
+                        : uploadStatus.includes("successfully")
+                            ? "bg-green-900/20 text-green-400 border border-green-900/30"
+                            : "bg-blue-900/20 text-blue-400 border border-blue-900/30"
+                )}>
+                    {uploadStatus}
+                </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 pt-6 border-t border-border">
+                <Button
+                    variant="ghost"
+                    onClick={handleCancel}
+                    disabled={isLoading}
+                    className="bg-muted hover:bg-muted/80 text-muted-foreground"
+                >
+                    <X size={16} />
+                    Cancel
+                </Button>
+                <Button
+                    onClick={handleSave}
+                    disabled={isLoading || !connected}
+                    className="bg-primary/70 hover:bg-primary/90 text-primary-foreground"
+                >
+                    <Save size={16} />
+                    {isLoading ? uploadStatus || "Saving..." : "Save Changes"}
+                </Button>
+            </div>
+        </DialogContent>
+    </Dialog>
+}
+
+export default function Profile() {
+    const { address, connected, actions: walletActions } = useWallet()
+    const profile = useProfile(address)
+    const primaryName = usePrimaryName(address)
+
+    if (!connected) {
+        return <LoginDialog>
+            <div className="p-2 m-2 cursor-pointer hover:bg-secondary rounded flex items-center gap-2 font-ocr">
+                <ProfileAvatar tx={profile?.pfp} />
+                <div className="mx-auto text-center text-primary">Login to Subspace</div>
+            </div>
+        </LoginDialog>
+    }
+
+    if (!profile) {
+        return <div className="p-2 m-2 cursor-pointer hover:bg-secondary rounded flex items-center gap-2 font-ocr animate-pulse">
+            <ProfileAvatar tx={null} />
+            <div className="flex flex-col gap-0.5 text-sm items-start text-primary/90">
+                <div>Materializing...</div>
+            </div>
+        </div>
+    }
+
+    return <Popover>
+        <PopoverTrigger className="p-2 m-2 cursor-pointer hover:bg-secondary rounded flex items-center gap-2 font-ocr">
+            <ProfileAvatar tx={profile?.pfp} />
+            <div className="flex flex-col gap-0.5 text-sm items-start text-primary/90">
+                <div>{primaryName ? primaryName : shortenAddress(address)}</div>
+                <div className="text-xs">{primaryName ? shortenAddress(address) : <div className="text-xs text-primary/50">You need a primary name</div>}</div>
+            </div>
+        </PopoverTrigger>
+        <PopoverContent sideOffset={7} className="discord-popover w-74 overflow-clip">
+            <div className="-m-2">
+                <div>
+                    {
+                        profile?.banner ? <img src={`https://arweave.net/${profile?.banner}`} alt={`${profile?.banner}`} className="w-full h-24 object-cover" /> :
+                            <div className="w-full h-24 bg-primary/10" />
+                    }
+                </div>
+                <div className="bg-background rounded absolute left-3 top-14">
+                    <ProfileAvatar tx={profile?.pfp} className="w-16 h-16" />
+                </div>
+                <div className="min-h-24 py-8 px-3 ">
+                    <div className="font-semibold font-ocr text-primary truncate">{primaryName ? primaryName : shortenAddress(address)}</div>
+                    <div className="text-xs text-primary/50 font-mono truncate">{primaryName ? shortenAddress(address) : <div className="text-xs text-primary/50">You need a primary name</div>}</div>
+                    {/* badges */}
+                    <div className="mt-2 text-sm">{profile?.bio}</div>
+                </div>
+            </div>
+
+            {/* Discord-style menu items */}
+            <div className="flex flex-col gap-1">
+                <MyProfileDialog>
+                    <Button
+                        variant="ghost"
+                        className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#4752c4] rounded-sm transition-colors"
+                        disabled={!connected}
+                    >
+                        <Edit2 size={16} /> Edit Profile
+                    </Button>
+                </MyProfileDialog>
+
+                <div className="discord-separator" />
+
+                <Button
+                    variant="ghost"
+                    className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#2b2d31] rounded-sm transition-colors"
+                    disabled={!connected}
+                >
+                    <SettingsIcon size={16} /> Settings
+                </Button>
+
+                <div className="discord-separator" />
+
+                <Button
+                    variant="ghost"
+                    className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-red-400 hover:text-white hover:bg-red-600 rounded-sm transition-colors"
+                    disabled={!connected}
+                    onClick={() => walletActions.disconnect()}
+                >
+                    <ArrowLeftFromLineIcon size={16} /> Logout
+                </Button>
+            </div>
+        </PopoverContent>
+    </Popover>
+}
+
+export function ProfilePopover(props: PopoverContentProps & { userId: string }) {
+    const { userId, ...rest } = props
+    const { activeServerId } = useGlobalState()
+
+    const profile = useProfile(userId)
+    const primaryName = usePrimaryName(userId)
+    const member = useMember(activeServerId, userId)
+
+    return <Popover>
+        <PopoverTrigger asChild>
+            {props.children}
+        </PopoverTrigger>
+        <PopoverContent sideOffset={7} className="discord-popover w-74 overflow-clip" {...rest}>
+            <div className="-m-2">
+                <div>
+                    {
+                        profile?.banner ? <img src={`https://arweave.net/${profile?.banner}`} alt={`${profile?.banner}`} className="w-full h-24 object-cover" /> :
+                            <div className="w-full h-24 bg-primary/10" />
+                    }
+                </div>
+                <div className="bg-background rounded absolute left-3 top-14">
+                    <ProfileAvatar tx={profile?.pfp} className="w-16 h-16" />
+                </div>
+                <div className="min-h-24 py-8 px-3 ">
+                    <div className="font-semibold font-ocr text-primary truncate">{member?.nickname || primaryName || shortenAddress(userId)}</div>
+                    <div className="text-xs text-primary/50 font-mono truncate">{primaryName ? shortenAddress(userId) : <div className="text-xs text-primary/50">You need a primary name</div>}</div>
+                    {/* badges */}
+                    <div className="mt-2 text-sm">{profile?.bio}</div>
+                </div>
+            </div>
+        </PopoverContent>
+    </Popover>
+
+}

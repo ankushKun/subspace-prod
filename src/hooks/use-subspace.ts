@@ -10,7 +10,8 @@ import { getPrimaryName, getWanderTier } from "@/lib/utils"
 interface SubspaceState {
     profiles: Record<string, IProfile>
     servers: Record<string, IServer> // this will contain all server metadata like channels, roles, server info etc
-    members: Record<string, Record<string, IMember>> // a seperate mapping for server members
+    members: Record<string, Record<string, IMember>> // serverid -> userid -> member
+    messages: Record<string, Record<string, Record<string, IMessage>>> // serverid -> channelid -> messageid -> message
     primaryNames: Record<string, string> // address -> primary name
     wanderTiers: Record<string, IWanderTier> // address -> wander tier
     actions: SubspaceActions
@@ -54,6 +55,11 @@ interface SubspaceActions {
         banMember: (data: Inputs.IBanMember) => Promise<boolean>
         unbanMember: (data: Inputs.IUnbanMember) => Promise<boolean>
     },
+    messages: {
+        get: (serverId: string, channelId: string) => Promise<Record<string, IMessage> | null>
+        getAll: (serverId: string) => Promise<Record<string, Record<string, IMessage>> | null>
+        getOne: (serverId: string, channelId: string, messageId: string) => Promise<IMessage | null>
+    },
     profiles: {
         get: (profileId: string) => Promise<IProfile | null>
         create: (data: Inputs.ICreateProfile) => Promise<IProfile | null>
@@ -80,6 +86,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     wanderTiers: {},
     servers: {},
     members: {},
+    messages: {},
     actions: {
         profiles: {
             get: async (profileId: string) => {
@@ -92,18 +99,18 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     // primary name
                     try {
                         Utils.log({ type: "debug", label: "Getting Primary Name", data: address })
-                        const primaryName = await getPrimaryName(address)
-                        set((state) => ({ primaryNames: { ...state.primaryNames, [address]: primaryName } }))
-                        Utils.log({ type: "success", label: "Got Primary Name", data: primaryName })
+                        const { result: primaryName, duration } = await Utils.withDuration(() => getPrimaryName(address))
+                        primaryName && set((state) => ({ primaryNames: { ...state.primaryNames, [address]: primaryName } }))
+                        Utils.log({ type: "success", label: "Got Primary Name", data: primaryName, duration })
                     } catch (e) {
                         Utils.log({ type: "error", label: "Error Getting Primary Name", data: e })
                     }
                     // wander tier
                     try {
                         Utils.log({ type: "debug", label: "Getting Wander Tier", data: address })
-                        const wanderTier = await getWanderTier(address)
-                        set((state) => ({ wanderTiers: { ...state.wanderTiers, [address]: wanderTier } }))
-                        Utils.log({ type: "success", label: "Got Wander Tier", data: wanderTier })
+                        const { result: wanderTier, duration } = await Utils.withDuration(() => getWanderTier(address))
+                        wanderTier && set((state) => ({ wanderTiers: { ...state.wanderTiers, [address]: wanderTier } }))
+                        Utils.log({ type: "success", label: "Got Wander Tier", data: wanderTier, duration })
                     } catch (e) {
                         Utils.log({ type: "error", label: "Error Getting Wander Tier", data: e })
                     }
@@ -498,6 +505,44 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 }
             },
         },
+        messages: {
+            get: async (serverId: string, channelId: string) => {
+                Utils.log({ type: "debug", label: "Getting Messages", data: { serverId, channelId } })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.getMessages(serverId, channelId))
+                    Utils.log({ type: "success", label: "Got Messages", data: result, duration })
+                    result && set((state) => ({ messages: { ...state.messages, [serverId]: { ...state.messages[serverId], [channelId]: result } } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting Messages", data: e })
+                    return null
+                }
+            },
+            getAll: async (serverId: string) => {
+                Utils.log({ type: "debug", label: "Getting All Messages", data: serverId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.getAllMessages(serverId))
+                    Utils.log({ type: "success", label: "Got All Messages", data: result, duration })
+                    result && set((state) => ({ messages: { ...state.messages, [serverId]: result } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting All Messages", data: e })
+                    return null
+                }
+            },
+            getOne: async (serverId: string, channelId: string, messageId: string) => {
+                Utils.log({ type: "debug", label: "Getting One Message", data: { serverId, channelId, messageId } })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.getMessage(serverId, channelId, messageId))
+                    Utils.log({ type: "success", label: "Got One Message", data: result, duration })
+                    result && set((state) => ({ messages: { ...state.messages, [serverId]: { ...state.messages[serverId], [channelId]: { ...state.messages[serverId][channelId], [messageId]: result } } } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting One Message", data: e })
+                    return null
+                }
+            }
+        },
 
         // Utility functions
         clearAllStates: () => {
@@ -523,70 +568,92 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         wanderTiers: state.wanderTiers,
         servers: state.servers,
         members: state.members,
+        messages: state.messages,
     })
 }))
 
 // Helper fns to access data from state
 
-export function useProfiles(): Record<string, IProfile>
-export function useProfiles(userId: string): IProfile | undefined
-export function useProfiles(userId?: string): Record<string, IProfile> | IProfile | undefined {
-    if (userId) {
-        return useSubspace((state) => state.profiles[userId] ? state.profiles[userId] : null)
-    }
+export function useProfile(userId: string): IProfile | undefined {
+    return useSubspace((state) => state.profiles[userId] ? state.profiles[userId] : null)
+}
+
+export function useProfiles(): Record<string, IProfile> {
     return useSubspace((state) => state.profiles)
 }
 
-export function useServers(): Record<string, IServer>
-export function useServers(serverId: string): IServer | undefined
-export function useServers(serverId?: string): Record<string, IServer> | IServer | undefined {
-    if (serverId) {
-        return useSubspace((state) => state.servers[serverId] ? state.servers[serverId] : null)
-    }
+export function useProfileServers(userId: string): Record<string, IServer> {
+    const profile = useProfile(userId)
+    const servers = useServers()
+
+    if (!userId) return {}
+
+    const profileServerId = Object.entries(profile?.servers || {}).filter(([serverId, server]) => server.approved)
+    const returnServers: Record<string, IServer> = {}
+    profileServerId.forEach(([serverId, server]) => {
+        returnServers[serverId] = servers[serverId]
+    })
+    return returnServers
+}
+
+export function useServer(serverId: string): IServer | undefined {
+    return useSubspace((state) => state.servers[serverId] ? state.servers[serverId] : null)
+}
+
+export function useServers(): Record<string, IServer> {
     return useSubspace((state) => state.servers)
 }
 
-export function useMembers(): Record<string, Record<string, IMember>>
-export function useMembers(serverId: string): Record<string, IMember> | undefined
-export function useMembers(serverId: string, memberId: string): IMember | undefined
-export function useMembers(serverId?: string, memberId?: string): Record<string, Record<string, IMember>> | Record<string, IMember> | IMember | undefined {
-    if (serverId && memberId) {
-        return useSubspace((state) => state.members[serverId]?.[memberId] || null)
-    }
-    if (serverId) {
-        return useSubspace((state) => state.members[serverId] ? state.members[serverId] : null)
-    }
-    return useSubspace((state) => state.members)
+export function useMember(serverId: string, memberId: string): IMember | undefined {
+    return useSubspace((state) => state.members[serverId]?.[memberId] || null)
 }
 
-export function useRoles(serverId: string): Record<string, IRole> | undefined
-export function useRoles(serverId: string, roleId: string): IRole | undefined
-export function useRoles(serverId: string, roleId?: string): Record<string, IRole> | Record<string, IRole> | IRole | undefined {
-    if (serverId && roleId) {
-        return useSubspace((state) => state.servers[serverId]?.roles[roleId] || null)
-    }
-    if (serverId) {
-        return useSubspace((state) => state.servers[serverId]?.roles ? state.servers[serverId]?.roles : null)
-    }
-    return null
+export function useMembers(serverId: string): Record<string, IMember> | undefined {
+    return useSubspace((state) => state.members[serverId] ? state.members[serverId] : null)
 }
 
-export function usePrimaryNames(): Record<string, string>
-export function usePrimaryNames(address: string): string | undefined
-export function usePrimaryNames(address?: string): Record<string, string> | string | undefined {
-    if (address) {
-        return useSubspace((state) => state.primaryNames[address] ? state.primaryNames[address] : null)
-    }
+export function useRole(serverId: string, roleId: string): IRole | undefined {
+    return useSubspace((state) => state.servers[serverId]?.roles[roleId] || null)
+}
+
+export function useRoles(serverId: string): Record<string, IRole> | undefined {
+    return useSubspace((state) => state.servers[serverId]?.roles ? state.servers[serverId]?.roles : null)
+}
+
+export function usePrimaryName(address: string): string | undefined {
+    return useSubspace((state) => state.primaryNames[address] ? state.primaryNames[address] : null)
+}
+
+export function usePrimaryNames(): Record<string, string> {
     return useSubspace((state) => state.primaryNames)
 }
 
-export function useWanderTiers(): Record<string, IWanderTier>
-export function useWanderTiers(address: string): IWanderTier | undefined
-export function useWanderTiers(address?: string): Record<string, IWanderTier> | IWanderTier | undefined {
-    if (address) {
-        return useSubspace((state) => state.wanderTiers[address] ? state.wanderTiers[address] : null)
-    }
+export function useWanderTier(address: string): IWanderTier | undefined {
+    return useSubspace((state) => state.wanderTiers[address] ? state.wanderTiers[address] : null)
+}
+
+export function useWanderTiers(): Record<string, IWanderTier> {
     return useSubspace((state) => state.wanderTiers)
+}
+
+export function useChannel(serverId: string, channelId: string): IChannel | undefined {
+    return useSubspace((state) => state.servers[serverId]?.channels[channelId] || null)
+}
+
+export function useChannels(serverId: string): Record<string, IChannel> | undefined {
+    return useSubspace((state) => state.servers[serverId]?.channels ? state.servers[serverId]?.channels : null)
+}
+
+export function useCategory(serverId: string, categoryId: string): ICategory | undefined {
+    return useSubspace((state) => state.servers[serverId]?.categories[categoryId] || null)
+}
+
+export function useCategories(serverId: string): Record<string, ICategory> | undefined {
+    return useSubspace((state) => state.servers[serverId]?.categories ? state.servers[serverId]?.categories : null)
+}
+
+export function useMessages(serverId: string, channelId: string): Record<string, IMessage> {
+    return useSubspace((state) => state.messages[serverId]?.[channelId] ? state.messages[serverId][channelId] : null)
 }
 
 // Helper function to access actions

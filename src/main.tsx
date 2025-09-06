@@ -431,15 +431,23 @@ function Main() {
     }, [globalStateActions])
 
     useEffect(() => {
-        if (connected && address) {
-            walletActions.getSigner().then(signer => {
-                try {
-                    Subspace.init({ address, signer })
-                } catch (error) {
-                    console.error("Subspace initialization failed:", error)
-                    handleAsyncError(error as Error)
+        async function init() {
+            const signer = await walletActions.getSigner()
+            try {
+                await Subspace.init({ address, signer })
+                const profile = await subspaceActions.profiles.get(address)
+                if (!profile) {
+                    await subspaceActions.profiles.create({
+                        bio: "Alien Tech"
+                    })
                 }
-            })
+            } catch (error) {
+                console.error("Subspace initialization failed:", error)
+                handleAsyncError(error as Error)
+            }
+        }
+        if (connected && address) {
+            init()
         } else if (!connected && !address) {
             // Clear state when wallet becomes disconnected
             globalStateActions.clear()

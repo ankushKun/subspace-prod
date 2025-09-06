@@ -14,6 +14,33 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
 }
 
+export function getRelativeTimeString(timestamp: number) {
+    const now = new Date()
+    // Convert timestamp to milliseconds if it's in seconds
+    const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
+    const diff = now.getTime() - timestampMs
+    const diffInSeconds = Math.floor(diff / 1000)
+
+    // Handle future timestamps
+    if (diffInSeconds < 0) {
+        return new Date(timestampMs).toLocaleString()
+    }
+
+    if (diffInSeconds < 60) {
+        return "now"
+    } else if (diffInSeconds < 3600) {
+        return `${Math.floor(diffInSeconds / 60)}m`
+    } else if (diffInSeconds < 86400) {
+        return `${Math.floor(diffInSeconds / 3600)}h`
+    } else if (diffInSeconds < 604800) {
+        return `${Math.floor(diffInSeconds / 86400)}d`
+    } else {
+        // local datetime string
+        return new Date(timestampMs).toLocaleString()
+    }
+}
+
+
 export function shortenAddress(address?: string | null) {
     if (!address || typeof address !== "string") return "";
     const safe = String(address);
