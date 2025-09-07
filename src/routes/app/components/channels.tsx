@@ -1,16 +1,21 @@
 import { useGlobalState } from "@/hooks/use-global-state";
-import { useChannels, useCategories, useServer, useSubspaceActions } from "@/hooks/use-subspace";
+import { useChannels, useCategories, useServer, useSubspaceActions, useMember } from "@/hooks/use-subspace";
+import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
-import { Hash, MessageSquare, ChevronDown, ChevronRight, Settings, Copy, Users, LogOut, Plus, FolderPlus } from "lucide-react";
+import { Hash, MessageSquare, ChevronDown, ChevronRight, Settings, Copy, Users, LogOut, Plus, FolderPlus, Check } from "lucide-react";
 import type { IChannel, ICategory } from "@subspace-protocol/sdk/types";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { Permissions, EPermissions } from "@subspace-protocol/sdk/permissions"
 
 interface ChannelItemProps {
     channel: IChannel;
@@ -92,14 +97,18 @@ function CategorySection({ category, channels, activeChannelId, onChannelClick }
 
 export default function Channels() {
     const { activeServerId, activeChannelId, actions: globalStateActions } = useGlobalState();
+    const { address } = useWallet();
     const channels = useChannels(activeServerId);
     const categories = useCategories(activeServerId);
     const activeServer = useServer(activeServerId);
+    const currentMember = useMember(activeServerId, address);
     const subspaceActions = useSubspaceActions();
+    const navigate = useNavigate();
 
     // Dialog states
     const [isCreateChannelDialogOpen, setIsCreateChannelDialogOpen] = useState(false);
     const [isCreateCategoryDialogOpen, setIsCreateCategoryDialogOpen] = useState(false);
+    const [isLeaveServerDialogOpen, setIsLeaveServerDialogOpen] = useState(false);
     const [channelName, setChannelName] = useState("");
     const [categoryName, setCategoryName] = useState("");
     const [selectedCategoryId, setSelectedCategoryId] = useState<string>("none");
@@ -107,13 +116,22 @@ export default function Channels() {
     const [error, setError] = useState<string | null>(null);
 
     const handleChannelClick = (channelId: string) => {
-        globalStateActions.setActiveChannelId(channelId);
+        navigate(`/app/${activeServerId}/${channelId}`);
     };
 
     const handleCopyInvite = () => {
         // TODO: Implement invite generation and copying
         navigator.clipboard.writeText(`https://subspace.ar.io/#/invite/${activeServerId}`);
         // Could add a toast notification here
+        toast.success("Invite copied", {});
+        const copyIcon = document.getElementById("copy-invite-icon");
+        const tickIcon = document.getElementById("tick-icon");
+        copyIcon.style.display = "none";
+        tickIcon.style.display = "block";
+        setTimeout(() => {
+            copyIcon.style.display = "block";
+            tickIcon.style.display = "none";
+        }, 2000);
     };
 
     const handleServerSettings = () => {
@@ -122,8 +140,31 @@ export default function Channels() {
     };
 
     const handleLeaveServer = () => {
-        // TODO: Implement leave server functionality
-        console.log("Leave server");
+        setIsLeaveServerDialogOpen(true);
+    };
+
+    const handleConfirmLeaveServer = async () => {
+        if (!activeServerId) return;
+
+        setIsLoading(true);
+        try {
+            clearTimeout(window.fetchMessageTimeout)
+            const success = await subspaceActions.servers.leave(activeServerId);
+            subspaceActions.profiles.get(address);
+            if (success) {
+                toast.success("Left server successfully");
+                setIsLeaveServerDialogOpen(false);
+                // Navigate back to home since the server is no longer available
+                navigate("/app");
+            } else {
+                toast.error("Failed to leave server");
+            }
+        } catch (error) {
+            console.error("Error leaving server:", error);
+            toast.error("An error occurred while leaving the server");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleCreateChannel = () => {
@@ -209,6 +250,29 @@ export default function Channels() {
         setError(null);
     };
 
+    // Permission checks
+    const canManageChannels = activeServer && currentMember ?
+        Permissions.memberHasAny(currentMember, activeServer, [
+            EPermissions.MANAGE_CHANNELS,
+            EPermissions.MANAGE_SERVER,
+            EPermissions.ADMINISTRATOR
+        ]) : false;
+
+    const canManageServer = activeServer && currentMember ?
+        Permissions.memberHasAny(currentMember, activeServer, [
+            EPermissions.MANAGE_SERVER,
+            EPermissions.ADMINISTRATOR
+        ]) : false;
+
+    const canViewMembers = activeServer && currentMember ?
+        Permissions.memberHasAny(currentMember, activeServer, [
+            EPermissions.MANAGE_MEMBERS,
+            EPermissions.KICK_MEMBERS,
+            EPermissions.BAN_MEMBERS,
+            EPermissions.MANAGE_SERVER,
+            EPermissions.ADMINISTRATOR
+        ]) : false;
+
     // If no server is active, show DMs
     if (!activeServerId || activeServerId === "") {
         return (
@@ -283,63 +347,116 @@ export default function Channels() {
                             <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                         </div>
                     </PopoverTrigger>
-                    <PopoverContent sideOffset={0} className="discord-popover rounded-t-none w-74 overflow-clip">
+                    <PopoverContent sideOffset={0} className="rounded-t-none w-74 overflow-clip p-1">
                         <div className="flex flex-col gap-1">
                             <Button
                                 variant="ghost"
-                                className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#4752c4] rounded-sm transition-colors"
+                                className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
                                 onClick={handleCopyInvite}
                             >
-                                <Copy size={16} />
-                                Copy Invite
+                                <div className="flex items-center gap-4 w-full min-w-0">
+                                    <div id="copy-invite-icon" className="p-2 rounded-md flex-shrink-0 bg-blue-500/10 text-blue-500">
+                                        <Copy size={14} />
+                                    </div>
+                                    <div id="tick-icon" style={{ display: "none" }} className="p-2 rounded-md flex-shrink-0 bg-blue-500/10 text-blue-500">
+                                        <Check size={14} />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                        <div className="font-medium text-sm truncate">Copy Invite</div>
+                                    </div>
+                                </div>
                             </Button>
+
+                            {canManageChannels && (
+                                <>
+                                    <div className="discord-separator" />
+
+                                    <Button
+                                        variant="ghost"
+                                        className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
+                                        onClick={handleCreateChannel}
+                                    >
+                                        <div className="flex items-center gap-4 w-full min-w-0">
+                                            <div className="p-2 rounded-md flex-shrink-0 bg-green-500/10 text-green-500">
+                                                <Plus size={14} />
+                                            </div>
+                                            <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                                <div className="font-medium text-sm truncate">Create Channel</div>
+                                            </div>
+                                        </div>
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
+                                        onClick={handleCreateCategory}
+                                    >
+                                        <div className="flex items-center gap-4 w-full min-w-0">
+                                            <div className="p-2 rounded-md flex-shrink-0 bg-green-500/10 text-green-500">
+                                                <FolderPlus size={16} />
+                                            </div>
+                                            <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                                <div className="font-medium text-sm truncate">Create Category</div>
+                                            </div>
+                                        </div>
+                                    </Button>
+                                </>
+                            )}
+
+                            {(canManageServer || canViewMembers) && (
+                                <>
+                                    <div className="discord-separator" />
+
+                                    {canManageServer && (
+                                        <Button
+                                            disabled
+                                            variant="ghost"
+                                            className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
+                                            onClick={handleServerSettings}
+                                        >
+                                            <div className="flex items-center gap-4 w-full min-w-0">
+                                                <div className="p-2 rounded-md flex-shrink-0 bg-gray-500/10 text-gray-400">
+                                                    <Settings size={14} />
+                                                </div>
+                                                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                                    <div className="font-medium text-sm truncate">Server Settings</div>
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    )}
+                                    {canViewMembers && (
+                                        <Button
+                                            disabled
+                                            variant="ghost"
+                                            className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
+                                        >
+                                            <div className="flex items-center gap-4 w-full min-w-0">
+                                                <div className="p-2 rounded-md flex-shrink-0 bg-purple-500/10 text-purple-400">
+                                                    <Users size={14} />
+                                                </div>
+                                                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                                    <div className="font-medium text-sm truncate">Members</div>
+                                                </div>
+                                            </div>
+                                        </Button>
+                                    )}
+                                </>
+                            )}
 
                             <div className="discord-separator" />
 
                             <Button
                                 variant="ghost"
-                                className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#4752c4] rounded-sm transition-colors"
-                                onClick={handleCreateChannel}
-                            >
-                                <Plus size={16} />
-                                Create Channel
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#4752c4] rounded-sm transition-colors"
-                                onClick={handleCreateCategory}
-                            >
-                                <FolderPlus size={16} />
-                                Create Category
-                            </Button>
-
-                            <div className="discord-separator" />
-
-                            <Button
-                                variant="ghost"
-                                className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#2b2d31] rounded-sm transition-colors"
-                                onClick={handleServerSettings}
-                            >
-                                <Settings size={16} />
-                                Server Settings
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#2b2d31] rounded-sm transition-colors"
-                            >
-                                <Users size={16} />
-                                Members
-                            </Button>
-
-                            <div className="discord-separator" />
-
-                            <Button
-                                variant="ghost"
-                                className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-red-400 hover:text-white hover:bg-red-600 rounded-sm transition-colors"
+                                className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
                                 onClick={handleLeaveServer}
                             >
-                                <LogOut size={16} />
-                                Leave Server
+                                <div className="flex items-center gap-4 w-full min-w-0">
+                                    <div className="p-2 rounded-md flex-shrink-0 bg-red-500/10 text-red-400">
+                                        <LogOut size={14} />
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                        <div className="font-medium text-sm truncate">Leave Server</div>
+                                    </div>
+                                </div>
                             </Button>
                         </div>
                     </PopoverContent>
@@ -532,6 +649,29 @@ export default function Channels() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Leave Server Confirmation Dialog */}
+            <AlertDialog open={isLeaveServerDialogOpen} onOpenChange={setIsLeaveServerDialogOpen}>
+                <AlertDialogContent className="bg-background">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-xl font-bold">Leave Server</AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted-foreground">
+                            Are you sure you want to leave <span className="font-semibold text-foreground">{activeServer?.profile.name}</span>?
+                            You will need to be re-invited to rejoin this server.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+                        <Button
+                            onClick={handleConfirmLeaveServer}
+                            disabled={isLoading}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            {isLoading ? "Leaving..." : "Leave Server"}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

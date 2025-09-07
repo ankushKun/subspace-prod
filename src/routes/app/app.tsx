@@ -7,20 +7,55 @@ import Channels from "@/routes/app/components/channels"
 import Welcome from "@/routes/app/components/welcome"
 import Messages from "@/routes/app/components/messages"
 import { useEffect } from "react"
+import { useParams, useNavigate } from "react-router"
+
+declare global {
+    interface Window {
+        fetchMessageTimeout: NodeJS.Timeout
+    }
+}
 
 export default function App() {
-    const { activeServerId, activeChannelId } = useGlobalState()
+    const { activeServerId, activeChannelId, lastChannelByServer, actions: globalStateActions } = useGlobalState()
     const activeServer = useServer(activeServerId)
     const subspaceActions = useSubspaceActions()
+    const { serverId, channelId } = useParams()
+    const navigate = useNavigate()
+    const { address } = useWallet()
 
     useEffect(() => {
-        let timeoutId: NodeJS.Timeout
+        clearTimeout(window.fetchMessageTimeout)
+        navigate("/app")
+    }, [address])
 
+    // Sync URL parameters with global state on mount and URL changes
+    // URL is the single source of truth
+    useEffect(() => {
+        const urlServerId = serverId || ""
+        const urlChannelId = channelId || ""
+
+        if (urlServerId !== activeServerId) {
+            globalStateActions.setActiveServerId(urlServerId)
+        }
+
+        if (urlChannelId !== activeChannelId) {
+            globalStateActions.setActiveChannelId(urlChannelId)
+        }
+    }, [serverId, channelId, activeServerId, activeChannelId, globalStateActions])
+
+    // Track the last opened channel for each server
+    useEffect(() => {
+        if (activeServerId && activeChannelId) {
+            globalStateActions.setLastChannelForServer(activeServerId, activeChannelId)
+        }
+    }, [activeServerId, activeChannelId, globalStateActions])
+
+    useEffect(() => {
         if (!activeServerId) {
             // If no active server, ensure any existing loop is stopped
             return () => {
-                if (timeoutId) {
-                    clearTimeout(timeoutId)
+                if (window.fetchMessageTimeout) {
+                    clearTimeout(window.fetchMessageTimeout)
                 }
             }
         }
@@ -32,9 +67,9 @@ export default function App() {
                 console.error(e)
             }
             finally {
-                timeoutId = setTimeout(() => {
+                window.fetchMessageTimeout = setTimeout(() => {
                     fetchMessages()
-                }, 1000);
+                }, 1000)
             }
         }
 
@@ -42,8 +77,8 @@ export default function App() {
 
         // Cleanup function to stop the polling loop when server changes or component unmounts
         return () => {
-            if (timeoutId) {
-                clearTimeout(timeoutId)
+            if (window.fetchMessageTimeout) {
+                clearTimeout(window.fetchMessageTimeout)
             }
         }
     }, [activeServerId])

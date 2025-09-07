@@ -7,6 +7,7 @@
       ],
       "@subspace-protocol/sdk": ["./subspace-sdk/src/index.ts"],
       "@subspace-protocol/sdk/types": ["./subspace-sdk/src/types/index.ts"],
+      "@subspace-protocol/sdk/permissions": ["./subspace-sdk/src/utils/permissions.ts"],
     },
     
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",

@@ -357,7 +357,7 @@ export default function Profile() {
                 <div className="text-xs">{primaryName ? shortenAddress(address) : <div className="text-xs text-primary/50">You need a primary name</div>}</div>
             </div>
         </PopoverTrigger>
-        <PopoverContent sideOffset={7} className="discord-popover w-74 overflow-clip">
+        <PopoverContent sideOffset={7} className="w-74 overflow-clip bg-gradient-to-br from-background/95 via-background/90 to-background/85 backdrop-blur-md border-2 border-primary/20 shadow-2xl">
             <div className="-m-2">
                 <div>
                     {
@@ -425,7 +425,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
         <PopoverTrigger asChild>
             {props.children}
         </PopoverTrigger>
-        <PopoverContent sideOffset={7} className="discord-popover w-74 overflow-clip" {...rest}>
+        <PopoverContent sideOffset={7} className="w-74 overflow-clip bg-gradient-to-br from-background/95 via-background/90 to-background/85 backdrop-blur-md border-2 border-primary/20 shadow-2xl" {...rest}>
             <div className="-m-2">
                 <div>
                     {

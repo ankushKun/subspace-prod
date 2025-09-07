@@ -107,6 +107,10 @@ export default function Welcome() {
                         <div className="text-sm text-muted-foreground">Roles</div>
                     </div>
                 </div>
+
+                <div className="text-sm text-muted-foreground">
+                    Open a channel from the left sidebar to start chatting.
+                </div>
             </div>
         </div>
     )

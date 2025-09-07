@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 
-import { SubspaceProfiles, SubspaceServers, Utils } from "@subspace-protocol/sdk"
+import { Subspace, SubspaceProfiles, SubspaceServers, Utils } from "@subspace-protocol/sdk"
 import type { IMember, IProfile, IServer, ICategory, IChannel, IRole, IMessage } from "@subspace-protocol/sdk/types"
 import type { Inputs } from "@subspace-protocol/sdk/types"
 import type { IWanderTier } from "@/lib/types"
@@ -24,6 +24,7 @@ interface SubspaceActions {
         create: (data: Inputs.ICreateServer) => Promise<IServer | null>
         update: (data: Inputs.IUpdateServer) => Promise<IServer | null>
         join: (serverId: string) => Promise<boolean>
+        leave: (serverId: string) => Promise<boolean>
 
         // Category functions
         createCategory: (data: Inputs.ICreateCategory) => Promise<ICategory | null>
@@ -272,6 +273,17 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     return result
                 } catch (e) {
                     Utils.log({ type: "error", label: "Error Joining Server", data: e })
+                    return false
+                }
+            },
+            leave: async (serverId: string) => {
+                Utils.log({ type: "debug", label: "Leaving Server", data: serverId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.leaveServer(serverId))
+                    Utils.log({ type: "success", label: "Left Server", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Leaving Server", data: e })
                     return false
                 }
             },

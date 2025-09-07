@@ -5,8 +5,6 @@ import { Constants } from "@/lib/constants"
 import type { JWKInterface } from "arweave/web/lib/wallet"
 import Arweave from "arweave"
 import { ArconnectSigner, ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk/web';
-import type { IMember, IRole } from "@subspace-protocol/sdk/types"
-import { EPermissions } from "@subspace-protocol/sdk"
 import { TIER_ID_TO_NAME, type IWanderTier } from "./types"
 
 
@@ -71,121 +69,6 @@ export function fileToUint8Array(file: File): Promise<Uint8Array> {
     });
 }
 
-// Validate that a permissions bitfield contains only known bits
-export function isPermissionValid(permission: number): boolean {
-    console.log('\nDebug - Validating permission:', permission)
-
-    if (!permission || permission <= 0) {
-        console.log('Debug - Invalid permission: zero or negative')
-        return false
-    }
-
-    // Calculate max valid permission value
-    const validPermissions = Object.values(EPermissions).filter(val => typeof val === 'number')
-    console.log('Debug - Valid permission values:', validPermissions)
-
-    const maxValidPermission = validPermissions.reduce((acc, val) => acc | (val as number), 0)
-    console.log('Debug - Max valid permission:', maxValidPermission)
-
-    // Check if permission only contains valid bits
-    const isValid = (permission & maxValidPermission) === permission
-    console.log('Debug - Permission validation result:', isValid)
-
-    return isValid
-}
-
-// Check if a role has a specific permission
-export function roleHasPermission(role: IRole, permission: number): boolean {
-    if (!role || !isPermissionValid(role.permissions) || !isPermissionValid(permission)) {
-        return false
-    }
-
-    return (role.permissions & permission) === permission
-}
-
-// Check if a member has a specific permission
-export function memberHasPermission(member: IMember, permission: number, server: { roles: Record<string, IRole>, ownerId: string }): boolean {
-    console.log('\nDebug - memberHasPermission check:')
-    console.log('Debug - Member:', member)
-    console.log('Debug - Permission requested:', permission)
-    console.log('Debug - Server:', { ownerId: server.ownerId, roles: server.roles })
-
-    if (!member || !isPermissionValid(permission)) {
-        console.log('Debug - Invalid member or permission')
-        return false
-    }
-
-    // Server owner has all permissions
-    if (member.id === server.ownerId) {
-        console.log('Debug - Is server owner, granting all permissions')
-        return true
-    }
-
-    if (!member.roles || Object.keys(member.roles).length === 0) {
-        console.log('Debug - No roles found')
-        return false
-    }
-
-    console.log('Debug - Checking roles:', member.roles)
-    let totalPermissions = 0
-    for (const roleId of Object.keys(member.roles)) {
-        const role = server.roles[roleId]
-        console.log('Debug - Checking role:', { roleId, role })
-
-        if (role && isPermissionValid(role.permissions)) {
-            console.log('Debug - Role permissions:', role.permissions)
-            // Accumulate permissions from all roles
-            totalPermissions = totalPermissions | role.permissions
-
-            // Administrator permission overrides all other permissions
-            if ((role.permissions & EPermissions.ADMINISTRATOR) === EPermissions.ADMINISTRATOR) {
-                console.log('Debug - Found ADMINISTRATOR permission')
-                return true
-            }
-        } else {
-            console.log('Debug - Invalid role or permissions:', { roleId, role })
-        }
-    }
-
-    console.log('Debug - Total accumulated permissions:', totalPermissions)
-    console.log('Debug - Permission check result:', (totalPermissions & permission) === permission)
-
-    // Check if accumulated permissions include the requested permission
-    return (totalPermissions & permission) === permission
-}
-
-// Get all permissions a member has
-export function getMemberPermissions(member: IMember, server: { roles: Record<string, IRole>, ownerId: string }): number {
-    if (!member) return 0
-
-    // Server owner has all permissions
-    if (member.id === server.ownerId) {
-        // Calculate all permissions by combining all enum values
-        return Object.values(EPermissions)
-            .filter(val => typeof val === 'number')
-            .reduce((acc, val) => acc | (val as number), 0)
-    }
-
-    if (!member.roles || Object.keys(member.roles).length === 0) {
-        return 0
-    }
-
-    let totalPermissions = 0
-    for (const roleId of Object.keys(member.roles)) {
-        const role = server.roles[roleId]
-        if (role && isPermissionValid(role.permissions)) {
-            totalPermissions = totalPermissions | role.permissions
-            if ((role.permissions & EPermissions.ADMINISTRATOR) === EPermissions.ADMINISTRATOR) {
-                // Return all permissions for administrator
-                return Object.values(EPermissions)
-                    .filter(val => typeof val === 'number')
-                    .reduce((acc, val) => acc | (val as number), 0)
-            }
-        }
-    }
-
-    return totalPermissions
-}
 
 export async function uploadFileAR(file: File, jwk?: JWKInterface) {
     const ar = Arweave.init({

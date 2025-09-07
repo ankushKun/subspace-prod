@@ -90,7 +90,7 @@ function Message({ message, serverId }: { message: IMessage, serverId: string })
         <ProfilePopover userId={message.author_id} side="right" align="start" alignOffset={-30}><ProfileAvatar tx={author?.pfp} className="mt-1" /></ProfilePopover>
         <div className="grow">
             <div className="flex items-center gap-1">
-                <ProfilePopover userId={message.author_id} side="bottom" align="start" sideOffset={2}><div className="text-primary/80 font-ocr ">{member?.nickname || primaryName}</div></ProfilePopover>
+                <ProfilePopover userId={message.author_id} side="bottom" align="start" sideOffset={2}><div className="text-primary/80 font-ocr ">{member?.nickname || primaryName || <span className="text-xs opacity-60">{shortenAddress(message.author_id)}</span>}</div></ProfilePopover>
                 <div className="text-xs text-muted-foreground/40">{relativeTimeString}</div>
             </div>
             <div className="text-sm">{message.content}</div>
@@ -132,6 +132,7 @@ export default function Messages() {
     </div>
 }
 
+// appears in the sidebar member list
 function Member({ member }: { member: IMember }) {
     const profile = useProfile(member.id)
     const primaryName = usePrimaryName(member.id)
@@ -153,6 +154,7 @@ function Members({ collapsible }: { collapsible: boolean }) {
     useEffect(() => {
         // fetch each member profile in batches of 10
         async function fetchProfiles() {
+            if (!members) return
             for (let i = 0; i < Object.keys(members).length; i += 10) {
                 const batch = Object.keys(members).slice(i, i + 10);
                 const promises = batch.map(member => subspaceActions.profiles.get(member));
@@ -164,8 +166,10 @@ function Members({ collapsible }: { collapsible: boolean }) {
     }, [members])
 
     useEffect(() => {
-        subspaceActions.servers.getAllMembers(activeServerId)
-    }, [])
+        if (activeServerId) {
+            subspaceActions.servers.getAllMembers(activeServerId)
+        }
+    }, [activeServerId])
 
     return <div className={cn("border-l w-[250px] min-w-[250px] max-w-[250px]", collapsible ? "max-h-[calc(100vh-0.5rem)]" : "h-screen")}>
         <div className="p-4 border-b font-ocr text-sm">Members</div>

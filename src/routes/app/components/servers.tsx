@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useProfileServers, useServers, useSubspaceActions } from "@/hooks/use-subspace";
+import { useProfileServers, useServers, useSubspaceActions, useServer, useProfile } from "@/hooks/use-subspace";
 import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useServerDialogs } from "@/hooks/use-server-dialogs";
@@ -29,9 +29,10 @@ import {
     Compass
 } from "lucide-react";
 import { cn, uploadFileTurbo } from "@/lib/utils";
-import { useState, useReducer, useEffect, useCallback } from "react";
+import { useState, useReducer, useEffect, useCallback, useMemo } from "react";
 import alienGreen from "@/assets/subspace/alien-green.svg";
 import { usePWA } from "@/hooks/use-pwa";
+import { useNavigate } from "react-router";
 
 // Dialog state types
 interface DialogState {
@@ -348,12 +349,16 @@ function ProgressSteps({
 export default function Servers() {
     const { address, connected, connectionStrategy } = useWallet();
     const servers = useProfileServers(address);
+    const profile = useProfile(address);
     const { servers: serverActions, profiles: profileActions } = useSubspaceActions();
-    const { activeServerId, actions: globalStateActions } = useGlobalState();
+    const { activeServerId, lastChannelByServer, actions: globalStateActions } = useGlobalState();
     const [isHomeActive, setIsHomeActive] = useState(true);
     const [dialogState, dispatch] = useReducer(dialogReducer, initialDialogState);
     const { isInstallable, isInstalled, showInstallPrompt, installPromptOutcome, isStandalone, debugInfo } = usePWA();
     const { isJoinDialogOpen, isCreateDialogOpen, actions: dialogActions } = useServerDialogs();
+    const navigate = useNavigate();
+
+    const serverKeys = useMemo(() => Object.keys(servers), [servers]);
 
     // Sync isHomeActive with global state
     useEffect(() => {
@@ -362,7 +367,7 @@ export default function Servers() {
 
     useEffect(() => {
         async function fetchServers() {
-            const serverIds = Object.keys(servers || {});
+            const serverIds = serverKeys;
             // fetch server in batches of 10
             for (let i = 0; i < serverIds.length; i += 10) {
                 const batch = serverIds.slice(i, i + 10).filter(serverId => serverId);
@@ -372,17 +377,33 @@ export default function Servers() {
             }
         }
         fetchServers();
-    }, []);
+    }, [profile?.servers]);
 
 
     const handleHomeClick = () => {
-        globalStateActions.setActiveServerId("");
-        globalStateActions.setActiveChannelId(""); // Clear active channel when going home
+        navigate("/app");
     };
 
-    const handleServerClick = (serverId: string) => {
-        globalStateActions.setActiveServerId(serverId);
-        globalStateActions.setActiveChannelId(""); // Clear active channel when switching servers
+    const handleServerClick = async (serverId: string) => {
+        // Check if there's a last opened channel for this server
+        const lastChannelId = lastChannelByServer[serverId];
+
+        if (lastChannelId) {
+            // Validate that the channel still exists by getting the server data
+            try {
+                const serverData = await serverActions.get(serverId);
+                if (serverData && serverData.channels && serverData.channels[lastChannelId]) {
+                    // Channel still exists, navigate to it
+                    navigate(`/app/${serverId}/${lastChannelId}`);
+                    return;
+                }
+            } catch (error) {
+                console.warn("Failed to validate channel existence:", error);
+            }
+        }
+
+        // No valid last channel, navigate to server only
+        navigate(`/app/${serverId}`);
     };
 
     const handleJoinServer = () => {
@@ -493,8 +514,8 @@ export default function Servers() {
                         dispatch({ type: 'CLOSE_CREATE_DIALOG' });
                         dispatch({ type: 'RESET_CREATE_FORM' });
                         dialogActions.closeCreateDialog();
-                        // Navigate to the new server
-                        globalStateActions.setActiveServerId(newServer.profile.id);
+                        // Navigate to the new server (no last channel for new servers)
+                        navigate(`/app/${newServer.profile.id}`);
                     }, 500);
                 } else {
                     dispatch({ type: 'SET_ERROR', payload: 'Server created but failed to join. Please try joining manually.' });
@@ -592,18 +613,18 @@ export default function Servers() {
 
             {/* Server List */}
             <div className="flex flex-col gap-2 overflow-y-scroll w-fit p-3 -m-3 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40 transition-colors">
-                {servers && Object.values(servers).map((server) => (
+                {serverKeys && serverKeys.map((serverId) => (
                     <ServerIcon
-                        key={server?.profile?.id}
-                        server={server}
-                        isActive={activeServerId === server?.profile?.id}
+                        key={serverId}
+                        server={servers[serverId]}
+                        isActive={activeServerId === serverId}
                         hasNotification={false} // TODO: Implement notification logic
-                        onClick={() => handleServerClick(server?.profile?.id)}
+                        onClick={() => handleServerClick(serverId)}
                     />
                 ))}
 
                 {/* Empty state when no servers */}
-                {servers && Object.values(servers).length === 0 && (
+                {serverKeys && serverKeys.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-2 text-center">
                         <p className="text-xs text-muted-foreground px-2">
                             No servers yet. Join or create one!
