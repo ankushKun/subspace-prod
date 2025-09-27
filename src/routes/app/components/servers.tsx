@@ -13,6 +13,7 @@ import { ConnectionStrategies, useWallet } from "@/hooks/use-wallet";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useServerDialogs } from "@/hooks/use-server-dialogs";
 import type { Inputs, IServer } from "@subspace-protocol/sdk/types";
+import { Subspace } from "@subspace-protocol/sdk";
 import { ProfileAvatar } from "@/components/profile";
 import {
     Home,
@@ -367,6 +368,9 @@ export default function Servers() {
 
     useEffect(() => {
         async function fetchServers() {
+            // Only fetch servers if Subspace is initialized
+            if (!Subspace.initialized) return;
+
             const serverIds = serverKeys;
             // fetch server in batches of 10
             for (let i = 0; i < serverIds.length; i += 10) {

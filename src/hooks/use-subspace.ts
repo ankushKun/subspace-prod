@@ -466,6 +466,18 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 try {
                     const { result, duration } = await Utils.withDuration(() => SubspaceServers.getServerMember(data))
                     Utils.log({ type: "success", label: "Got Server Member", data: result, duration })
+                    // Update the local state with the fetched member data
+                    if (result) {
+                        set((state) => ({
+                            members: {
+                                ...state.members,
+                                [data.serverId]: {
+                                    ...state.members[data.serverId],
+                                    [data.userId]: result
+                                }
+                            }
+                        }))
+                    }
                     return result
                 } catch (e) {
                     Utils.log({ type: "error", label: "Error Getting Server Member", data: e })

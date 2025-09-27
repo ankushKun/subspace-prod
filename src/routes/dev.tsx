@@ -36,8 +36,19 @@ export default function Dev() {
 
         async function init() {
             const signer = await walletActions.getSigner()
-            Subspace.init({ signer, address })
-            subspaceActions.profiles.get(address)
+            try {
+                // Wait for Subspace initialization to complete
+                await Subspace.init({ signer, address })
+
+                // Only proceed with operations after initialization is confirmed
+                if (Subspace.initialized) {
+                    await subspaceActions.profiles.get(address)
+                } else {
+                    console.error("Subspace initialization completed but not marked as initialized")
+                }
+            } catch (error) {
+                console.error("Subspace initialization failed:", error)
+            }
         }
         init()
     }, [connected, address])

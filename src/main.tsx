@@ -30,6 +30,7 @@ import { Toaster } from 'sonner';
 import Dev from '@/routes/dev';
 import { Subspace } from '@subspace-protocol/sdk';
 import App from '@/routes/app/app';
+import ServerSettings from '@/routes/app/server-settings';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -321,7 +322,7 @@ function ThemedToaster() {
 function Main() {
     const { actions: subspaceActions } = useSubspace()
     const { jwk, address, connected, connectionStrategy, provider, actions: walletActions } = useWallet()
-    const { actions: globalStateActions } = useGlobalState()
+    const { actions: globalStateActions, subspaceFailed } = useGlobalState()
     const [errorBoundary, setErrorBoundary] = useState<ErrorBoundary | null>(null);
 
     // Set the global error boundary reference
@@ -434,15 +435,23 @@ function Main() {
         async function init() {
             const signer = await walletActions.getSigner()
             try {
+                // Wait for Subspace initialization to complete
                 await Subspace.init({ address, signer })
-                const profile = await subspaceActions.profiles.get(address)
-                if (!profile) {
-                    await subspaceActions.profiles.create({
-                        bio: "Alien Tech"
-                    })
+
+                // Only proceed with operations after initialization is confirmed
+                if (Subspace.initialized) {
+                    globalStateActions.setSubspaceFailed(false)
+                    const profile = await subspaceActions.profiles.get(address)
+                    if (!profile) {
+                        await subspaceActions.profiles.create({
+                            bio: "Alien Tech"
+                        })
+                    }
+                } else {
+                    globalStateActions.setSubspaceFailed(true)
                 }
             } catch (error) {
-                console.error("Subspace initialization failed:", error)
+                globalStateActions.setSubspaceFailed(true)
                 handleAsyncError(error as Error)
             }
         }
@@ -459,6 +468,21 @@ function Main() {
             ref={setErrorBoundary}
             onError={handleAsyncError}
         >
+            <div className={`absolute left-1/2 -translate-x-1/2 z-50 max-w-md w-fit transition-all duration-500 ease-out ${subspaceFailed ? 'top-10 opacity-100 translate-y-0' : '-top-20 opacity-0 -translate-y-4'
+                }`}>
+                <div className='bg-destructive/10 border border-destructive/20 rounded-lg p-4 shadow-lg backdrop-blur-sm'>
+                    <div className='flex items-center gap-3'>
+                        <div className='flex-shrink-0'>
+                            <AlertTriangle className='h-5 w-5 text-destructive' />
+                        </div>
+                        <div className='flex-1'>
+                            <h3 className='text-sm font-medium text-destructive'>Connection Failed</h3>
+                            <p className='text-xs text-muted-foreground mt-1'>Unable to connect to Subspace process</p>
+                            <p className='text-xs text-muted-foreground mt-1'>Please check network tab and report to the developers</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <ThemeProvider defaultTheme="dark">
                 <ThemedToaster />
                 <HashRouter>
@@ -471,7 +495,7 @@ function Main() {
 
                         {/* <Route path="/invite/:invite" element={<Invite />} /> */}
                         {/* <Route path="/app/settings" element={<Settings />} /> */}
-                        {/* <Route path="/app/:serverId/settings" element={<ServerSettings />} /> */}
+                        <Route path="/app/:serverId/settings" element={<ServerSettings />} />
 
                         {/* <Route path="/developer" element={<Developer />} /> */}
                         {/* <Route path="/developer/bots" element={<Bots />} /> */}

@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useMember, usePrimaryName, useProfile, useProfiles, useSubspace } from "@/hooks/use-subspace";
+import { useMember, usePrimaryName, useProfile, useProfiles, useRoles, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
 import { useWallet } from "@/hooks/use-wallet";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
@@ -12,9 +12,12 @@ import React, { useState, useRef, type HTMLAttributes } from "react";
 import { cn, shortenAddress, uploadFileTurbo } from "@/lib/utils";
 import alienGreen from "@/assets/subspace/alien-green.svg";
 import LoginDialog from "./login-dialog";
-import { ArrowLeftFromLineIcon, Edit2, Edit3, SettingsIcon, UserIcon, Save, X, Camera, Upload } from "lucide-react";
+import { ArrowLeftFromLineIcon, Edit2, Edit3, SettingsIcon, UserIcon, Save, X, Camera, Upload, Plus, Search, UserPlus2 } from "lucide-react";
 import { useGlobalState } from "@/hooks/use-global-state";
 import type { PopoverContentProps } from "@radix-ui/react-popover";
+import type { IMember, IRole } from "@subspace-protocol/sdk/types";
+import { Badge } from "./ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export function ProfileAvatar(props: HTMLAttributes<HTMLDivElement> & { tx: string }) {
     // validate tx is a valid arweave transaction
@@ -413,19 +416,67 @@ export default function Profile() {
     </Popover>
 }
 
+function RoleBadge({ role, serverId, member }: { role: IRole, serverId: string, member: IMember }) {
+    const subspaceActions = useSubspaceActions()
+
+
+    async function handleUnassignRole() {
+        await subspaceActions.servers.unassignRole({
+            serverId: serverId,
+            roleId: role.id,
+            userId: member.id
+        })
+        subspaceActions.servers.getMember({
+            serverId: serverId,
+            userId: member.id
+        })
+    }
+
+    return <Badge variant="secondary" style={{ backgroundColor: `${role.color}20`, borderColor: `${role.color}20` }}
+        className="text-xs text-primary/50 border cursor-default p-0 px-0.5 overflow-clip truncate relative group transition-all duration-300 hover:pr-3.5"
+    >
+        <div className="backdrop-blur px-0.5 rounded z-20 truncate max-w-64">
+            {role.name}
+        </div>
+        <Button variant="ghost" size="icon" onClick={handleUnassignRole}
+            className="absolute right-0.5 rounded-full z-0 !cursor-pointer w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out ml-1">
+            <Plus className="rotate-45 p-0.5" />
+        </Button>
+    </Badge>
+}
+
 export function ProfilePopover(props: PopoverContentProps & { userId: string }) {
     const { userId, ...rest } = props
     const { activeServerId } = useGlobalState()
-
+    const subspaceActions = useSubspaceActions()
     const profile = useProfile(userId)
     const primaryName = usePrimaryName(userId)
     const member = useMember(activeServerId, userId)
+    const roles = useRoles(activeServerId)
+    const memberRoles: IRole[] = Object.keys(roles || {}).filter(roleId => Object.keys(member?.roles || {}).includes(roleId)).map(roleId => roles[roleId])
+
+    async function handleAssignRole(roleId: string) {
+        await subspaceActions.servers.assignRole({
+            serverId: activeServerId,
+            roleId: roleId,
+            userId: userId
+        })
+        subspaceActions.servers.getMember({
+            serverId: activeServerId,
+            userId: userId
+        })
+    }
 
     return <Popover>
         <PopoverTrigger asChild>
             {props.children}
         </PopoverTrigger>
         <PopoverContent sideOffset={7} className="w-74 overflow-clip bg-gradient-to-br from-background/95 via-background/90 to-background/85 backdrop-blur-md border-2 border-primary/20 shadow-2xl" {...rest}>
+            <div className="absolute top-2 right-1.5 flex items-center gap-1 z-50">
+                <Button variant="ghost" size="icon" className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5">
+                    <UserPlus2 size={20} className="!w-3.5 !h-3.5" />
+                </Button>
+            </div>
             <div className="-m-2">
                 <div>
                     {
@@ -438,9 +489,58 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
                 </div>
                 <div className="min-h-24 py-8 px-3 ">
                     <div className="font-semibold font-ocr text-primary truncate">{member?.nickname || primaryName || shortenAddress(userId)}</div>
-                    <div className="text-xs text-primary/50 font-mono truncate">{primaryName ? shortenAddress(userId) : <div className="text-xs text-primary/50">You need a primary name</div>}</div>
+                    <div className="text-xs text-primary/50 font-mono truncate">{member?.nickname ? primaryName ? `${primaryName} (${shortenAddress(userId)})` : shortenAddress(userId) : <div className="text-xs text-primary/50">This guy needs a primary name</div>}</div>
                     {/* badges */}
-                    <div className="mt-2 text-sm">{profile?.bio}</div>
+                    <div className="mt-2 text-xs">{profile?.bio}</div>
+                    {/* roles */}
+                    {member && <>
+                        {<div className="mt-2 text-[10px] font-medium tracking-wide text-primary/50 truncate">ROLES</div>}
+                        <div className="mt-0.5 text-sm flex flex-wrap gap-1 items-center">
+                            {memberRoles.map(role => <RoleBadge key={role.id} role={role} serverId={activeServerId} member={member} />)}
+                            {/* add role button */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" size="icon"
+                                        className="h-4 w-4 !cursor-pointer ">
+                                        <Plus className="p-0.5" strokeWidth={2} />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent side="top" className="w-64 p-2" align="center">
+                                    <div className="space-y-2">
+                                        <div className="relative">
+                                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Role"
+                                                className="pl-8 h-9 bg-background/50 border-primary/20"
+                                            />
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto space-y-1">
+                                            {Object.values(roles || {})
+                                                .filter(role => !Object.keys(member?.roles || {}).includes(role.id))
+                                                .map(role => (
+                                                    <div
+                                                        key={role.id}
+                                                        className="flex items-center gap-2 p-2 rounded hover:bg-secondary/50 cursor-pointer"
+                                                        style={{ backgroundColor: `${role.color}20`, borderColor: `${role.color}20` }}
+                                                        onClick={() => {
+                                                            // Handle role assignment here
+                                                            handleAssignRole(role.id)
+                                                        }}
+                                                    >
+                                                        <div
+                                                            className="w-3 h-3 rounded-full"
+                                                            style={{ backgroundColor: role.color }}
+                                                        />
+                                                        <span className="text-sm">{role.name}</span>
+                                                    </div>
+                                                ))
+                                            }
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </>}
                 </div>
             </div>
         </PopoverContent>

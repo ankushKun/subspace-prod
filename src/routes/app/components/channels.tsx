@@ -136,7 +136,8 @@ export default function Channels() {
 
     const handleServerSettings = () => {
         // TODO: Open server settings modal/page
-        console.log("Open server settings");
+        // console.log("Open server settings");
+        navigate(`/app/${activeServerId}/settings`);
     };
 
     const handleLeaveServer = () => {
@@ -402,13 +403,12 @@ export default function Channels() {
                                 </>
                             )}
 
-                            {(canManageServer || canViewMembers) && (
+                            {(canManageServer) && (
                                 <>
                                     <div className="discord-separator" />
 
                                     {canManageServer && (
                                         <Button
-                                            disabled
                                             variant="ghost"
                                             className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
                                             onClick={handleServerSettings}
@@ -419,22 +419,6 @@ export default function Channels() {
                                                 </div>
                                                 <div className="flex flex-col gap-1 min-w-0 flex-1">
                                                     <div className="font-medium text-sm truncate">Server Settings</div>
-                                                </div>
-                                            </div>
-                                        </Button>
-                                    )}
-                                    {canViewMembers && (
-                                        <Button
-                                            disabled
-                                            variant="ghost"
-                                            className="h-auto p-2 justify-start text-left hover:bg-accent/50 w-full"
-                                        >
-                                            <div className="flex items-center gap-4 w-full min-w-0">
-                                                <div className="p-2 rounded-md flex-shrink-0 bg-purple-500/10 text-purple-400">
-                                                    <Users size={14} />
-                                                </div>
-                                                <div className="flex flex-col gap-1 min-w-0 flex-1">
-                                                    <div className="font-medium text-sm truncate">Members</div>
                                                 </div>
                                             </div>
                                         </Button>

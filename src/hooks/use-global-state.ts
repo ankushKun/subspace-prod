@@ -6,11 +6,13 @@ interface GlobalState {
     activeChannelId: string
     activeFriendId: string
     lastChannelByServer: Record<string, string> // serverId -> channelId
+    subspaceFailed: boolean
     actions: {
         setActiveServerId: (serverId: string) => void
         setActiveChannelId: (channelId: string) => void
         setActiveFriendId: (friendId: string) => void
         setLastChannelForServer: (serverId: string, channelId: string) => void
+        setSubspaceFailed: (failed: boolean) => void
         clear: () => void
         getLastChannelForServer: (serverId: string) => string | undefined
     }
@@ -21,6 +23,7 @@ export const useGlobalState = create<GlobalState>()(persist((set, get) => ({
     activeChannelId: "",
     activeFriendId: "",
     lastChannelByServer: {},
+    subspaceFailed: false,
     actions: {
         setActiveServerId: (serverId: string) => set({ activeServerId: serverId }),
         setActiveChannelId: (channelId: string) => set({ activeChannelId: channelId }),
@@ -33,6 +36,7 @@ export const useGlobalState = create<GlobalState>()(persist((set, get) => ({
                 }
             }))
         },
+        setSubspaceFailed: (failed: boolean) => set({ subspaceFailed: failed }),
         clear: () => {
             console.log("🧹 Clearing global state due to wallet disconnection")
             set({

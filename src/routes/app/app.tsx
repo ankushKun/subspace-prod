@@ -1,6 +1,7 @@
 import { useWallet } from "@/hooks/use-wallet"
 import { useGlobalState } from "@/hooks/use-global-state"
 import { useServer, useChannel, useSubspaceActions } from "@/hooks/use-subspace"
+import { Subspace } from "@subspace-protocol/sdk"
 import Servers from "./components/servers"
 import Profile from "@/components/profile"
 import Channels from "@/routes/app/components/channels"
@@ -12,6 +13,7 @@ import { useParams, useNavigate } from "react-router"
 declare global {
     interface Window {
         fetchMessageTimeout: NodeJS.Timeout
+        prevAddress: string
     }
 }
 
@@ -25,7 +27,10 @@ export default function App() {
 
     useEffect(() => {
         clearTimeout(window.fetchMessageTimeout)
-        navigate("/app")
+        if (address !== window.prevAddress && window.prevAddress && window.prevAddress !== "") {
+            navigate("/app")
+        }
+        window.prevAddress = address
     }, [address])
 
     // Sync URL parameters with global state on mount and URL changes
@@ -62,7 +67,10 @@ export default function App() {
 
         async function fetchMessages() {
             try {
-                await subspaceActions.messages.getAll(activeServerId)
+                // Only fetch messages if Subspace is initialized
+                if (Subspace.initialized) {
+                    await subspaceActions.messages.getAll(activeServerId)
+                }
             } catch (e) {
                 console.error(e)
             }

@@ -8,6 +8,7 @@ import { Hash, Paperclip, SendHorizonal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Mention, MentionsInput, type MentionsInputStyle } from "react-mentions";
 import type { IMember, IMessage } from "subspace-sdk/src/types/subspace";
+import { Subspace } from "@subspace-protocol/sdk";
 
 function MessageInput() {
     const [message, setMessage] = useState("");
@@ -19,6 +20,9 @@ function MessageInput() {
 
     async function handleSend() {
         if (message.length === 0) return
+        // Only send message if Subspace is initialized
+        if (!Subspace.initialized) return
+
         setMessage("")
         const msg = await subspaceActions.servers.sendMessage({
             serverId: server?.profile.id,
@@ -90,7 +94,7 @@ function Message({ message, serverId }: { message: IMessage, serverId: string })
         <ProfilePopover userId={message.author_id} side="right" align="start" alignOffset={-30}><ProfileAvatar tx={author?.pfp} className="mt-1" /></ProfilePopover>
         <div className="grow">
             <div className="flex items-center gap-1">
-                <ProfilePopover userId={message.author_id} side="bottom" align="start" sideOffset={2}><div className="text-primary/80 font-ocr ">{member?.nickname || primaryName || <span className="text-xs opacity-60">{shortenAddress(message.author_id)}</span>}</div></ProfilePopover>
+                <ProfilePopover userId={message.author_id} side="bottom" align="start" sideOffset={2}><div className={cn("text-primary/80 font-ocr ", !member && "text-muted-foreground/60")}>{member?.nickname || primaryName || <span className="text-xs opacity-60">{shortenAddress(message.author_id)}</span>}</div></ProfilePopover>
                 <div className="text-xs text-muted-foreground/40">{relativeTimeString}</div>
             </div>
             <div className="text-sm">{message.content}</div>
@@ -139,10 +143,9 @@ function Member({ member }: { member: IMember }) {
 
     // return <div className="p-0">{member.nickname || primaryName || shortenAddress(member.id)}</div>
     return <ProfilePopover side="left" align="start" userId={member.id}><div className="flex items-center gap-2 p-2 cursor-pointer hover:bg-secondary/30">
-        <ProfileAvatar tx={profile?.pfp} className="w-10 h-10" />
+        <ProfileAvatar tx={profile?.pfp} className="w-8 h-8" />
         <div className="font-ocr text-primary/80 truncate">{member.nickname || primaryName || shortenAddress(member.id)}</div>
     </div></ProfilePopover>
-
 }
 
 
