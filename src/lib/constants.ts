@@ -1,4 +1,4 @@
-import type { Tag } from "@subspace-protocol/sdk";
+import type { Tag } from "@subspace-protocol/sdk/types";
 
 
 export class Constants {

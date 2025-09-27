@@ -6,7 +6,6 @@ import type { JWKInterface } from "arweave/web/lib/wallet";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { WAuth, WAuthProviders } from "@wauth/sdk";
 import { createSigner } from "@permaweb/aoconnect";
-import type { AoSigner } from "@subspace-protocol/sdk";
 
 export enum ConnectionStrategies {
     ArWallet = "ar_wallet",
@@ -36,7 +35,7 @@ interface WalletActions {
     updateAddress: (address: string) => void
     connect: ({ strategy, jwk, provider }: { strategy: ConnectionStrategies, jwk?: JWKInterface, provider?: WAuthProviders }) => Promise<void>
     disconnect: () => void
-    getSigner: () => Promise<AoSigner | null>
+    getSigner: () => Promise<any | null>
     waitForWAuthInit: () => Promise<void>
     initializeAuthState: () => void
 }
@@ -158,14 +157,14 @@ export const useWallet = create<WalletState>()(persist((set, get) => ({
             switch (connectionStrategy) {
                 case ConnectionStrategies.ArWallet:
                 case ConnectionStrategies.WanderConnect:
-                    return createSigner(window.arweaveWallet) as AoSigner
+                    return createSigner(window.arweaveWallet) as any
                 case ConnectionStrategies.ScannedJWK:
                     {
                         const jwk = get().jwk;
                         if (!jwk) {
                             throw new Error("ScannedJWK connection strategy requires a JWK, but none was found");
                         }
-                        return createSigner(jwk) as AoSigner;
+                        return createSigner(jwk) as any;
                     }
                 case ConnectionStrategies.WAuth:
                     {

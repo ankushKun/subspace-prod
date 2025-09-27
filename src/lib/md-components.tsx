@@ -4,7 +4,8 @@ import { useSubspace } from "@/hooks/use-subspace";
 import { useWallet } from "@/hooks/use-wallet";
 import { useNavigate } from "react-router";
 import { useGlobalState } from "@/hooks/use-global-state";
-import ProfilePopover from "@/routes/app/components/profile-popover";
+// import ProfilePopover from "@/routes/app/components/profile-popover";
+import { ProfilePopover } from "@/components/profile";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, Users, ExternalLink, Loader2, CircleQuestionMark } from "lucide-react";
@@ -239,7 +240,10 @@ function InvitePreviewInline({ serverId, href }: { serverId: string; href: strin
                     await actions.servers.get(serverId);
                 }
                 if (!isMemberFromCache && address && actions?.servers?.getMember) {
-                    await actions.servers.getMember(serverId, address);
+                    await actions.servers.getMember({
+                        serverId,
+                        userId: address
+                    });
                 }
             } catch {
                 // ignore

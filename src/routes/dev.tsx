@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useProfiles, useSubspace, useSubspaceActions } from "@/hooks/use-subspace"
+import { useProfile, useProfiles, useSubspace, useSubspaceActions } from "@/hooks/use-subspace"
 import { useWallet } from "@/hooks/use-wallet"
 import { Subspace } from "@subspace-protocol/sdk"
 import { useEffect, useState } from "react"
@@ -14,7 +14,7 @@ import { User, Server, Plus, Search, UserPlus, Code2, Wallet, Hash, Users, Shiel
 export default function Dev() {
     const { profiles, servers, members, actions: subspaceActions } = useSubspace()
     const { connected, address, actions: walletActions } = useWallet()
-    const profile = useProfiles(address)
+    const profile = useProfile(address)
     const [serverId, setServerId] = useState("server-id")
     const [userId, setUserId] = useState("")
     const [friendId, setFriendId] = useState("")
