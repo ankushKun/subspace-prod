@@ -30,7 +30,7 @@ export default function Welcome() {
 
                         <div className="space-y-3">
                             <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-ocr">
-                                Welcome to Subspace
+                                Welcome to Subspace <span className="text-sm -ml-6">(beta)</span>
                             </h1>
                             <p className="text-lg text-muted-foreground max-w-lg mx-auto leading-relaxed">
                                 Your decentralized communication hub. Connect with communities, share ideas, and explore cyberspace.
