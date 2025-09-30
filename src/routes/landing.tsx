@@ -75,7 +75,7 @@ export default function SubspaceLanding() {
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">
             <title>Subspace</title>
             {/* <ThemeToggleButton className="rounded-xs left-4.5 !z-20 absolute -top-0.5 !text-black !bg-transparent" /> */}
-            <img src={alien} alt="logo" className="absolute top-1 left-6 w-6 h-6 z-20" />
+            <img src={alien} alt="logo" className="absolute top-1 left-9 w-6 h-6 z-20" />
             {/* {!connected ? <LoginDialog>
                 <Button asChild className="absolute top-0 right-1 font-ocr !z-20 rounded-none !bg-transparent p-0 px-2 h-8">
                     <span>login</span>
@@ -86,7 +86,7 @@ export default function SubspaceLanding() {
                 </Link>
             } */}
             <Link to="#waitlist" onClick={scrollToWaitlist}>
-                <Button className="absolute top-0 right-1 font-ocr h-8 !z-20 rounded-none !bg-transparent p-0 !px-1.5">waitlist</Button>
+                <Button className="absolute top-0 right-1 font-ocr h-8 !z-20 rounded-none !bg-transparent p-0 !px-1">waitlist</Button>
             </Link>
             <div className="!bg-primary border-b text-background !w-screen mx-auto !h-2 transform-gpu absolute top-0 z-10 overflow-x-clip">
                 <Trapezoid className="left-1/2 -translate-x-1/2 top-1.5 w-60 absolute" />
@@ -94,7 +94,7 @@ export default function SubspaceLanding() {
                     {/* <img src={alien} alt="logo" className="object-cover w-5 mb-1.5" /> */}
                     SUBSPACE
                 </div>
-                <Trapezoid className="left-0 -translate-x-2/3 w-72 top-0 z-0" />
+                <Trapezoid className="left-0 -translate-x-2/3 w-96 top-0 z-0" />
                 <Trapezoid className="right-0 translate-x-2/3 w-96 top-0 z-0" />
             </div>
 
@@ -166,7 +166,7 @@ export default function SubspaceLanding() {
 
 
                     </div>
-                    <div id="waitlist" className="mb-64 w-full max-w-md mx-auto">
+                    <div id="waitlist" className="mb-64 -mt-20 w-full max-w-md mx-auto">
                         {isSubmitted ? (
                             <div className="text-center space-y-4">
                                 <div className="font-ocr text-primary text-lg tracking-wider">
@@ -184,7 +184,7 @@ export default function SubspaceLanding() {
                                         placeholder="your@email.com"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="flex-1 h-10 p-3 min-w-96 px-4 bg-background/50 border-primary/20 focus:border-primary font-ocr text-base placeholder:text-muted-foreground/60 rounded-lg transition-all duration-200"
+                                        className="flex-1 h-10 p-3 md:min-w-96 px-4 bg-background/50 border-primary/20 focus:border-primary font-ocr text-base placeholder:text-muted-foreground/60 rounded-lg transition-all duration-200"
                                         required
                                         disabled={isSubmitting}
                                     />
@@ -205,7 +205,7 @@ export default function SubspaceLanding() {
                                 </div>
                                 <div className="text-center mb-6">
                                     <div className="text-muted-foreground text-xs sm:text-sm">
-                                        Be the first to know when we launch
+                                        Be the first to know when we launch on mainnet
                                     </div>
                                 </div>
 
