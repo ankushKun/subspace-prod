@@ -455,6 +455,22 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
     const roles = useRoles(activeServerId)
     const memberRoles: IRole[] = Object.keys(roles || {}).filter(roleId => Object.keys(member?.roles || {}).includes(roleId)).map(roleId => roles[roleId])
 
+    // Refetch profile and member data when popover opens
+    const handleOpenChange = (open: boolean) => {
+        if (open) {
+            // Refetch user profile
+            subspaceActions.profiles.get(userId)
+
+            // Refetch server member data if user is in a server
+            if (activeServerId) {
+                subspaceActions.servers.getMember({
+                    serverId: activeServerId,
+                    userId: userId
+                })
+            }
+        }
+    }
+
     async function handleAssignRole(roleId: string) {
         await subspaceActions.servers.assignRole({
             serverId: activeServerId,
@@ -467,7 +483,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
         })
     }
 
-    return <Popover>
+    return <Popover onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
             {props.children}
         </PopoverTrigger>
@@ -489,7 +505,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
                 </div>
                 <div className="min-h-24 py-8 px-3 ">
                     <div className="font-semibold font-ocr text-primary truncate">{member?.nickname || primaryName || shortenAddress(userId)}</div>
-                    <div className="text-xs text-primary/50 font-mono truncate">{member?.nickname ? primaryName ? `${primaryName} (${shortenAddress(userId)})` : shortenAddress(userId) : <div className="text-xs text-primary/50">This guy needs a primary name</div>}</div>
+                    <div className="text-xs text-primary/50 font-mono truncate">{member?.nickname && primaryName ? `${primaryName} (${shortenAddress(userId)})` : (member?.nickname || primaryName) ? shortenAddress(userId) : <div className="text-xs text-primary/50">This guy needs a primary name</div>}</div>
                     {/* badges */}
                     <div className="mt-2 text-xs">{profile?.bio}</div>
                     {/* roles */}

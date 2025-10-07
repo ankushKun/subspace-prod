@@ -9,6 +9,7 @@ import Welcome from "@/routes/app/components/welcome"
 import Messages from "@/routes/app/components/messages"
 import { useEffect } from "react"
 import { useParams, useNavigate } from "react-router"
+import { toast } from "sonner"
 
 declare global {
     interface Window {
@@ -24,6 +25,11 @@ export default function App() {
     const { serverId, channelId } = useParams()
     const navigate = useNavigate()
     const { address } = useWallet()
+
+    useEffect(() => {
+
+        window.toast = toast
+    }, [toast])
 
     useEffect(() => {
         clearTimeout(window.fetchMessageTimeout)

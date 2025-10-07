@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn, uploadFileTurbo, shortenAddress } from "@/lib/utils";
 import { SubspaceValidation, EPermissions } from "@subspace-protocol/sdk";
 import type { Inputs, IMember } from "@subspace-protocol/sdk/types";
-import { Camera, Upload, Save, X, Settings, ArrowLeft, Users, Shield, Hash, Info, Palette, Plus, Search } from "lucide-react";
+import { Camera, Upload, Save, X, Settings, ArrowLeft, Users, Shield, Hash, Info, Palette, Plus, Search, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 import alienGreen from "@/assets/subspace/alien-green.svg";
 
@@ -86,12 +86,12 @@ function MemberItem({ member, onMemberClick, onManageRoles, onKickMember, isSele
                 </div>
             </div>
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="sm" onClick={() => onManageRoles(member.id)}>
+                {/* <Button variant="ghost" size="sm" onClick={() => onManageRoles(member.id)}>
                     Manage Roles
-                </Button>
-                <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => onKickMember(member.id)}>
+                </Button> */}
+                {/* <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => onKickMember(member.id)}>
                     Kick
-                </Button>
+                </Button> */}
             </div>
         </div>
     );
@@ -136,10 +136,14 @@ function MemberProfileSection({ member, serverId }: { member: IMember, serverId:
 
         setIsUpdatingNickname(true);
         try {
+            // Explicitly handle empty string to unset nickname
+            const trimmedNickname = nicknameValue.trim();
+            const nicknameToSave = trimmedNickname === "" ? null : trimmedNickname;
+
             await subspaceActions.servers.updateMember({
                 serverId: serverId,
                 userId: member.id,
-                nickname: nicknameValue.trim() || undefined
+                nickname: nicknameToSave
             });
 
             // Refresh member data
@@ -202,11 +206,14 @@ function MemberProfileSection({ member, serverId }: { member: IMember, serverId:
                                 <Input
                                     value={nicknameValue}
                                     onChange={(e) => setNicknameValue(e.target.value)}
-                                    placeholder="Enter nickname..."
+                                    placeholder="Enter nickname or leave empty to unset..."
                                     className="bg-background border-border"
                                     maxLength={32}
                                     disabled={isUpdatingNickname}
                                 />
+                                <div className="text-xs text-muted-foreground">
+                                    Leave empty to remove the nickname
+                                </div>
                                 <div className="flex items-center gap-2">
                                     <Button
                                         size="sm"
@@ -1053,7 +1060,7 @@ export default function ServerSettings() {
                                                 <div
                                                     key={role.id}
                                                     className={cn(
-                                                        "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors",
+                                                        "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors group hover:bg-muted/80",
                                                         selectedRoleId === role.id
                                                             ? "bg-primary/10 border-primary/30"
                                                             : "bg-muted border-border hover:bg-muted/80"
@@ -1076,10 +1083,10 @@ export default function ServerSettings() {
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="text-red-400 hover:text-red-300"
+                                                            className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
                                                             onClick={() => handleDeleteRole(role.id)}
                                                         >
-                                                            Delete
+                                                            <Trash2 size={16} />
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1326,16 +1333,13 @@ export default function ServerSettings() {
                                     {server?.categories && Object.values(server.categories).length > 0 ? (
                                         Object.values(server.categories).map((category) => (
                                             <div key={category.id} className="space-y-2">
-                                                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
+                                                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border group hover:bg-muted/80 transition-colors">
                                                     <div className="font-medium text-foreground uppercase text-sm tracking-wide">
                                                         {category.name}
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Button variant="ghost" size="sm" onClick={() => handleEditCategory(category.id)}>
-                                                            Edit
-                                                        </Button>
+                                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => handleDeleteCategory(category.id)}>
-                                                            Delete
+                                                            <Trash2 size={16} />
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1345,7 +1349,7 @@ export default function ServerSettings() {
                                                     {server.channels && Object.values(server.channels)
                                                         .filter(channel => channel.category_id === category.id)
                                                         .map((channel) => (
-                                                            <div key={channel.id} className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
+                                                            <div key={channel.id} className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border group hover:bg-muted/80 transition-colors">
                                                                 <div className="flex items-center gap-3">
                                                                     <Hash size={16} className="text-muted-foreground" />
                                                                     <div>
@@ -1355,12 +1359,9 @@ export default function ServerSettings() {
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Button variant="ghost" size="sm" onClick={() => handleEditChannel(channel.id)}>
-                                                                        Edit
-                                                                    </Button>
+                                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => handleDeleteChannel(channel.id)}>
-                                                                        Delete
+                                                                        <Trash2 size={16} />
                                                                     </Button>
                                                                 </div>
                                                             </div>

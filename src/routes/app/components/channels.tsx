@@ -158,11 +158,10 @@ export default function Channels() {
                 // Navigate back to home since the server is no longer available
                 navigate("/app");
             } else {
-                toast.error("Failed to leave server");
+
             }
         } catch (error) {
             console.error("Error leaving server:", error);
-            toast.error("An error occurred while leaving the server");
         } finally {
             setIsLoading(false);
         }
