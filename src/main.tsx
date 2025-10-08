@@ -324,6 +324,7 @@ function Main() {
     const { jwk, address, connected, connectionStrategy, provider, actions: walletActions } = useWallet()
     const { actions: globalStateActions, subspaceFailed } = useGlobalState()
     const [errorBoundary, setErrorBoundary] = useState<ErrorBoundary | null>(null);
+    const [appReady, setAppReady] = useState(false);
 
     // Set the global error boundary reference
     useEffect(() => {
@@ -463,6 +464,34 @@ function Main() {
         }
     }, [connected, address])
 
+    // Complete page loading when app is ready
+    useEffect(() => {
+        // Check if app is ready (connected and subspace initialized or failed)
+        const isReady = connected && (address || subspaceFailed !== null);
+
+        if (isReady && !appReady) {
+            setAppReady(true);
+            // Small delay to ensure UI is rendered
+            setTimeout(() => {
+                if (typeof window !== 'undefined' && window.completePageLoading) {
+                    window.completePageLoading();
+                }
+            }, 500);
+        }
+    }, [connected, address, subspaceFailed, appReady]);
+
+    // Also complete loading after a reasonable timeout even if not fully ready
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            if (!appReady && typeof window !== 'undefined' && window.completePageLoading) {
+                setAppReady(true);
+                window.completePageLoading();
+            }
+        }, 5000); // 5 second timeout
+
+        return () => clearTimeout(timeout);
+    }, [appReady]);
+
     return (
         <ErrorBoundary
             ref={setErrorBoundary}
@@ -477,8 +506,8 @@ function Main() {
                         </div>
                         <div className='flex-1'>
                             <h3 className='text-sm font-medium text-destructive'>Connection Failed</h3>
-                            <p className='text-xs text-muted-foreground mt-1'>Unable to connect to Subspace process</p>
-                            <p className='text-xs text-muted-foreground mt-1'>Please check network tab and report to the developers</p>
+                            <p className='text-xs text-muted-foreground mt-1'>Unable to connect to Subspace process, please try again later</p>
+                            <p className='text-xs text-muted-foreground mt-1'>If problem persists, check network tab and report to the developers</p>
                         </div>
                     </div>
                 </div>

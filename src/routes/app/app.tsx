@@ -7,9 +7,10 @@ import Profile from "@/components/profile"
 import Channels from "@/routes/app/components/channels"
 import Welcome from "@/routes/app/components/welcome"
 import Messages from "@/routes/app/components/messages"
-import { useEffect } from "react"
-import { useParams, useNavigate } from "react-router"
+import { useEffect, useState } from "react"
+import { useParams, useNavigate, useLocation } from "react-router"
 import { toast } from "sonner"
+import SubspaceLoader from "@/components/subspace-loader"
 
 declare global {
     interface Window {
@@ -25,9 +26,11 @@ export default function App() {
     const { serverId, channelId } = useParams()
     const navigate = useNavigate()
     const { address } = useWallet()
+    const [showLoader, setShowLoader] = useState(true)
+    const [loaderAnimating, setLoaderAnimating] = useState(false)
+    const { connected } = useWallet()
 
     useEffect(() => {
-
         window.toast = toast
     }, [toast])
 
@@ -96,6 +99,34 @@ export default function App() {
             }
         }
     }, [activeServerId])
+
+    const path = useLocation().pathname
+    console.log(path)
+
+    // Handle loader transition when Subspace becomes initialized
+    useEffect(() => {
+        if (Subspace.initialized && showLoader && !loaderAnimating) {
+            setLoaderAnimating(true)
+            // Wait for blur-out animation to complete before hiding loader
+            setTimeout(() => {
+                setShowLoader(false)
+                setLoaderAnimating(false)
+            }, 400) // Match the blur-out animation duration
+        }
+    }, [Subspace.initialized, showLoader, loaderAnimating])
+
+    // Reset loader state when Subspace becomes uninitialized
+    useEffect(() => {
+        if (!Subspace.initialized && !showLoader) {
+            setShowLoader(true)
+            setLoaderAnimating(false)
+        }
+    }, [Subspace.initialized, showLoader])
+
+    // if subspace is not initialized or loader is still showing, show the loader
+    if (!Subspace.initialized && connected) {
+        return <SubspaceLoader isAnimatingOut={loaderAnimating} />
+    }
 
     return <div className="h-screen w-screen flex">
         {/* Server list */}

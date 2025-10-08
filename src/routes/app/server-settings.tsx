@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useServer, useSubspaceActions, useMembers, useRoles, useProfile, usePrimaryName, useMember } from "@/hooks/use-subspace";
 import { useWallet } from "@/hooks/use-wallet";
+import { Subspace } from "@subspace-protocol/sdk";
 import { ProfileAvatar } from "@/components/profile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,7 +179,7 @@ function MemberProfileSection({ member, serverId }: { member: IMember, serverId:
                 <div className="flex-1 space-y-2">
                     <div>
                         <div className="font-semibold text-foreground text-lg">
-                            {member.nickname ? `${member.nickname} (${primaryName})` : primaryName || "No nickname or primary name"}
+                            {member.nickname ? `${member.nickname}${primaryName ? ` (${primaryName})` : ""}` : primaryName || "No nickname or primary name"}
                         </div>
                         <div className="text-sm text-muted-foreground">
                             {member.id}
@@ -402,6 +403,7 @@ export default function ServerSettings() {
     const [uploadStatus, setUploadStatus] = useState<string>("");
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
+    const [isUpdatingSource, setIsUpdatingSource] = useState(false);
 
     // File input refs
     const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -767,6 +769,38 @@ export default function ServerSettings() {
         console.log("Delete channel clicked:", channelId);
     };
 
+    const handleUpdateServerSource = async () => {
+        if (!connected || !serverId) return;
+
+        setIsUpdatingSource(true);
+        setUploadStatus("");
+
+        try {
+            setUploadStatus("Updating server source...");
+            console.log("Updating server source for:", serverId);
+
+            await serverActions.updateServerSource(serverId);
+
+            setUploadStatus("Server source updated successfully!");
+            console.log("Server source updated successfully");
+
+            // Clear success message after 3 seconds
+            setTimeout(() => {
+                setUploadStatus("");
+            }, 3000);
+        } catch (error) {
+            console.error("Failed to update server source:", error);
+            setUploadStatus("Failed to update server source. Please try again.");
+
+            // Clear error message after 3 seconds
+            setTimeout(() => {
+                setUploadStatus("");
+            }, 3000);
+        } finally {
+            setIsUpdatingSource(false);
+        }
+    };
+
     // Show loading or error state if server not found
     if (!server) {
         if (fetchError) {
@@ -802,7 +836,7 @@ export default function ServerSettings() {
         return (
             <div className="flex items-center justify-center h-full">
                 <div className="text-center space-y-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <div className="loading-spinner mx-auto"></div>
                     <div className="text-lg text-muted-foreground">Loading server...</div>
                     {serverId && (
                         <div className="text-sm text-muted-foreground/70">
@@ -1002,6 +1036,80 @@ export default function ServerSettings() {
                                         {uploadStatus}
                                     </div>
                                 )}
+
+                                {/* Server Source Section */}
+                                <div className="space-y-4">
+                                    <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                                        Server Source
+                                    </h2>
+
+                                    <div className="p-4 bg-muted/30 rounded-lg border border-border space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="font-medium text-foreground">Version Information</div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Compare your server's current version with the latest available
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Version Comparison */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <div className="text-sm font-medium text-muted-foreground">Live Version</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className={cn(
+                                                        "px-2 py-1 rounded text-xs font-medium",
+                                                        server?.version === Subspace.sources?.server?.version
+                                                            ? "bg-green-900/20 text-green-400 border border-green-900/30"
+                                                            : "bg-yellow-900/20 text-yellow-400 border border-yellow-900/30"
+                                                    )}>
+                                                        v{server?.version || "Unknown"}
+                                                    </div>
+                                                    {server?.version !== Subspace.sources?.server?.version && (
+                                                        <div className="text-xs text-yellow-400">Outdated</div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-sm font-medium text-muted-foreground">Available Version</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="px-2 py-1 bg-blue-900/20 text-blue-400 border border-blue-900/30 rounded text-xs font-medium">
+                                                        v{Subspace.sources?.server?.version || "1.0.0"}
+                                                    </div>
+                                                    {server?.version === Subspace.sources?.server?.version && (
+                                                        <div className="text-xs text-green-400">Up to date</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-xs text-muted-foreground">
+                                            <strong>Server Process ID:</strong> {serverId}
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-2 border-t border-border">
+                                            <div className="text-sm text-muted-foreground">
+                                                {server?.version === Subspace.sources?.server?.version
+                                                    ? "Your server is up to date. You can still force an update to refresh the source."
+                                                    : "Update server to use the latest source code and features"
+                                                }
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="bg-primary/10 border-primary/30 text-primary hover:bg-primary/20"
+                                                disabled={isLoading || isUpdatingSource || !connected}
+                                                onClick={handleUpdateServerSource}
+                                            >
+                                                <Upload size={14} />
+                                                {isUpdatingSource ? "Updating..." :
+                                                    server?.version === Subspace.sources?.server?.version ? "Force Update" : "Update Source"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 {/* Action Buttons */}
                                 <div className="flex justify-end gap-3 pt-6 border-t border-border">

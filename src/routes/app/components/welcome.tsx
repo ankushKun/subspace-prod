@@ -23,9 +23,9 @@ export default function Welcome() {
                             <img
                                 src={alienGreen}
                                 alt="Subspace"
-                                className="w-16 h-24 mx-auto opacity-90 animate-pulse"
+                                className="w-16 h-24 mx-auto opacity-90 animate-breathe"
                             />
-                            <div className="absolute inset-0 bg-primary/20 w-32 mx-auto rounded-full blur-3xl scale-75 animate-pulse" />
+                            <div className="absolute inset-0 bg-primary/20 w-32 mx-auto rounded-full blur-3xl scale-75 animate-smooth-pulse" />
                         </div>
 
                         <div className="space-y-3">
@@ -71,7 +71,7 @@ export default function Welcome() {
                                 </div>
                             )}
                         </div>
-                        <div className="absolute inset-0 bg-primary/10 w-32 mx-auto rounded-full blur-3xl scale-75 animate-pulse" />
+                        <div className="absolute inset-0 bg-primary/10 w-32 mx-auto rounded-full blur-3xl scale-75 animate-smooth-pulse" />
                     </div>
 
                     <div className="space-y-3">

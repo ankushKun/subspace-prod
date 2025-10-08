@@ -173,7 +173,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                     ) : (
                         <>
                             {/* Social Login Options */}
-                            <div className="space-y-4">
+                            {/* <div className="space-y-4">
                                 <h3 className="text-sm font-ocr text-primary/80 text-center">Social Login</h3>
                                 <div className="flex items-center justify-evenly gap-2">
                                     <Button
@@ -205,7 +205,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                         <img src={x} className="w-6 h-6 object-contain rounded" />
                                     </Button>
                                 </div>
-                            </div>
+                            </div> */}
 
                             {/* Separator */}
                             <div className="relative">
@@ -213,7 +213,8 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                     <span className="w-full border-t border-primary/20" />
                                 </div>
                                 <div className="relative flex justify-center text-xs">
-                                    <span className="bg-background px-3 text-primary/60 font-ocr">or use wallet</span>
+                                    {/* <span className="bg-background px-3 text-primary/60 font-ocr">or use wallet</span> */}
+                                    <span className="bg-background px-3 text-primary/60 font-ocr">use wallet</span>
                                 </div>
                             </div>
 
@@ -230,7 +231,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                     </Button>
                                 )}
 
-                                <Button
+                                {/* <Button
                                     variant="outline"
                                     className="w-full h-12 justify-between font-ocr border-primary/30 text-primary/80 hover:bg-primary/10 hover:border-primary/40"
                                     onClick={() => {
@@ -244,7 +245,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                 >
                                     <span>Wander Connect</span>
                                     <img src={wander} className="w-6 h-6 object-contain" />
-                                </Button>
+                                </Button> */}
                             </div>
 
                             {/* Development Options */}

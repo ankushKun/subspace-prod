@@ -3,6 +3,18 @@
 
 <head>
   <meta charset="UTF-8" />
+  <script>
+    document.addEventListener('readystatechange', function () {
+      console.log(document.readyState);
+      if (document.readyState === 'loading') {
+        console.log('Document is loading.');
+      } else if (document.readyState === 'interactive') {
+        console.log('Document is interactive (DOM ready).');
+      } else if (document.readyState === 'complete') {
+        console.log('Document is complete (all resources loaded).');
+      }
+    });
+  </script>
 
   <!-- Favicon and Icons -->
   <link rel="icon" href="/favicon.ico" sizes="any">
@@ -102,10 +114,408 @@
       navigator.serviceWorker.register('/sw.js');
     }
   </script>
+
+  <!-- Loader Styles -->
+  <style>
+    /* Base styles for loader (before Tailwind loads) */
+    #page-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 99999 !important;
+      background-color: oklch(0.2097 0.0080 274.5332);
+      /* --background from dark theme */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Geist', sans-serif;
+      color: oklch(0.9314 0.2229 122.1);
+      /* --primary from dark theme */
+    }
+
+    .loader-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      position: relative;
+      z-index: 10;
+    }
+
+    .loader-icon-container {
+      width: 6rem;
+      height: 6rem;
+      background-color: oklch(0.9314 0.2229 122.1);
+      /* --primary */
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .loader-icon {
+      width: 80%;
+      height: 80%;
+    }
+
+    .loader-text-container {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .loader-title {
+      font-size: 2rem;
+      font-family: 'freecam', sans-serif;
+      color: oklch(0.9314 0.2229 122.1);
+      /* --primary */
+      letter-spacing: 0.1em;
+      margin: 0;
+    }
+
+    .loader-message {
+      font-size: 0.875rem;
+      color: oklch(0.7200 0 0);
+      /* --muted-foreground */
+      font-family: 'OCR', monospace;
+      margin: 0;
+    }
+
+    .progress-container {
+      width: 20rem;
+      max-width: 90vw;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 0.5rem;
+      background-color: oklch(0.2300 0 0);
+      /* --muted */
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(to right, oklch(0.9314 0.2229 122.1), oklch(0.8314 0.2229 122.1));
+      /* --primary gradient */
+      border-radius: 9999px;
+      transition: width 0.3s ease-out;
+      width: 0%;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: oklch(0.7200 0 0);
+      /* --muted-foreground */
+      font-family: 'OCR', monospace;
+    }
+
+    /* Background effects */
+    .bg-effect-1 {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 30% 20%, oklch(0.9314 0.2229 122.1 / 0.03) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .bg-effect-2 {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 70% 80%, oklch(0.9314 0.2229 122.1 / 0.03) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    /* Loader rotation animation - linear like animate-rotation */
+    @keyframes loaderRotation {
+      from {
+        transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg);
+        transform-origin: center;
+      }
+
+      to {
+        transform: rotateX(0deg) rotateY(360deg) rotateZ(0deg);
+        transform-origin: center;
+      }
+    }
+
+    /* Progress bar pulsing animation */
+    @keyframes progressPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 oklch(0.9314 0.2229 122.1 / 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 0 4px oklch(0.9314 0.2229 122.1 / 0.1);
+      }
+    }
+
+    /* Animation classes */
+    .loader-rotation {
+      animation: loaderRotation 4s linear infinite;
+      will-change: transform;
+      perspective: 1000px;
+      transform: translateZ(0);
+    }
+
+    .progress-bar-animated {
+      animation: progressPulse 2s ease-in-out infinite;
+      will-change: transform;
+      backface-visibility: hidden;
+      transform: translateZ(0);
+    }
+
+    .loader-transition {
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    }
+  </style>
 </head>
 
 <body>
+  <!-- Loading Screen -->
+  <div id="page-loader" class="loader-transition">
+    <!-- Background effects -->
+    <div class="bg-effect-1"></div>
+    <div class="bg-effect-2"></div>
+
+    <!-- Loader content -->
+    <div class="loader-content">
+      <!-- Alien icon with rotation -->
+      <div class="loader-icon-container">
+        <img src="/alien-face-black.svg" alt="Subspace Alien" class="loader-icon loader-rotation" />
+      </div>
+
+      <!-- Loading text -->
+      <div class="loader-text-container">
+        <h1 class="loader-title">SUBSPACE</h1>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-container">
+        <div class="progress-bar-bg">
+          <div id="progress-bar" class="progress-bar-fill progress-bar-animated"></div>
+        </div>
+        <div class="progress-info">
+          <span id="loading-message"
+            style="font-size: 0.875rem; color: oklch(0.7200 0 0); font-family: 'OCR', monospace;">Initializing...</span>
+          <span id="progress-text">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warning message positioned at bottom of screen -->
+  <div id="warning-message"
+    style="position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); font-size: 0.75rem; color: oklch(0.6900 0.2000 23.9100); font-family: 'OCR', monospace; text-align: center; opacity: 0; transition: opacity 0.3s ease-in-out; z-index: 100000; max-width: 90vw; padding: 0.75rem 1rem; background: oklch(0.2097 0.0080 274.5332); border: 1px solid oklch(0.6900 0.2000 23.9100); border-radius: 0.5rem; backdrop-filter: blur(8px);">
+  </div>
+
   <div id="root"></div>
+
+  <!-- Loading Progress Script -->
+  <script>
+    (function () {
+      let progress = 0;
+      let isDocumentComplete = false;
+      let isReactAppReady = false;
+      let resourcesLoaded = 0;
+      let totalResources = 0;
+
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      const loadingMessage = document.getElementById('loading-message');
+      const warningMessage = document.getElementById('warning-message');
+
+      const messages = [
+        "Initializing...",
+        "Loading HTML document...",
+        "Loading stylesheets...",
+        "Loading scripts...",
+        "Parsing resources...",
+        "Initializing application...",
+        "Connecting to services...",
+        "Almost ready...",
+        "Finalizing..."
+      ];
+
+      function updateProgress(newProgress, message) {
+        progress = Math.min(newProgress, 100);
+        if (progressBar) {
+          progressBar.style.width = progress + '%';
+        }
+        if (progressText) {
+          progressText.textContent = Math.round(progress) + '%';
+        }
+        if (message && loadingMessage) {
+          loadingMessage.textContent = message;
+        }
+      }
+
+
+      // Track document loading states
+      function checkDocumentState() {
+        if (document.readyState === 'loading') {
+          updateProgress(Math.max(progress, 5), messages[0]);
+        } else if (document.readyState === 'interactive') {
+          updateProgress(Math.max(progress, 15), messages[1]);
+        } else if (document.readyState === 'complete') {
+          isDocumentComplete = true;
+          updateProgress(Math.max(progress, 40), messages[4]);
+          checkIfFullyLoaded();
+        }
+      }
+
+      // Count and track all resources
+      function initResourceTracking() {
+        // Count all resources that need to load
+        const scripts = document.querySelectorAll('script[src]');
+        const links = document.querySelectorAll('link[rel="stylesheet"], link[href*=".css"]');
+        const images = document.querySelectorAll('img[src]');
+
+        totalResources = scripts.length + links.length + images.length;
+
+        // Track script loading
+        scripts.forEach(script => {
+          if (script.src) {
+            script.addEventListener('load', onResourceLoaded);
+            script.addEventListener('error', onResourceLoaded);
+          }
+        });
+
+        // Track stylesheet loading
+        links.forEach(link => {
+          if (link.href && (link.rel === 'stylesheet' || link.href.includes('.css'))) {
+            link.addEventListener('load', onResourceLoaded);
+            link.addEventListener('error', onResourceLoaded);
+          }
+        });
+
+        // Track image loading
+        images.forEach(img => {
+          if (img.complete) {
+            onResourceLoaded();
+          } else {
+            img.addEventListener('load', onResourceLoaded);
+            img.addEventListener('error', onResourceLoaded);
+          }
+        });
+      }
+
+      function onResourceLoaded() {
+        resourcesLoaded++;
+        const resourceProgress = totalResources > 0 ? (resourcesLoaded / totalResources) * 25 : 0;
+        const newProgress = Math.min(15 + resourceProgress, 40);
+
+        if (resourcesLoaded <= totalResources * 0.3) {
+          updateProgress(Math.max(progress, newProgress), messages[2]);
+        } else if (resourcesLoaded <= totalResources * 0.7) {
+          updateProgress(Math.max(progress, newProgress), messages[3]);
+        } else {
+          updateProgress(Math.max(progress, newProgress), messages[4]);
+        }
+
+        checkIfFullyLoaded();
+      }
+
+      function checkIfFullyLoaded() {
+        // Only proceed to final stages if document is complete and most resources are loaded
+        if (isDocumentComplete && (resourcesLoaded >= totalResources * 0.8 || totalResources === 0)) {
+          updateProgress(Math.max(progress, 50), messages[5]);
+
+          // Gradually increase progress while waiting for React app
+          let waitProgress = 50;
+          const progressInterval = setInterval(() => {
+            if (!isReactAppReady && waitProgress < 80) {
+              waitProgress += 2;
+              updateProgress(Math.max(progress, waitProgress), messages[6]);
+            } else {
+              clearInterval(progressInterval);
+            }
+          }, 200); // Increase by 2% every 200ms
+        }
+      }
+
+      // Global function to complete loading (called from React app)
+      window.completePageLoading = function () {
+        isReactAppReady = true;
+
+        // Hide warning message if it's showing
+        if (warningMessage) {
+          warningMessage.style.opacity = '0';
+        }
+
+        // Gradually complete the final progress
+        let finalProgress = Math.max(progress, 85);
+        const finalInterval = setInterval(() => {
+          if (finalProgress < 100) {
+            finalProgress += 3;
+            updateProgress(finalProgress, finalProgress >= 95 ? messages[8] : messages[7]);
+          } else {
+            clearInterval(finalInterval);
+            // Final completion and fade out
+            setTimeout(() => {
+              const loader = document.getElementById('page-loader');
+              if (loader) {
+                loader.style.opacity = '0';
+                loader.style.transition = 'opacity 0.8s ease-out';
+                setTimeout(() => {
+                  loader.style.display = 'none';
+                }, 800);
+              }
+            }, 500);
+          }
+        }, 150); // Increase by 3% every 150ms for smooth final completion
+      };
+
+      // Initialize tracking
+      updateProgress(1, messages[0]);
+
+      // Show warning message after 11 seconds
+      setTimeout(() => {
+        if (warningMessage && !isReactAppReady) {
+          warningMessage.textContent = 'Taking longer than usual, check your internet connection';
+          warningMessage.style.opacity = '1';
+        }
+      }, 15000);
+
+      // Start tracking document state
+      checkDocumentState();
+      document.addEventListener('readystatechange', checkDocumentState);
+
+      // Initialize resource tracking
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initResourceTracking);
+      } else {
+        initResourceTracking();
+      }
+
+      // Window load event (all resources including images, stylesheets, etc.)
+      window.addEventListener('load', () => {
+        isDocumentComplete = true;
+        updateProgress(Math.max(progress, 45), messages[5]);
+        checkIfFullyLoaded();
+      });
+    })();
+  </script>
+
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

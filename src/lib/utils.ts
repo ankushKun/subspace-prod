@@ -16,6 +16,7 @@ export function getRelativeTimeString(timestamp: number) {
     const now = new Date()
     // Convert timestamp to milliseconds if it's in seconds
     const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
+    const messageDate = new Date(timestampMs)
     const diff = now.getTime() - timestampMs
     const diffInSeconds = Math.floor(diff / 1000)
 
@@ -24,17 +25,71 @@ export function getRelativeTimeString(timestamp: number) {
         return new Date(timestampMs).toLocaleString()
     }
 
-    if (diffInSeconds < 60) {
-        return "now"
-    } else if (diffInSeconds < 3600) {
-        return `${Math.floor(diffInSeconds / 60)}m`
-    } else if (diffInSeconds < 86400) {
-        return `${Math.floor(diffInSeconds / 3600)}h`
-    } else if (diffInSeconds < 604800) {
-        return `${Math.floor(diffInSeconds / 86400)}d`
+    // Check if message is from today
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    // Reset time to start of day for comparison
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate())
+    const messageDateStart = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate())
+
+    if (messageDateStart.getTime() === todayStart.getTime()) {
+        // Same day - show relative time
+        if (diffInSeconds < 60) {
+            return "now"
+        } else if (diffInSeconds < 3600) {
+            return `${Math.floor(diffInSeconds / 60)}m`
+        } else {
+            return `${Math.floor(diffInSeconds / 3600)}h`
+        }
+    } else if (messageDateStart.getTime() === yesterdayStart.getTime()) {
+        // Yesterday
+        return "Yesterday"
     } else {
-        // local datetime string
-        return new Date(timestampMs).toLocaleString()
+        // Different date - show absolute date
+        return messageDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        })
+    }
+}
+
+export function getDateKey(timestamp: number): string {
+    // Convert timestamp to milliseconds if it's in seconds
+    const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
+    const date = new Date(timestampMs)
+
+    // Return date in YYYY-MM-DD format for grouping
+    return date.toISOString().split('T')[0]
+}
+
+export function getDateLabel(timestamp: number): string {
+    // Convert timestamp to milliseconds if it's in seconds
+    const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
+    const messageDate = new Date(timestampMs)
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    // Reset time to start of day for comparison
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate())
+    const messageDateStart = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate())
+
+    if (messageDateStart.getTime() === todayStart.getTime()) {
+        return "Today"
+    } else if (messageDateStart.getTime() === yesterdayStart.getTime()) {
+        return "Yesterday"
+    } else {
+        // Format as "Month Day, Year" (e.g., "January 15, 2024")
+        return messageDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        })
     }
 }
 
@@ -147,3 +202,5 @@ export async function getWanderTier(address: string): Promise<IWanderTier> {
     }
     return tier
 }
+
+

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useChannel, useMember, useMembers, useMessages, usePrimaryName, usePrimaryNames, useProfile, useServer, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
 import { useMessageInputFocus } from "@/hooks/use-message-input-focus";
-import { cn, getRelativeTimeString, shortenAddress } from "@/lib/utils";
+import { cn, getRelativeTimeString, shortenAddress, getDateKey, getDateLabel } from "@/lib/utils";
 import { Hash, Paperclip, SendHorizonal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Mention, MentionsInput, type MentionsInputStyle } from "react-mentions";
@@ -280,6 +280,20 @@ function MessageInput() {
     </div>
 }
 
+function DateDivider({ timestamp }: { timestamp: number }) {
+    const dateLabel = getDateLabel(timestamp)
+
+    return (
+        <div className="flex items-center gap-3 py-4 px-3">
+            <div className="flex-1 h-px bg-border"></div>
+            <div className="text-xs font-ocr text-muted-foreground/60 px-2 bg-background">
+                {dateLabel}
+            </div>
+            <div className="flex-1 h-px bg-border"></div>
+        </div>
+    )
+}
+
 function Message({ message, serverId }: { message: IMessage, serverId: string }) {
     const author = useProfile(message.author_id)
     const member = useMember(serverId, message.author_id)
@@ -304,8 +318,36 @@ export default function Messages() {
     const channel = useChannel(activeServerId, activeChannelId)
     // console.log(messages)
 
-    const messagesOrderedByTime = useMemo(() => {
-        return messages ? Object.values(messages).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) : []
+    const messagesGroupedByDate = useMemo(() => {
+        if (!messages) return []
+
+        // Sort messages by timestamp (newest first)
+        const sortedMessages = Object.values(messages).sort((a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+
+        // Group messages by date
+        const groups: Array<{ dateKey: string; timestamp: number; messages: IMessage[] }> = []
+        let currentGroup: { dateKey: string; timestamp: number; messages: IMessage[] } | null = null
+
+        for (const message of sortedMessages) {
+            const dateKey = getDateKey(message.timestamp)
+
+            if (!currentGroup || currentGroup.dateKey !== dateKey) {
+                // Start a new group
+                currentGroup = {
+                    dateKey,
+                    timestamp: message.timestamp,
+                    messages: [message]
+                }
+                groups.push(currentGroup)
+            } else {
+                // Add to existing group
+                currentGroup.messages.push(message)
+            }
+        }
+
+        return groups
     }, [messages])
 
     return <div className="grow flex">
@@ -315,11 +357,18 @@ export default function Messages() {
             <div className="border-b p-3.5 flex items-center gap-1 font-ocr"><Hash className="w-4 h-4 shrink-0 text-muted-foreground" />{channel?.name}</div>
             {/* message list */}
             <div className="grow overflow-y-scroll flex flex-col-reverse">
-                {messagesOrderedByTime.map((message) => (
-                    <Message key={message.id} message={message} serverId={activeServerId} />
+                {messagesGroupedByDate.map((group, groupIndex) => (
+                    <div key={group.dateKey}>
+                        {/* Date divider (shown before each group, except the first/newest group) */}
+                        <DateDivider timestamp={group.timestamp} />
+                        {/* Messages in this date group (reversed to show oldest first within the group) */}
+                        {group.messages.reverse().map((message) => (
+                            <Message key={message.id} message={message} serverId={activeServerId} />
+                        ))}
+                    </div>
                 ))}
                 {
-                    messagesOrderedByTime.length === 0 && <div className="text-center text-sm text-gray-500">No messages yet</div>
+                    messagesGroupedByDate.length === 0 && <div className="text-center text-sm text-gray-500">No messages yet</div>
                 }
             </div>
             {/* input */}

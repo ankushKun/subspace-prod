@@ -356,7 +356,7 @@ function InvitePreviewInline({ serverId, href }: { serverId: string; href: strin
                             }}
                             disabled={isJoining || isUnknownServer}
                         >
-                            {isJoining ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Joining…</>) : 'Join Server'}
+                            {isJoining ? (<><Loader2 className="h-4 w-4 mr-2 animate-smooth-spin" />Joining…</>) : 'Join Server'}
                         </Button>
                     </div>
                 </DialogContent>

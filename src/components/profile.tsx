@@ -344,7 +344,7 @@ export default function Profile() {
     }
 
     if (!profile) {
-        return <div className="p-2 m-2 cursor-pointer hover:bg-secondary rounded flex items-center gap-2 font-ocr animate-pulse">
+        return <div className="p-2 m-2 cursor-pointer hover:bg-secondary rounded flex items-center gap-2 font-ocr animate-smooth-pulse">
             <ProfileAvatar tx={null} />
             <div className="flex flex-col gap-0.5 text-sm items-start text-primary/90">
                 <div>Materializing...</div>

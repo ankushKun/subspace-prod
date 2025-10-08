@@ -340,7 +340,7 @@ function ProgressSteps({
 
     return (
         <div className="flex items-center">
-            <span className="text-sm font-medium animate-pulse text-primary/80">
+            <span className="text-sm font-medium animate-smooth-pulse text-primary/80">
                 {activeStep.label}
             </span>
         </div>
@@ -730,10 +730,10 @@ export default function Servers() {
                         {dialogState.isFetchingServer && (
                             <div className="bg-muted/30 rounded-lg p-4 border border-dashed border-muted-foreground/30">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 bg-muted rounded-full animate-pulse" />
+                                    <div className="w-12 h-12 bg-muted rounded-full animate-smooth-pulse" />
                                     <div className="flex-1 space-y-2">
-                                        <div className="h-4 bg-muted rounded animate-pulse" />
-                                        <div className="h-3 bg-muted rounded w-2/3 animate-pulse" />
+                                        <div className="h-4 bg-muted rounded animate-smooth-pulse" />
+                                        <div className="h-3 bg-muted rounded w-2/3 animate-smooth-pulse" />
                                     </div>
                                 </div>
                             </div>

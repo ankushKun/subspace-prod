@@ -23,6 +23,7 @@ interface SubspaceActions {
         get: (serverId: string) => Promise<IServer | null>
         create: (data: Inputs.ICreateServer) => Promise<IServer | null>
         update: (data: Inputs.IUpdateServer) => Promise<IServer | null>
+        updateServerSource: (serverId: string) => Promise<boolean>
         join: (serverId: string) => Promise<boolean>
         leave: (serverId: string) => Promise<boolean>
 
@@ -263,6 +264,17 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 } catch (e) {
                     Utils.log({ type: "error", label: "Error Updating Server", data: e })
                     return null
+                }
+            },
+            updateServerSource: async (serverId: string) => {
+                Utils.log({ type: "debug", label: "Updating Server Source", data: serverId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceServers.updateServerSource(serverId))
+                    Utils.log({ type: "success", label: "Updated Server Source", data: { result }, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Updating Server Source", data: e })
+                    return false
                 }
             },
             join: async (serverId: string) => {
