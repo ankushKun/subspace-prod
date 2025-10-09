@@ -12,64 +12,10 @@ import opengraph from "vite-plugin-open-graph"
 const commitHash = execSync("git rev-parse --short HEAD").toString().trim()
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf-8"));
 
-// const vitePWA = VitePWA({
-//   registerType: "autoUpdate",
-//   includeAssets: ['/favicon.ico', '/alien-rounded.svg', '/alien.svg', '/alien-small.svg', '/icon.png', 'notification.wav', '/x_banner.png'],
-//   devOptions: {
-//     enabled: process.env.NODE_ENV === "development"
-//   },
-//   workbox: {
-//     maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB
-//     runtimeCaching: [{ urlPattern: "arweave.net", handler: "CacheFirst" }]
-//   },
-//   manifest: {
-//     name: 'Subspace Chat',
-//     short_name: 'Subspace',
-//     description: 'Subspace is an intergalactic communication app built on the Permaweb. It allows you to chat in online communities without the fear of censorship.',
-//     theme_color: '#17181c',
-//     background_color: '#17181c',
-//     display: "standalone",
-//     orientation: "any",
-//     scope: "./",
-//     start_url: "/#/app",
-//     categories: ["social", "communication"],
-//     shortcuts: [
-//       {
-//         name: "Settings",
-//         short_name: "Settings",
-//         description: "Subspace settings",
-//         url: "/#/app/settings"
-//       }
-//     ],
-//     icons: [
-//       {
-//         src: './alien-small.svg',
-//         sizes: '512x512',
-//         type: 'image/svg+xml',
-//       },
-//       {
-//         src: './alien-small.svg',
-//         sizes: '192x192',
-//         type: 'image/svg+xml',
-//       },
-//       {
-//         src: './alien-small.svg',
-//         sizes: '512x512',
-//         type: 'image/svg+xml',
-//         purpose: 'maskable',
-//       }, {
-//         src: './alien-small.svg',
-//         sizes: '192x192',
-//         type: 'image/svg+xml',
-//         purpose: 'maskable',
-//       }, {
-//         src: './alien-small.svg',
-//         sizes: '800x800',
-//         type: 'image/svg+xml',
-//       }
-//     ],
-//   }
-// })
+// SDK version and commit hash
+const sdkPackageJson = JSON.parse(fs.readFileSync("./subspace-sdk/package.json", "utf-8"));
+const sdkCommitHash = execSync("cd subspace-sdk && git rev-parse --short HEAD").toString().trim()
+
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -108,5 +54,7 @@ export default defineConfig({
   define: {
     __VERSION__: JSON.stringify(packageJson.version),
     __COMMIT_HASH__: JSON.stringify(commitHash),
+    __SDK_VERSION__: JSON.stringify(sdkPackageJson.version),
+    __SDK_COMMIT_HASH__: JSON.stringify(sdkCommitHash),
   },
 })

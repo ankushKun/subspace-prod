@@ -31,6 +31,7 @@ import Dev from '@/routes/dev';
 import { Subspace } from '@subspace-protocol/sdk';
 import App from '@/routes/app/app';
 import ServerSettings from '@/routes/app/server-settings';
+import AppSettings from '@/routes/app/app-settings';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -523,7 +524,7 @@ function Main() {
                         <Route path="/app/:serverId/:channelId" element={<App />} />
 
                         {/* <Route path="/invite/:invite" element={<Invite />} /> */}
-                        {/* <Route path="/app/settings" element={<Settings />} /> */}
+                        <Route path="/app/settings" element={<AppSettings />} />
                         <Route path="/app/:serverId/settings" element={<ServerSettings />} />
 
                         {/* <Route path="/developer" element={<Developer />} /> */}

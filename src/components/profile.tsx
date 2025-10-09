@@ -18,6 +18,7 @@ import type { PopoverContentProps } from "@radix-ui/react-popover";
 import type { IMember, IRole } from "@subspace-protocol/sdk/types";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { Link } from "react-router";
 
 export function ProfileAvatar(props: HTMLAttributes<HTMLDivElement> & { tx: string }) {
     // validate tx is a valid arweave transaction
@@ -393,13 +394,15 @@ export default function Profile() {
 
                 <div className="discord-separator" />
 
-                <Button
-                    variant="ghost"
-                    className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#2b2d31] rounded-sm transition-colors"
-                    disabled={!connected}
-                >
-                    <SettingsIcon size={16} /> Settings
-                </Button>
+                <Link to="/app/settings">
+                    <Button
+                        variant="ghost"
+                        className="discord-menu-item justify-start gap-3 h-8 px-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-[#2b2d31] rounded-sm transition-colors"
+                        disabled={!connected}
+                    >
+                        <SettingsIcon size={16} /> Settings
+                    </Button>
+                </Link>
 
                 <div className="discord-separator" />
 
