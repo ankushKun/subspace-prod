@@ -5,8 +5,8 @@ import { useGlobalState } from "@/hooks/use-global-state";
 import { useChannel, useMember, useMembers, useMessages, usePrimaryName, usePrimaryNames, useProfile, useServer, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
 import { useMessageInputFocus } from "@/hooks/use-message-input-focus";
 import { cn, getRelativeTimeString, shortenAddress, getDateKey, getDateLabel } from "@/lib/utils";
-import { Hash, Paperclip, SendHorizonal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Hash, Paperclip, SendHorizonal, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Mention, MentionsInput, type MentionsInputStyle } from "react-mentions";
 import type { IMember, IMessage, IProfile } from "subspace-sdk/src/types/subspace";
 import { Subspace } from "@subspace-protocol/sdk";
@@ -316,17 +316,69 @@ export default function Messages() {
     const { activeServerId, activeChannelId } = useGlobalState()
     const messages = useMessages(activeServerId, activeChannelId)
     const channel = useChannel(activeServerId, activeChannelId)
+    const messagesEndRef = useRef<HTMLDivElement>(null)
+    const messagesContainerRef = useRef<HTMLDivElement>(null)
+    const [isAtBottom, setIsAtBottom] = useState(true)
+    const [showJumpButton, setShowJumpButton] = useState(false)
     // console.log(messages)
+
+    // Check scroll position and determine if jump button should show
+    const checkScrollState = () => {
+        const container = messagesContainerRef.current
+        if (!container) return
+
+        const threshold = 10 // pixels from bottom to consider "at bottom"
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+        setIsAtBottom(isNearBottom)
+
+        // Show jump button if user is more than 1000px away from bottom
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+        setShowJumpButton(distanceFromBottom > 1000)
+    }
+
+    // Handle scroll events
+    const handleScroll = () => {
+        checkScrollState()
+    }
+
+    // Manual scroll to bottom function
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+
+    // Auto-scroll to bottom when messages change, but only if user was already at bottom
+    useEffect(() => {
+        if (isAtBottom) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+        // Also check scroll state when messages change
+        checkScrollState()
+    }, [messages, isAtBottom])
+
+    // Add scroll event listener
+    useEffect(() => {
+        const container = messagesContainerRef.current
+        if (!container) return
+
+        container.addEventListener('scroll', handleScroll)
+
+        // Initial check
+        checkScrollState()
+
+        return () => {
+            container.removeEventListener('scroll', handleScroll)
+        }
+    }, [])
 
     const messagesGroupedByDate = useMemo(() => {
         if (!messages) return []
 
-        // Sort messages by timestamp (newest first)
+        // Sort messages by timestamp (oldest first for chronological order)
         const sortedMessages = Object.values(messages).sort((a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
         )
 
-        // Group messages by date
+        // Group messages by date in chronological order
         const groups: Array<{ dateKey: string; timestamp: number; messages: IMessage[] }> = []
         let currentGroup: { dateKey: string; timestamp: number; messages: IMessage[] } | null = null
 
@@ -342,7 +394,7 @@ export default function Messages() {
                 }
                 groups.push(currentGroup)
             } else {
-                // Add to existing group
+                // Add to existing group (already in chronological order)
                 currentGroup.messages.push(message)
             }
         }
@@ -352,17 +404,29 @@ export default function Messages() {
 
     return <div className="grow flex">
         {/* messages */}
-        <div className="grow flex flex-col gap-1 h-screen max-h-[calc(100vh-0.5rem)]">
+        <div className="grow flex flex-col gap-1 h-screen max-h-[calc(100vh-0.5rem)] relative">
             {/* header */}
             <div className="border-b p-3.5 flex items-center gap-1 font-ocr"><Hash className="w-4 h-4 shrink-0 text-muted-foreground" />{channel?.name}</div>
+
+            {/* Scroll to bottom button */}
+            {showJumpButton && (
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
+                    <Button
+                        onClick={scrollToBottom}
+                        className="bg-primary/30 hover:bg-primary/70 backdrop-blur text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg transition-colors duration-200"
+                    >
+                        Jump to latest message
+                    </Button>
+                </div>
+            )}
             {/* message list */}
-            <div className="grow overflow-y-scroll flex flex-col-reverse">
+            <div ref={messagesContainerRef} className="grow overflow-y-scroll flex flex-col">
                 {messagesGroupedByDate.map((group, groupIndex) => (
                     <div key={group.dateKey}>
-                        {/* Date divider (shown before each group, except the first/newest group) */}
+                        {/* Date divider shown at the start of each date group */}
                         <DateDivider timestamp={group.timestamp} />
-                        {/* Messages in this date group (reversed to show oldest first within the group) */}
-                        {group.messages.reverse().map((message) => (
+                        {/* Messages in this date group (already in chronological order) */}
+                        {group.messages.map((message) => (
                             <Message key={message.id} message={message} serverId={activeServerId} />
                         ))}
                     </div>
@@ -370,6 +434,8 @@ export default function Messages() {
                 {
                     messagesGroupedByDate.length === 0 && <div className="text-center text-sm text-gray-500">No messages yet</div>
                 }
+                {/* Scroll anchor - always stays at the bottom */}
+                <div ref={messagesEndRef} />
             </div>
             {/* input */}
             <div className="">

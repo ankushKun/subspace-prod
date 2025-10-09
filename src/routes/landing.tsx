@@ -13,7 +13,7 @@ import { Link, useNavigate } from "react-router"
 import s1 from "@/assets/s1.png"
 import s2 from "@/assets/s2.png"
 import chk from "@/assets/chkthisout.png"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Input } from "@/components/ui/input"
 
 
@@ -30,6 +30,7 @@ export default function SubspaceLanding() {
     const [email, setEmail] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isSubmitted, setIsSubmitted] = useState(false)
+    const initialConnectionState = useRef<boolean | null>(null)
 
     function scrollToWaitlist() {
         const waitlist = document.getElementById("waitlist")
@@ -62,40 +63,48 @@ export default function SubspaceLanding() {
         }
     }
 
-    // useEffect(() => {
-    //     const onAuthenticated = () => navigate("/app")
+    // Navigate to /app when wallet connection changes from disconnected to connected
+    useEffect(() => {
+        // Store initial connection state on mount
+        if (initialConnectionState.current === null) {
+            initialConnectionState.current = connected
+            return
+        }
 
-    //     if (!connected) navigate("/")
+        // Navigate only if connection changed from false to true
+        if (!initialConnectionState.current && connected) {
+            navigate("/app")
+        }
 
-    //     window.addEventListener("subspace-authenticated", onAuthenticated)
-    //     return () => window.removeEventListener("subspace-authenticated", onAuthenticated)
-    // }, [connected])
+        // Update the tracked state
+        initialConnectionState.current = connected
+    }, [connected, navigate])
 
     return (
         <div className="flex flex-col min-h-screen max-w-screen overflow-clip">
             <title>Subspace</title>
             {/* <ThemeToggleButton className="rounded-xs left-4.5 !z-20 absolute -top-0.5 !text-black !bg-transparent" /> */}
-            <img src={alien} alt="logo" className="absolute top-1 left-9 w-6 h-6 z-20" />
-            {/* {!connected ? <LoginDialog>
+            <img src={alien} alt="logo" className="absolute top-1 left-6 w-6 h-6 z-20" />
+            {!connected ? <LoginDialog>
                 <Button asChild className="absolute top-0 right-1 font-ocr !z-20 rounded-none !bg-transparent p-0 px-2 h-8">
                     <span>login</span>
                 </Button>
             </LoginDialog> :
                 <Link to="/app">
-                    <Button className="absolute top-0 right-1 font-ocr h-8 !z-20 rounded-none !bg-transparent p-0 !px-1.5">app <ExternalLink /></Button>
+                    <Button className="absolute top-0 right-1 font-ocr h-8 !z-20 rounded-none !bg-transparent p-0 !px-1 pr-1.5">app <ExternalLink /></Button>
                 </Link>
-            } */}
-            <Link to="#waitlist" onClick={scrollToWaitlist}>
+            }
+            {/* <Link to="#waitlist" onClick={scrollToWaitlist}>
                 <Button className="absolute top-0 right-1 font-ocr h-8 !z-20 rounded-none !bg-transparent p-0 !px-1">waitlist</Button>
-            </Link>
+            </Link> */}
             <div className="!bg-primary border-b text-background !w-screen mx-auto !h-2 transform-gpu absolute top-0 z-10 overflow-x-clip">
                 <Trapezoid className="left-1/2 -translate-x-1/2 top-1.5 w-60 absolute" />
                 <div className="mx-auto z-10 px-2 absolute left-1/2 -translate-x-1/2 top-2 text-xl font-ocr text-black flex items-center justify-center gap-2">
                     {/* <img src={alien} alt="logo" className="object-cover w-5 mb-1.5" /> */}
                     SUBSPACE
                 </div>
-                <Trapezoid className="left-0 -translate-x-2/3 w-96 top-0 z-0" />
-                <Trapezoid className="right-0 translate-x-2/3 w-96 top-0 z-0" />
+                <Trapezoid className="left-0 -translate-x-2/3 w-72 top-0 z-0" />
+                <Trapezoid className="right-0 translate-x-2/3 w-72 top-0 z-0" />
             </div>
 
             <div className="flex-1 w-full !z-0 pt-24 pb-16 flex flex-col items-center justify-center px-4 sm:px-6 text-foreground relative">
@@ -166,52 +175,6 @@ export default function SubspaceLanding() {
 
 
                     </div>
-                    <div id="waitlist" className="mb-64 -mt-20 w-full max-w-md mx-auto">
-                        {isSubmitted ? (
-                            <div className="text-center space-y-4">
-                                <div className="font-ocr text-primary text-lg tracking-wider">
-                                    ✓ You're on the list!
-                                </div>
-                                <div className="text-muted-foreground text-sm">
-                                    We'll notify you when Subspace is ready
-                                </div>
-                            </div>
-                        ) : (
-                            <form onSubmit={handleWaitlistSubmit} className="space-y-4">
-                                <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
-                                    <Input
-                                        type="email"
-                                        placeholder="your@email.com"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="flex-1 h-10 p-3 md:min-w-96 px-4 bg-background/50 border-primary/20 focus:border-primary font-ocr text-base placeholder:text-muted-foreground/60 rounded-lg transition-all duration-200"
-                                        required
-                                        disabled={isSubmitting}
-                                    />
-                                    <Button
-                                        type="submit"
-                                        disabled={!email || isSubmitting}
-                                        className="h-10 px-6 sm:px-8 bg-primary text-primary-foreground font-ocr text-sm tracking-wider rounded-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                                    >
-                                        {isSubmitting ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-smooth-spin"></div>
-                                                JOINING...
-                                            </div>
-                                        ) : (
-                                            "JOIN WAITLIST"
-                                        )}
-                                    </Button>
-                                </div>
-                                <div className="text-center mb-6">
-                                    <div className="text-muted-foreground text-xs sm:text-sm">
-                                        Be the first to know when we launch on mainnet
-                                    </div>
-                                </div>
-
-                            </form>
-                        )}
-                    </div>
 
 
                     {/* App Preview Section */}
@@ -239,11 +202,11 @@ export default function SubspaceLanding() {
                                 <span>Start Talking</span>
                             </Button>
                         </LoginDialog> : <>
-                            <Button variant="ghost" className="text-lg sm:text-xl md:text-2xl font-ka tracking-wider bg-primary text-black h-14 sm:h-16 md:h-18 px-10 sm:px-12 md:px-14 rounded-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl drop-shadow-2xl">
-                                <Link to="#waitlist" onClick={scrollToWaitlist}>
+                            <Link to="/app">
+                                <Button variant="ghost" className="text-lg sm:text-xl md:text-2xl font-ka tracking-wider bg-primary text-black h-14 sm:h-16 md:h-18 px-10 sm:px-12 md:px-14 rounded-lg hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl drop-shadow-2xl">
                                     Start Talking
-                                </Link>
-                            </Button>
+                                </Button>
+                            </Link>
                         </>}
 
                         {/* Enhanced loading dots */}

@@ -20,9 +20,14 @@ export function getRelativeTimeString(timestamp: number) {
     const diff = now.getTime() - timestampMs
     const diffInSeconds = Math.floor(diff / 1000)
 
-    // Handle future timestamps
-    if (diffInSeconds < 0) {
+    // Handle future timestamps or very recent messages (within 5 seconds)
+    if (diffInSeconds < -5) {
         return new Date(timestampMs).toLocaleString()
+    }
+
+    // Treat messages within 5 seconds (past or future) as "now"
+    if (diffInSeconds <= 5) {
+        return "now"
     }
 
     // Check if message is from today

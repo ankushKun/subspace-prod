@@ -65,8 +65,8 @@ export default function App() {
     }, [activeServerId, activeChannelId, globalStateActions])
 
     useEffect(() => {
-        if (!activeServerId) {
-            // If no active server, ensure any existing loop is stopped
+        if (!activeServerId || !Subspace.initialized) {
+            // If no active server or Subspace not initialized, ensure any existing loop is stopped
             return () => {
                 if (window.fetchMessageTimeout) {
                     clearTimeout(window.fetchMessageTimeout)
@@ -98,7 +98,7 @@ export default function App() {
                 clearTimeout(window.fetchMessageTimeout)
             }
         }
-    }, [activeServerId])
+    }, [activeServerId, Subspace.initialized])
 
     const path = useLocation().pathname
     console.log(path)
