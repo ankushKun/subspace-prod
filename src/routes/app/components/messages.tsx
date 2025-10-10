@@ -2,7 +2,7 @@ import { ProfileAvatar, ProfilePopover } from "@/components/profile";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useGlobalState } from "@/hooks/use-global-state";
-import { useChannel, useMember, useMembers, useMessages, usePrimaryName, usePrimaryNames, useProfile, useServer, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
+import { useChannel, useMember, useMembers, useMessages, usePrimaryName, usePrimaryNames, useProfile, useRoles, useServer, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
 import { useMessageInputFocus } from "@/hooks/use-message-input-focus";
 import { cn, getRelativeTimeString, shortenAddress, getDateKey, getDateLabel } from "@/lib/utils";
 import { Hash, Paperclip, SendHorizonal, ChevronDown } from "lucide-react";
@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Mention, MentionsInput, type MentionsInputStyle } from "react-mentions";
 import type { IMember, IMessage, IProfile } from "subspace-sdk/src/types/subspace";
 import { Subspace } from "@subspace-protocol/sdk";
+import { Constants } from "@/lib/constants";
 
 interface MentionDisplayProps {
     userId: string;
@@ -20,6 +21,7 @@ function MentionDisplay({ userId, serverId }: MentionDisplayProps) {
     const member = useMember(serverId, userId);
     const primaryName = usePrimaryName(userId);
     const profile = useProfile(userId);
+    const roles = useRoles(serverId);
 
     // Check if user exists on Subspace (has profile or primary name)
     const userExistsOnSubspace = profile || primaryName;
@@ -38,9 +40,39 @@ function MentionDisplay({ userId, serverId }: MentionDisplayProps) {
     // Priority: nickname (if server member) -> primary name -> shortened ID
     const displayName = (isServerMember ? member.nickname : null) || primaryName || shortenAddress(userId);
 
+    // Helper function to get topmost role for a member
+    const getTopmostRole = (member: IMember) => {
+        if (!member?.roles || !roles) return null;
+
+        const memberRoleIds = Object.keys(member.roles);
+        const memberRoles = memberRoleIds
+            .map(roleId => roles[roleId])
+            .filter(role => role);
+
+        if (memberRoles.length === 0) return null;
+
+        // Return role with highest order (topmost in hierarchy)
+        return memberRoles.reduce((highest, current) =>
+            current.order > highest.order ? current : highest
+        );
+    };
+
+    const topmostRole = member ? getTopmostRole(member) : null;
+    const roleColor = topmostRole?.color;
+
+    // Use role color only if it's not the default color
+    const shouldUseRoleColor = roleColor && roleColor.toUpperCase() !== Constants.DEFAULT_ROLE_COLOR.toUpperCase();
+    const displayColor = shouldUseRoleColor ? roleColor : 'var(--primary)';
+
     return (
         <ProfilePopover userId={userId} side="top" align="center" sideOffset={2}>
-            <span className="inline-flex items-center px-1 py-0.5 rounded text-sm font-medium bg-primary/20 text-primary hover:bg-primary/30 cursor-pointer transition-colors">
+            <span
+                className="inline-flex items-center px-1 py-0.5 rounded text-sm font-medium hover:opacity-80 cursor-pointer transition-all"
+                style={{
+                    backgroundColor: shouldUseRoleColor ? `${roleColor}20` : 'rgba(34, 197, 94, 0.2)',
+                    color: displayColor
+                }}
+            >
                 @{displayName}
             </span>
         </ProfilePopover>
@@ -140,20 +172,49 @@ function MessageContent({ content, serverId }: MessageContentProps) {
 
 interface MentionSuggestionProps {
     member: IMember;
+    serverId: string;
 }
 
-function MentionSuggestion({ member }: MentionSuggestionProps) {
+function MentionSuggestion({ member, serverId }: MentionSuggestionProps) {
     const profile = useProfile(member.id);
     const primaryName = usePrimaryName(member.id);
+    const roles = useRoles(serverId);
 
     // Priority: nickname -> primary name -> shortened ID
     const displayName = member.nickname || primaryName || shortenAddress(member.id);
+
+    // Helper function to get topmost role for a member
+    const getTopmostRole = (member: IMember) => {
+        if (!member?.roles || !roles) return null;
+
+        const memberRoleIds = Object.keys(member.roles);
+        const memberRoles = memberRoleIds
+            .map(roleId => roles[roleId])
+            .filter(role => role);
+
+        if (memberRoles.length === 0) return null;
+
+        // Return role with highest order (topmost in hierarchy)
+        return memberRoles.reduce((highest, current) =>
+            current.order > highest.order ? current : highest
+        );
+    };
+
+    const topmostRole = getTopmostRole(member);
+    const roleColor = topmostRole?.color;
+
+    // Use role color only if it's not the default color
+    const shouldUseRoleColor = roleColor && roleColor.toUpperCase() !== Constants.DEFAULT_ROLE_COLOR.toUpperCase();
+    const displayColor = shouldUseRoleColor ? roleColor : 'var(--primary)';
 
     return (
         <div className="flex items-center gap-2 p-2 hover:bg-accent/50 rounded">
             <ProfileAvatar tx={profile?.pfp} className="w-6 h-6" />
             <div className="flex flex-col min-w-0">
-                <span className="text-sm font-medium text-foreground truncate">
+                <span
+                    className="text-sm font-medium truncate"
+                    style={{ color: displayColor }}
+                >
                     {displayName}
                 </span>
                 {member.nickname && primaryName && member.nickname !== primaryName && (
@@ -263,6 +324,7 @@ function MessageInput() {
                         <MentionSuggestion
                             key={memberData.id}
                             member={memberData.member}
+                            serverId={activeServerId}
                         />
                     );
                 }}
@@ -299,12 +361,44 @@ function Message({ message, serverId }: { message: IMessage, serverId: string })
     const member = useMember(serverId, message.author_id)
     const primaryName = usePrimaryName(message.author_id)
     const relativeTimeString = getRelativeTimeString(message.timestamp)
+    const roles = useRoles(serverId)
+
+    // Helper function to get topmost role for a member
+    const getTopmostRole = (member: IMember) => {
+        if (!member?.roles || !roles) return null;
+
+        const memberRoleIds = Object.keys(member.roles);
+        const memberRoles = memberRoleIds
+            .map(roleId => roles[roleId])
+            .filter(role => role);
+
+        if (memberRoles.length === 0) return null;
+
+        // Return role with highest order (topmost in hierarchy)
+        return memberRoles.reduce((highest, current) =>
+            current.order > highest.order ? current : highest
+        );
+    };
+
+    const topmostRole = member ? getTopmostRole(member) : null;
+    const roleColor = topmostRole?.color;
+
+    // Use role color only if it's not the default color
+    const shouldUseRoleColor = roleColor && roleColor.toUpperCase() !== Constants.DEFAULT_ROLE_COLOR.toUpperCase();
+    const displayColor = shouldUseRoleColor ? roleColor : (member ? 'var(--primary)' : undefined);
 
     return <div className="flex items-start gap-3 cursor-pointer hover:bg-secondary/30 p-2 px-3">
         <ProfilePopover userId={message.author_id} side="right" align="start" alignOffset={-30}><ProfileAvatar tx={author?.pfp} className="mt-1" /></ProfilePopover>
         <div className="grow">
             <div className="flex items-center gap-1">
-                <ProfilePopover userId={message.author_id} side="bottom" align="start" sideOffset={2}><div className={cn("text-primary/80 font-ocr ", !member && "text-muted-foreground/60")}>{member?.nickname || primaryName || <span className="text-xs opacity-60">{shortenAddress(message.author_id)}</span>}</div></ProfilePopover>
+                <ProfilePopover userId={message.author_id} side="bottom" align="start" sideOffset={2}>
+                    <div
+                        className={cn("font-ocr ", !member && "text-muted-foreground/60")}
+                        style={{ color: displayColor }}
+                    >
+                        {member?.nickname || primaryName || <span className="text-xs opacity-60">{shortenAddress(message.author_id)}</span>}
+                    </div>
+                </ProfilePopover>
                 <div className="text-xs text-muted-foreground/40">{relativeTimeString}</div>
             </div>
             <MessageContent content={message.content} serverId={serverId} />
@@ -448,14 +542,44 @@ export default function Messages() {
 }
 
 // appears in the sidebar member list
-function Member({ member }: { member: IMember }) {
+function Member({ member, serverId }: { member: IMember, serverId: string }) {
     const profile = useProfile(member.id)
     const primaryName = usePrimaryName(member.id)
+    const roles = useRoles(serverId)
+
+    // Helper function to get topmost role for a member
+    const getTopmostRole = (member: IMember) => {
+        if (!member.roles || !roles) return null;
+
+        const memberRoleIds = Object.keys(member.roles);
+        const memberRoles = memberRoleIds
+            .map(roleId => roles[roleId])
+            .filter(role => role);
+
+        if (memberRoles.length === 0) return null;
+
+        // Return role with highest order (topmost in hierarchy)
+        return memberRoles.reduce((highest, current) =>
+            current.order > highest.order ? current : highest
+        );
+    };
+
+    const topmostRole = getTopmostRole(member);
+    const roleColor = topmostRole?.color;
+
+    // Use role color only if it's not the default color
+    const shouldUseRoleColor = roleColor && roleColor.toUpperCase() !== Constants.DEFAULT_ROLE_COLOR.toUpperCase();
+    const displayColor = shouldUseRoleColor ? roleColor : 'var(--primary)';
 
     // return <div className="p-0">{member.nickname || primaryName || shortenAddress(member.id)}</div>
     return <ProfilePopover side="left" align="start" userId={member.id}><div className="flex items-center gap-2 p-2 cursor-pointer hover:bg-secondary/30">
         <ProfileAvatar tx={profile?.pfp} className="w-8 h-8" />
-        <div className="font-ocr text-primary/80 truncate">{member.nickname || primaryName || shortenAddress(member.id)}</div>
+        <div
+            className="font-ocr truncate"
+            style={{ color: displayColor }}
+        >
+            {member.nickname || primaryName || shortenAddress(member.id)}
+        </div>
     </div></ProfilePopover>
 }
 
@@ -469,36 +593,100 @@ function getMemberProfileCompleteness(member: IMember, profile: IProfile | undef
     return 2; // Neither
 }
 
-function SortedMemberList({ members }: { members: IMember[] }) {
+function SortedMemberList({ members, serverId }: { members: IMember[], serverId: string }) {
     const profiles = useSubspace((state) => state.profiles);
     const primaryNames = useSubspace((state) => state.primaryNames);
+    const roles = useRoles(serverId);
 
-    const sortedMembers = useMemo(() => {
-        return [...members].sort((a, b) => {
-            const profileA = profiles[a.id];
-            const primaryNameA = primaryNames[a.id];
-            const completenessA = getMemberProfileCompleteness(a, profileA, primaryNameA);
+    // Helper function to get topmost hoisted role for a member
+    const getTopmostHoistedRole = (member: IMember) => {
+        if (!member.roles || !roles) return null;
 
-            const profileB = profiles[b.id];
-            const primaryNameB = primaryNames[b.id];
-            const completenessB = getMemberProfileCompleteness(b, profileB, primaryNameB);
+        const memberRoleIds = Object.keys(member.roles);
+        const memberRoles = memberRoleIds
+            .map(roleId => roles[roleId])
+            .filter(role => role && role.hoist); // Only consider hoisted roles
 
-            // Sort by completeness first (0 = both, 1 = either, 2 = neither)
-            if (completenessA !== completenessB) {
-                return completenessA - completenessB;
+        if (memberRoles.length === 0) return null;
+
+        // Return role with highest order (topmost in hierarchy)
+        return memberRoles.reduce((highest, current) =>
+            current.order > highest.order ? current : highest
+        );
+    };
+
+    // Group members by their topmost hoisted role
+    const groupedMembers = useMemo(() => {
+        const groups: Record<string, { role: any | null, members: IMember[] }> = {};
+
+        members.forEach(member => {
+            const topmostRole = getTopmostHoistedRole(member);
+            const groupKey = topmostRole?.id || 'no-role';
+
+            if (!groups[groupKey]) {
+                groups[groupKey] = {
+                    role: topmostRole,
+                    members: []
+                };
             }
 
-            // Within same completeness level, sort alphabetically by display name
-            const displayNameA = (a.nickname || primaryNameA || shortenAddress(a.id)).toLowerCase();
-            const displayNameB = (b.nickname || primaryNameB || shortenAddress(b.id)).toLowerCase();
-            return displayNameA.localeCompare(displayNameB);
+            groups[groupKey].members.push(member);
         });
-    }, [members, profiles, primaryNames]);
+
+        // Sort members within each group
+        Object.values(groups).forEach(group => {
+            group.members.sort((a, b) => {
+                const profileA = profiles[a.id];
+                const primaryNameA = primaryNames[a.id];
+                const completenessA = getMemberProfileCompleteness(a, profileA, primaryNameA);
+
+                const profileB = profiles[b.id];
+                const primaryNameB = primaryNames[b.id];
+                const completenessB = getMemberProfileCompleteness(b, profileB, primaryNameB);
+
+                // Sort by completeness first (0 = both, 1 = either, 2 = neither)
+                if (completenessA !== completenessB) {
+                    return completenessA - completenessB;
+                }
+
+                // Within same completeness level, sort alphabetically by display name
+                const displayNameA = (a.nickname || primaryNameA || shortenAddress(a.id)).toLowerCase();
+                const displayNameB = (b.nickname || primaryNameB || shortenAddress(b.id)).toLowerCase();
+                return displayNameA.localeCompare(displayNameB);
+            });
+        });
+
+        // Sort groups by role order (highest first), with no-role group at the end
+        return Object.entries(groups).sort(([keyA, groupA], [keyB, groupB]) => {
+            if (keyA === 'no-role') return 1;
+            if (keyB === 'no-role') return -1;
+            return (groupB.role?.order || 0) - (groupA.role?.order || 0);
+        });
+    }, [members, profiles, primaryNames, roles]);
 
     return (
         <>
-            {sortedMembers.map((member) => (
-                <Member key={member.id} member={member} />
+            {groupedMembers.map(([groupKey, group]) => (
+                <div key={groupKey}>
+                    {/* Role Header */}
+                    <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                        {group.role ? (
+                            <>
+                                <div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: group.role.color || '#6b7280' }}
+                                />
+                                {group.role.name} — {group.members.length}
+                            </>
+                        ) : (
+                            <>Members — {group.members.length}</>
+                        )}
+                    </div>
+                    {/* Members in this group */}
+                    {group.members.map((member) => (
+                        <Member key={member.id} member={member} serverId={serverId} />
+                    ))}
+                </div>
             ))}
         </>
     );
@@ -529,9 +717,9 @@ function Members({ collapsible }: { collapsible: boolean }) {
         }
     }, [activeServerId])
 
-    return <div className={cn("border-l w-[250px] min-w-[250px] max-w-[250px]", collapsible ? "max-h-[calc(100vh-0.5rem)]" : "h-screen")}>
-        <div className="p-4 border-b font-ocr text-sm">Members</div>
-        {members ? <SortedMemberList members={Object.values(members)} /> : <div className="text-center text-sm text-muted-foreground/50 py-4">No members yet</div>}
+    return <div className={cn("border-l w-[250px] min-w-[250px] max-w-[250px] overflow-y-auto", collapsible ? "max-h-[calc(100vh-0.5rem)]" : "h-screen")}>
+        <div className="p-4 border-b font-ocr text-sm sticky top-0 bg-background z-10">Members</div>
+        {members ? <SortedMemberList members={Object.values(members)} serverId={activeServerId} /> : <div className="text-center text-sm text-muted-foreground/50 py-4">No members yet</div>}
     </div>
 }
 
