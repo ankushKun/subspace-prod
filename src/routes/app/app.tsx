@@ -11,6 +11,7 @@ import { useEffect, useState } from "react"
 import { useParams, useNavigate, useLocation } from "react-router"
 import { toast } from "sonner"
 import SubspaceLoader from "@/components/subspace-loader"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 declare global {
     interface Window {
@@ -31,6 +32,7 @@ export default function App() {
     const { connected } = useWallet()
     const userProfile = useProfile(address)
     const joinedServers = useProfileServers(address)
+    const isMobile = useIsMobile()
 
     useEffect(() => {
         window.toast = toast
@@ -129,6 +131,12 @@ export default function App() {
             setLoaderAnimating(false)
         }
     }, [Subspace.initialized, showLoader])
+
+    if (isMobile) {
+        return <div className="h-screen w-screen flex items-center justify-center">
+            <div className="text-sm text-muted-foreground font-ocr">Works best on desktop</div>
+        </div>
+    }
 
     // if subspace is not initialized or loader is still showing, show the loader
     if (!Subspace.initialized && connected) {

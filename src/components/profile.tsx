@@ -477,6 +477,7 @@ function ProfileBadge({ badge }: { badge: ProfileBadge }) {
 
 export function ProfilePopover(props: PopoverContentProps & { userId: string }) {
     const { userId, ...rest } = props
+    const { address } = useWallet()
     const { activeServerId } = useGlobalState()
     const subspaceActions = useSubspaceActions()
     const profile = useProfile(userId)
@@ -486,6 +487,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
     const roles = useRoles(activeServerId)
     const memberRoles: IRole[] = Object.keys(roles || {}).filter(roleId => Object.keys(member?.roles || {}).includes(roleId)).map(roleId => roles[roleId])
     const profileBadges: ProfileBadge[] = []
+    const isOwnProfile = userId === address
 
     if (primaryName) {
         const item: ProfileBadge = {
@@ -539,11 +541,13 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
             {props.children}
         </PopoverTrigger>
         <PopoverContent sideOffset={7} className="w-74 overflow-clip bg-gradient-to-br from-background/95 via-background/90 to-background/85 backdrop-blur-md border-2 border-primary/20 shadow-2xl" {...rest}>
-            <div className="absolute top-2 right-1.5 flex items-center gap-1 z-50">
-                <Button variant="ghost" size="icon" className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5">
-                    <UserPlus2 size={20} className="!w-3.5 !h-3.5" />
-                </Button>
-            </div>
+            {!isOwnProfile && (
+                <div className="absolute top-2 right-1.5 flex items-center gap-1 z-50">
+                    <Button variant="ghost" size="icon" className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5">
+                        <UserPlus2 size={20} className="!w-3.5 !h-3.5" />
+                    </Button>
+                </div>
+            )}
             <div className="-m-2">
                 <div>
                     {
