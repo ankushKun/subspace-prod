@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useMember, usePrimaryName, useProfile, useProfiles, useRoles, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
+import { useMember, usePrimaryName, useProfile, useProfiles, useRoles, useSubspace, useSubspaceActions, useWanderTier } from "@/hooks/use-subspace";
 import { useWallet } from "@/hooks/use-wallet";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
@@ -19,6 +19,7 @@ import type { IMember, IRole } from "@subspace-protocol/sdk/types";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { Link } from "react-router";
+import { Constants } from "@/lib/constants";
 
 export function ProfileAvatar(props: HTMLAttributes<HTMLDivElement> & { tx: string }) {
     // validate tx is a valid arweave transaction
@@ -448,15 +449,62 @@ function RoleBadge({ role, serverId, member }: { role: IRole, serverId: string, 
     </Badge>
 }
 
+type ProfileBadge = {
+    iconTx: string
+    label: string
+    url: string
+    hoverText: string
+}
+
+function ProfileBadge({ badge }: { badge: ProfileBadge }) {
+    return <Tooltip>
+        <TooltipTrigger asChild>
+            <a
+                href={badge.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative cursor-pointer hover:opacity-80 transition-opacity"
+            >
+                <img src={`https://arweave.net/${badge.iconTx}`} alt={badge.label} className="w-5 h-5 rounded-full" />
+            </a>
+        </TooltipTrigger>
+        <TooltipContent>
+            <p>{badge.hoverText}</p>
+        </TooltipContent>
+    </Tooltip>
+}
+
+
 export function ProfilePopover(props: PopoverContentProps & { userId: string }) {
     const { userId, ...rest } = props
     const { activeServerId } = useGlobalState()
     const subspaceActions = useSubspaceActions()
     const profile = useProfile(userId)
     const primaryName = usePrimaryName(userId)
+    const wanderTier = useWanderTier(userId)
     const member = useMember(activeServerId, userId)
     const roles = useRoles(activeServerId)
     const memberRoles: IRole[] = Object.keys(roles || {}).filter(roleId => Object.keys(member?.roles || {}).includes(roleId)).map(roleId => roles[roleId])
+    const profileBadges: ProfileBadge[] = []
+
+    if (primaryName) {
+        const item: ProfileBadge = {
+            iconTx: Constants.Icons.ArnsLogo,
+            label: "ARNS",
+            url: "https://arns.ar.io",
+            hoverText: "Primary Name"
+        }
+        profileBadges.push(item)
+    }
+    if (wanderTier) {
+        const item: ProfileBadge = {
+            iconTx: Constants.WanderTiers[wanderTier.tier].Icon,
+            label: Constants.WanderTiers[wanderTier.tier].Label,
+            url: "https://wander.app/wndr",
+            hoverText: Constants.WanderTiers[wanderTier.tier].Label + " Tier User"
+        }
+        profileBadges.push(item)
+    }
 
     // Refetch profile and member data when popover opens
     const handleOpenChange = (open: boolean) => {
@@ -502,6 +550,9 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
                         profile?.banner ? <img src={`https://arweave.net/${profile?.banner}`} alt={`${profile?.banner}`} className="w-full h-24 object-cover" /> :
                             <div className="w-full h-24 bg-primary/10" />
                     }
+                </div>
+                <div className="absolute left-20 py-1 -translate-y-full gap-0.5 flex flex-wrap">
+                    {profileBadges.map(badge => <ProfileBadge key={badge.label} badge={badge} />)}
                 </div>
                 <div className="bg-background rounded absolute left-3 top-14">
                     <ProfileAvatar tx={profile?.pfp} className="w-16 h-16" />

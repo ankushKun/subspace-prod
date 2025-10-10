@@ -1,6 +1,6 @@
 import { useWallet } from "@/hooks/use-wallet"
 import { useGlobalState } from "@/hooks/use-global-state"
-import { useServer, useChannel, useSubspaceActions } from "@/hooks/use-subspace"
+import { useServer, useChannel, useSubspaceActions, useProfile, useProfileServers } from "@/hooks/use-subspace"
 import { Subspace } from "@subspace-protocol/sdk"
 import Servers from "./components/servers"
 import Profile from "@/components/profile"
@@ -29,6 +29,8 @@ export default function App() {
     const [showLoader, setShowLoader] = useState(true)
     const [loaderAnimating, setLoaderAnimating] = useState(false)
     const { connected } = useWallet()
+    const userProfile = useProfile(address)
+    const joinedServers = useProfileServers(address)
 
     useEffect(() => {
         window.toast = toast
@@ -63,6 +65,14 @@ export default function App() {
             globalStateActions.setLastChannelForServer(activeServerId, activeChannelId)
         }
     }, [activeServerId, activeChannelId, globalStateActions])
+
+    // Redirect to /app if server is active but not in user's joined servers
+    useEffect(() => {
+        if (activeServerId && joinedServers && !joinedServers[activeServerId]) {
+            console.log("Server not found in joined servers, redirecting to /app")
+            navigate("/app")
+        }
+    }, [activeServerId, joinedServers, navigate])
 
     useEffect(() => {
         if (!activeServerId || !Subspace.initialized) {
@@ -99,9 +109,6 @@ export default function App() {
             }
         }
     }, [activeServerId, Subspace.initialized])
-
-    const path = useLocation().pathname
-    console.log(path)
 
     // Handle loader transition when Subspace becomes initialized
     useEffect(() => {

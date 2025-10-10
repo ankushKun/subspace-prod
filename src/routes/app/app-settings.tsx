@@ -196,7 +196,7 @@ export default function AppSettings() {
                                         className="gap-2 hover:bg-secondary"
                                     >
                                         <img src={xLogo} alt="X" className="w-4 h-4" />
-                                        Follow on X
+                                        Follow on X @use_subspace
                                     </Button>
                                 </a>
                                 <a

@@ -457,9 +457,9 @@
       window.completePageLoading = function () {
         isReactAppReady = true;
 
-        // Hide warning message if it's showing
+        // Remove warning message if it exists
         if (warningMessage) {
-          warningMessage.style.opacity = '0';
+          warningMessage.remove();
         }
 
         // Gradually complete the final progress

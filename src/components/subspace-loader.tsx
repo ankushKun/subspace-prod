@@ -39,6 +39,7 @@ interface SubspaceLoaderProps {
 
 export default function SubspaceLoader({ isAnimatingOut = false }: SubspaceLoaderProps) {
     const [message, setMessage] = useState(messages[Math.floor(Math.random() * messages.length)])
+    const [showWarning, setShowWarning] = useState(false)
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -46,6 +47,24 @@ export default function SubspaceLoader({ isAnimatingOut = false }: SubspaceLoade
         }, 2100)
         return () => clearInterval(interval)
     }, [])
+
+    useEffect(() => {
+        // Show warning message after 15 seconds
+        const warningTimeout = setTimeout(() => {
+            if (!isAnimatingOut) {
+                setShowWarning(true)
+            }
+        }, 15000)
+
+        return () => clearTimeout(warningTimeout)
+    }, [isAnimatingOut])
+
+    // Hide warning when animating out
+    useEffect(() => {
+        if (isAnimatingOut) {
+            setShowWarning(false)
+        }
+    }, [isAnimatingOut])
 
     return (
         <div className={`flex flex-col items-center justify-center h-screen relative ${isAnimatingOut ? 'animate-blur-out' : 'animate-blur-in'}`}>
@@ -69,6 +88,15 @@ export default function SubspaceLoader({ isAnimatingOut = false }: SubspaceLoade
             </div>
 
             <p className="text-xs text-muted-foreground mt-6 font-medium font-ocr text-center">{message}</p>
+
+            {/* Warning message */}
+            {showWarning && (
+                <div
+                    className="fixed bottom-8 left-1/2 -translate-x-1/2 text-xs text-orange-400 font-ocr text-center max-w-[90vw] px-4 py-3 bg-background border border-orange-400 rounded-lg backdrop-blur-sm animate-in fade-in duration-300 z-[100000]"
+                >
+                    Taking longer than usual, check your internet connection
+                </div>
+            )}
         </div >
     )
 }
