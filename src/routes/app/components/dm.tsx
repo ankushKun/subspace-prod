@@ -4,7 +4,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { useProfile, usePrimaryName, useSubspace, useSubspaceActions, useDmConversation } from "@/hooks/use-subspace";
 import { useMessageInputFocus } from "@/hooks/use-message-input-focus";
 import { cn, getRelativeTimeString, shortenAddress, getDateKey, getDateLabel } from "@/lib/utils";
-import { Paperclip, SendHorizonal, User, UserPlus } from "lucide-react";
+import { Paperclip, SendHorizonal, User, UserCircleIcon, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Subspace } from "@subspace-protocol/sdk";
 import type { IMessage } from "subspace-sdk/src/types/subspace";
@@ -418,17 +418,22 @@ export default function DM({ friendId }: DMProps) {
     return (
         <div className="grow flex flex-col h-screen max-h-[calc(100vh-0.5rem)] relative">
             {/* Header */}
-            <div className="border-b p-1.5 flex items-center gap-3 font-ocr">
+            <div className="border-b p-2.5 pl-4 flex items-center gap-3 font-ocr">
                 <ProfilePopover userId={friendId} side="bottom" align="start" sideOffset={2}>
                     <ProfileAvatar tx={friendProfile?.pfp} className="w-8 h-8" />
                 </ProfilePopover>
                 <ProfilePopover userId={friendId} side="bottom" align="start" sideOffset={2}>
                     <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{friendDisplayName}</span>
+                            <span className="font-medium">{friendDisplayName}</span>
                         </div>
                     </div>
                 </ProfilePopover>
+                <div className="ml-auto mr-2">
+                    <Button variant="ghost" size="icon" className="!p-0 rounded-full">
+                        <UserCircleIcon className="!w-5 !h-5" />
+                    </Button>
+                </div>
             </div>
 
             {/* Scroll to bottom button */}

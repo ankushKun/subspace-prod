@@ -87,7 +87,7 @@ export class Constants {
 
     static readonly HyperbeamEndpoints = {
         BetterIDEa: "https://hb.arweave.tech",
-        Forward: "https://forward.computer",
+        Forward: "https://scheduler.forward.computer",
         PermaDAO: "https://hb.arweave.asia",
         "Localhost ⚠️": "http://localhost:8173"
     }

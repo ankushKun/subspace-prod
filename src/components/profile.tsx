@@ -503,7 +503,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
         }
         profileBadges.push(item)
     }
-    if (wanderTier) {
+    if (wanderTier && wanderTier.tier) {
         const item: ProfileBadge = {
             iconTx: Constants.WanderTiers[wanderTier.tier].Icon,
             label: Constants.WanderTiers[wanderTier.tier].Label,

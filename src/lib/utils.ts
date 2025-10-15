@@ -182,7 +182,8 @@ export async function uploadFileTurbo(file: File, jwk?: JWKInterface, customSign
 }
 
 export async function getPrimaryName(address: string) {
-    const ario = ARIO.init({})
+    // @ts-expect-error
+    const ario = ARIO.mainnet({ cu: "https://cu.ardrive.io" })
     try {
         const { name } = await ario.getPrimaryName({ address })
         return name
