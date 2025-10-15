@@ -75,7 +75,7 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
         if (!profile) {
             actions.profiles.get(userId)
         }
-    }, [userId, profile, actions])
+    }, [userId, profile])
 
     const handleAccept = async () => {
         setLoading(true)
@@ -207,16 +207,18 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
     )
 }
 
+// TempConversationCard component removed - temporary DMs are no longer supported
+
 function FriendsView({ acceptedIds, sentIds, receivedIds }: {
     acceptedIds: string[],
     sentIds: string[],
     receivedIds: string[]
 }) {
-    const totalPending = receivedIds.length + sentIds.length
+    const { address } = useWallet()
 
     return (
         <div className="flex-1 flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
-            <div className="max-w-4xl mx-auto w-full">
+            <div className="mx-auto w-full">
                 {/* Tabs Interface */}
                 <Tabs defaultValue="friends" className="w-full">
                     {/* Header with Tabs */}
@@ -234,12 +236,13 @@ function FriendsView({ acceptedIds, sentIds, receivedIds }: {
                             <TabsTrigger value="pending" className="flex items-center gap-2 h-7 cursor-pointer">
                                 <UserPlus className="h-4 w-4" />
                                 Pending
-                                {totalPending > 0 && (
+                                {receivedIds.length > 0 && (
                                     <span className="ml-1 bg-destructive text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] h-[18px] flex items-center justify-center">
-                                        {totalPending}
+                                        {receivedIds.length}
                                     </span>
                                 )}
                             </TabsTrigger>
+                            {/* Temporary tab removed - temporary DMs are no longer supported */}
                         </TabsList>
                     </div>
 
@@ -313,6 +316,8 @@ function FriendsView({ acceptedIds, sentIds, receivedIds }: {
                             )}
                         </div>
                     </TabsContent>
+
+                    {/* Temporary Conversations Tab removed - temporary DMs are no longer supported */}
                 </Tabs>
             </div>
         </div>

@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Permissions, EPermissions } from "@subspace-protocol/sdk/permissions"
 
@@ -277,14 +277,22 @@ export default function Channels() {
     if (!activeServerId || activeServerId === "") {
         return (
             <div className="flex flex-col h-full">
+                {/* Friends header */}
+                <Link to="/app" className="w-full p-2">
+                    <Button variant="ghost" className="flex items-center justify-start px-4 py-3 w-full bg-secondary">
+                        <Users className="w-4 h-4 mr-2 text-muted-foreground" />
+                        <span className="text-sm font-semibold text-foreground">Friends</span>
+                    </Button>
+                </Link>
+
                 {/* DM Header */}
-                <div className="flex items-center px-4 py-3 border-b border-border/50">
+                <div className="flex items-center justify-start px-4 py-1 pb-3 border-border/50">
                     <MessageSquare className="w-4 h-4 mr-2 text-muted-foreground" />
                     <span className="text-sm font-semibold text-foreground">Direct Messages</span>
                 </div>
 
                 {/* DM List */}
-                <div className="flex-1 overflow-y-auto py-2">
+                <div className="flex-1 overflow-y-auto py-2 border-t">
                     <div className="text-sm text-muted-foreground px-4 py-2">
                         No direct messages yet. DM functionality will be available soon.
                     </div>

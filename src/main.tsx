@@ -5,7 +5,8 @@ const skipErrors = [
     "user cancelled the authrequest",
     "profile not found",
     "session password not available - please reconnect",
-    "removeChild"
+    "removeChild",
+    "WebAssembly"
 ];
 
 import { createRoot } from 'react-dom/client'
@@ -431,7 +432,7 @@ function Main() {
         return () => {
             window.removeEventListener("subspace-wallet-disconnected", handleWalletDisconnected)
         }
-    }, [globalStateActions])
+    }, [])
 
     useEffect(() => {
         async function init() {

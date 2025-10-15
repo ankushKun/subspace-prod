@@ -12,6 +12,10 @@ interface SubspaceState {
     servers: Record<string, IServer> // this will contain all server metadata like channels, roles, server info etc
     members: Record<string, Record<string, IMember>> // serverid -> userid -> member
     messages: Record<string, Record<string, Record<string, IMessage>>> // serverid -> channelid -> messageid -> message
+    dmConversations: Record<string, Record<string, Record<string, IMessage>>> // dmProcessId -> friendId -> messageId -> message
+    // tempConversations: Record<string, Record<string, Record<string, IMessage>>> // dmProcessId -> userId -> messageId -> message - DISABLED: temporary DMs not supported
+    friends: Record<string, string[]> // dmProcessId -> friendIds
+    blockedUsers: Record<string, string[]> // dmProcessId -> blockedUserIds
     primaryNames: Record<string, string> // address -> primary name
     wanderTiers: Record<string, IWanderTier> // address -> wander tier
     actions: SubspaceActions
@@ -77,6 +81,11 @@ interface SubspaceActions {
         sendDM: (data: Inputs.ISendDM) => Promise<boolean>
         editDM: (data: Inputs.IEditDM) => Promise<boolean>
         deleteDM: (data: Inputs.IDeleteDM) => Promise<boolean>
+
+        // DM conversation functions
+        getConversationIds: (dmProcessId: string) => Promise<string[]>
+        getDmConversation: (dmProcessId: string, friendId: string) => Promise<Record<string, IMessage>>
+        getBlockedUsers: (dmProcessId: string) => Promise<string[]>
     },
     // Utility functions
     clearAllStates: () => void
@@ -89,6 +98,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     servers: {},
     members: {},
     messages: {},
+    dmConversations: {},
+    // tempConversations: {}, - DISABLED: temporary DMs not supported
+    friends: {},
+    blockedUsers: {},
     actions: {
         profiles: {
             get: async (profileId: string) => {
@@ -225,6 +238,82 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 } catch (e) {
                     Utils.log({ type: "error", label: "Error Deleting DM", data: e })
                     return false
+                }
+            },
+
+            // DM conversation functions
+            getConversationIds: async (dmProcessId: string) => {
+                Utils.log({ type: "debug", label: "Getting Conversation IDs", data: dmProcessId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getConversationIds({ dmProcessId }))
+                    Utils.log({ type: "success", label: "Got Conversation IDs", data: result, duration })
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting Conversation IDs", data: e })
+                    return []
+                }
+            },
+            getDmConversation: async (dmProcessId: string, friendId: string) => {
+                Utils.log({ type: "debug", label: "Getting DM Conversation", data: { dmProcessId, friendId } })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getDmConversation({ dmProcessId, friendId }))
+                    Utils.log({ type: "success", label: "Got DM Conversation", data: result, duration })
+                    result && set((state) => ({
+                        dmConversations: {
+                            ...state.dmConversations,
+                            [dmProcessId]: {
+                                ...state.dmConversations[dmProcessId],
+                                [friendId]: result
+                            }
+                        }
+                    }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting DM Conversation", data: e })
+                    return {}
+                }
+            },
+            // getTempConversationIds: async (dmProcessId: string) => { - DISABLED: temporary DMs not supported
+            //     Utils.log({ type: "debug", label: "Getting Temp Conversation IDs", data: dmProcessId })
+            //     try {
+            //         const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getTempConversationIds({ dmProcessId }))
+            //         Utils.log({ type: "success", label: "Got Temp Conversation IDs", data: result, duration })
+            //         return result
+            //     } catch (e) {
+            //         Utils.log({ type: "error", label: "Error Getting Temp Conversation IDs", data: e })
+            //         return []
+            //     }
+            // },
+            // getTempDmConversation: async (dmProcessId: string, userId: string) => { - DISABLED: temporary DMs not supported
+            //     Utils.log({ type: "debug", label: "Getting Temp DM Conversation", data: { dmProcessId, userId } })
+            //     try {
+            //         const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getTempDmConversation({ dmProcessId, userId }))
+            //         Utils.log({ type: "success", label: "Got Temp DM Conversation", data: result, duration })
+            //         result && set((state) => ({
+            //             tempConversations: {
+            //                 ...state.tempConversations,
+            //                 [dmProcessId]: {
+            //                     ...state.tempConversations[dmProcessId],
+            //                     [userId]: result
+            //                 }
+            //             }
+            //         }))
+            //         return result
+            //     } catch (e) {
+            //         Utils.log({ type: "error", label: "Error Getting Temp DM Conversation", data: e })
+            //         return {}
+            //     }
+            // },
+            getBlockedUsers: async (dmProcessId: string) => {
+                Utils.log({ type: "debug", label: "Getting Blocked Users", data: dmProcessId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getBlockedUsers({ dmProcessId }))
+                    Utils.log({ type: "success", label: "Got Blocked Users", data: result, duration })
+                    result && set((state) => ({ blockedUsers: { ...state.blockedUsers, [dmProcessId]: result } }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Getting Blocked Users", data: e })
+                    return []
                 }
             }
         },
@@ -582,13 +671,17 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
 
         // Utility functions
         clearAllStates: () => {
-            Utils.log({ type: "debug", label: "Clearing All States", data: "Resetting profiles, servers, and members" })
+            Utils.log({ type: "debug", label: "Clearing All States", data: "Resetting profiles, servers, members, and DM data" })
             set(() => ({
                 profiles: {},
                 primaryNames: {},
                 wanderTiers: {},
                 servers: {},
-                members: {}
+                members: {},
+                dmConversations: {},
+                // tempConversations: {}, - DISABLED: temporary DMs not supported
+                friends: {},
+                blockedUsers: {}
             }))
             // Also clear localStorage
             localStorage.removeItem("subspace2-dev")
@@ -605,6 +698,10 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
         servers: state.servers,
         members: state.members,
         messages: state.messages,
+        dmConversations: state.dmConversations,
+        // tempConversations: state.tempConversations, - DISABLED: temporary DMs not supported
+        friends: state.friends,
+        blockedUsers: state.blockedUsers,
     })
 }))
 
@@ -690,6 +787,31 @@ export function useCategories(serverId: string): Record<string, ICategory> | und
 
 export function useMessages(serverId: string, channelId: string): Record<string, IMessage> {
     return useSubspace((state) => state.messages[serverId]?.[channelId] ? state.messages[serverId][channelId] : null)
+}
+
+// DM conversation helper functions
+export function useDmConversation(dmProcessId: string, friendId: string): Record<string, IMessage> | null {
+    return useSubspace((state) => state.dmConversations[dmProcessId]?.[friendId] ? state.dmConversations[dmProcessId][friendId] : null)
+}
+
+export function useDmConversations(dmProcessId: string): Record<string, Record<string, IMessage>> | null {
+    return useSubspace((state) => state.dmConversations[dmProcessId] ? state.dmConversations[dmProcessId] : null)
+}
+
+// export function useTempDmConversation(dmProcessId: string, userId: string): Record<string, IMessage> | null { - DISABLED: temporary DMs not supported
+//     return useSubspace((state) => state.tempConversations[dmProcessId]?.[userId] ? state.tempConversations[dmProcessId][userId] : null)
+// }
+
+// export function useTempDmConversations(dmProcessId: string): Record<string, Record<string, IMessage>> | null { - DISABLED: temporary DMs not supported
+//     return useSubspace((state) => state.tempConversations[dmProcessId] ? state.tempConversations[dmProcessId] : null)
+// }
+
+export function useFriends(dmProcessId: string): string[] {
+    return useSubspace((state) => state.friends[dmProcessId] ? state.friends[dmProcessId] : [])
+}
+
+export function useBlockedUsers(dmProcessId: string): string[] {
+    return useSubspace((state) => state.blockedUsers[dmProcessId] ? state.blockedUsers[dmProcessId] : [])
 }
 
 // Helper function to access actions
