@@ -262,6 +262,38 @@ export default function DM({ friendId }: DMProps) {
         }
     }, [address, friendId, dmProcessId, areFriends]);
 
+    // Poll for new DM messages (similar to how messages.tsx polls for channel messages)
+    useEffect(() => {
+        if (!dmProcessId || !areFriends) return;
+
+        let fetchDmMessageTimeout: NodeJS.Timeout;
+
+        async function fetchDmMessages() {
+            try {
+                // Only fetch DM messages if Subspace is initialized
+                if (Subspace.initialized) {
+                    await subspaceActions.profiles.getDmConversation(dmProcessId, friendId);
+                }
+            } catch (e) {
+                console.error('Error fetching DM messages:', e);
+            } finally {
+                // Poll every 1 second, same as channel messages
+                fetchDmMessageTimeout = setTimeout(() => {
+                    fetchDmMessages();
+                }, 1000);
+            }
+        }
+
+        fetchDmMessages();
+
+        // Cleanup function to stop the polling loop when DM changes or component unmounts
+        return () => {
+            if (fetchDmMessageTimeout) {
+                clearTimeout(fetchDmMessageTimeout);
+            }
+        };
+    }, [dmProcessId, friendId, areFriends]);
+
     // Friends list is now loaded from profile data, no need to fetch from DM process
 
     // Check scroll position
