@@ -1,19 +1,29 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGlobalState } from "@/hooks/use-global-state"
-import { useServer } from "@/hooks/use-subspace"
+import { useProfile, usePrimaryName, useServer, useSubspaceActions } from "@/hooks/use-subspace"
 import { useServerDialogs } from "@/hooks/use-server-dialogs"
-import { Plus, Users, MessageSquare, Sparkles, Compass } from "lucide-react"
-import alienShip from "@/assets/subspace/alien-ship.svg"
+import { Users, MessageSquare, UserCheck, UserX, Check, X, Send, Mail, UserPlus } from "lucide-react"
 import alienGreen from "@/assets/subspace/alien-green.svg"
+import { useWallet } from "@/hooks/use-wallet"
+import { ProfileAvatar, ProfilePopover } from "@/components/profile"
+import { shortenAddress } from "@/lib/utils"
+import React from "react"
+import { Link } from "react-router"
 
-export default function Welcome() {
-    const { activeServerId } = useGlobalState()
-    const activeServer = useServer(activeServerId)
+function AppWelcome() {
+    const { address } = useWallet()
+    const myProfile = useProfile(address)
     const { actions: dialogActions } = useServerDialogs()
 
-    // Scenario 1: No server active (app welcome)
-    if (!activeServer || !activeServerId) {
+    const friends = myProfile ? myProfile.friends : { accepted: {}, sent: {}, received: {} }
+    const acceptedIds = Object.keys(friends.accepted)
+    const sentIds = Object.keys(friends.sent)
+    const receivedIds = Object.keys(friends.received)
+
+    // case 1: if there are no friends, show the hero section
+    if (acceptedIds.length === 0 && sentIds.length === 0 && receivedIds.length === 0) {
         return (
             <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-background via-background to-primary/5">
                 <div className="max-w-2xl mx-auto text-center space-y-8 animate-in fade-in-50 duration-700">
@@ -42,6 +52,280 @@ export default function Welcome() {
                 </div>
             </div>
         )
+    }
+
+    // case 2: if there are friends, show the friends section
+    if (acceptedIds.length > 0 || sentIds.length > 0 || receivedIds.length > 0) {
+        return <FriendsView
+            acceptedIds={acceptedIds}
+            sentIds={sentIds}
+            receivedIds={receivedIds}
+        />
+    }
+}
+
+function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent" | "received" }) {
+    const profile = useProfile(userId)
+    const primaryName = usePrimaryName(userId)
+    const actions = useSubspaceActions()
+    const { address } = useWallet()
+    const [loading, setLoading] = React.useState(false)
+
+    React.useEffect(() => {
+        if (!profile) {
+            actions.profiles.get(userId)
+        }
+    }, [userId, profile, actions])
+
+    const handleAccept = async () => {
+        setLoading(true)
+        await actions.profiles.acceptFriend(userId)
+        await actions.profiles.get(address)
+        setLoading(false)
+    }
+
+    const handleReject = async () => {
+        setLoading(true)
+        await actions.profiles.rejectFriend(userId)
+        await actions.profiles.get(address)
+        setLoading(false)
+    }
+
+    const handleRemove = async () => {
+        setLoading(true)
+        await actions.profiles.removeFriend(userId)
+        await actions.profiles.get(address)
+        setLoading(false)
+    }
+
+    const displayName = primaryName || shortenAddress(userId)
+
+    return (
+        <Card className="group bg-secondary/20 transition-all duration-200 !p-0">
+            <CardContent className="m-0 p-2">
+                <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <ProfilePopover userId={userId} side="bottom" align="start" sideOffset={2}>
+                        <ProfileAvatar tx={profile?.pfp} className="w-10 h-10" />
+                    </ProfilePopover>
+
+                    {/* User Info */}
+                    {type == "accepted" ? (
+                        <Link to={`/app/dm/${userId}`} className="w-full">
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-primary truncate">
+                                    {displayName}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate font-mono">
+                                    {primaryName ? shortenAddress(userId) : "No primary name"}
+                                </div>
+                            </div>
+                        </Link>
+                    ) : <ProfilePopover userId={userId} side="bottom" align="start" sideOffset={2}>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-primary truncate">
+                                {displayName}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate font-mono">
+                                {primaryName ? shortenAddress(userId) : "No primary name"}
+                            </div>
+                        </div>
+                    </ProfilePopover>}
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2">
+                        {type === "received" && (
+                            <>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={handleAccept}
+                                    disabled={loading}
+                                    className="h-9 w-9 bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300"
+                                    title="Accept"
+                                >
+                                    <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={handleReject}
+                                    disabled={loading}
+                                    className="h-9 w-9 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300"
+                                    title="Reject"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </>
+                        )}
+                        {type === "sent" && (
+                            <div className="flex items-center gap-2">
+                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 px-2 py-1 bg-primary/10 rounded">
+                                    <Send className="h-3 w-3" />
+                                    Pending
+                                </div>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={handleReject}
+                                    disabled={loading}
+                                    className="h-9 w-9 hover:bg-red-500/20 hover:text-red-400"
+                                    title="Cancel Request"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                        {type === "accepted" && (
+                            <>
+                                <Button
+                                    size="icon"
+                                    variant="destructive"
+                                    onClick={handleRemove}
+                                    disabled={loading}
+                                    className="h-9 w-9 !bg-transparent hover:!bg-red-300/20 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Remove Friend"
+                                >
+                                    <UserX className="h-4 w-4" />
+                                </Button>
+                                <Link to={`/app/dm/${userId}`}>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-9 w-9 hover:bg-primary/20 text-primary"
+                                        title="Message"
+                                    >
+                                        <MessageSquare className="h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+function FriendsView({ acceptedIds, sentIds, receivedIds }: {
+    acceptedIds: string[],
+    sentIds: string[],
+    receivedIds: string[]
+}) {
+    const totalPending = receivedIds.length + sentIds.length
+
+    return (
+        <div className="flex-1 flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
+            <div className="max-w-4xl mx-auto w-full">
+                {/* Tabs Interface */}
+                <Tabs defaultValue="friends" className="w-full">
+                    {/* Header with Tabs */}
+                    <div className="border-b p-1.5 pl-4 flex items-center gap-4 font-ocr">
+                        <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4 shrink-0 text-muted-foreground" />
+                            <span className="text-muted-foreground">Friends</span>
+                        </div>
+
+                        <TabsList className="w-fit h-8 bg-transparent gap-4 ml-4">
+                            <TabsTrigger value="friends" className="flex items-center gap-2 h-7 cursor-pointer">
+                                <Users className="h-4 w-4" />
+                                All
+                            </TabsTrigger>
+                            <TabsTrigger value="pending" className="flex items-center gap-2 h-7 cursor-pointer">
+                                <UserPlus className="h-4 w-4" />
+                                Pending
+                                {totalPending > 0 && (
+                                    <span className="ml-1 bg-destructive text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[18px] h-[18px] flex items-center justify-center">
+                                        {totalPending}
+                                    </span>
+                                )}
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
+
+                    {/* Friends Tab */}
+                    <TabsContent value="friends" className="mt-2 px-4">
+                        <div className="space-y-2">
+                            {acceptedIds.length > 0 ? (
+                                acceptedIds.map(id => (
+                                    <FriendCard key={id} userId={id} type="accepted" />
+                                ))
+                            ) : (
+                                <div className="text-center py-8">
+                                    <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                                    <h3 className="text-sm font-semibold text-muted-foreground mb-1">No friends yet</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        Start adding friends to see them here
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </TabsContent>
+
+                    {/* Pending Tab */}
+                    <TabsContent value="pending" className="mt-2 px-4">
+                        <div className="space-y-4">
+                            {/* Received Requests Section */}
+                            {receivedIds.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 px-2 py-1">
+                                        <Mail className="h-4 w-4 text-green-400" />
+                                        <span className="text-sm font-semibold text-green-400">
+                                            Received Requests
+                                        </span>
+                                        <span className="text-xs  px-1.5 py-0.5 rounded">
+                                            {receivedIds.length}
+                                        </span>
+                                    </div>
+                                    {receivedIds.map(id => (
+                                        <FriendCard key={id} userId={id} type="received" />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Sent Requests Section */}
+                            {sentIds.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 px-2 py-1">
+                                        <Send className="h-4 w-4 text-primary/70" />
+                                        <span className="text-sm font-semibold text-primary/70">
+                                            Sent Requests
+                                        </span>
+                                        <span className="text-xs px-1.5 py-0.5 rounded">
+                                            {sentIds.length}
+                                        </span>
+                                    </div>
+                                    {sentIds.map(id => (
+                                        <FriendCard key={id} userId={id} type="sent" />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Empty State for Pending */}
+                            {receivedIds.length === 0 && sentIds.length === 0 && (
+                                <div className="text-center py-8">
+                                    <UserPlus className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                                    <h3 className="text-sm font-semibold text-muted-foreground mb-1">No pending requests</h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        All friend requests have been handled
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </TabsContent>
+                </Tabs>
+            </div>
+        </div>
+    )
+}
+
+export default function Welcome() {
+    const { activeServerId } = useGlobalState()
+    const activeServer = useServer(activeServerId)
+
+    // Scenario 1: No server active (app welcome)
+    if (!activeServer || !activeServerId) {
+        return <AppWelcome />
     }
 
     // Scenario 2: Server active but no channel selected (server welcome)

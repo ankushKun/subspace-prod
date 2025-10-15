@@ -481,6 +481,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
     const { activeServerId } = useGlobalState()
     const subspaceActions = useSubspaceActions()
     const profile = useProfile(userId)
+    const myProfile = useProfile(address)
     const primaryName = usePrimaryName(userId)
     const wanderTier = useWanderTier(userId)
     const member = useMember(activeServerId, userId)
@@ -488,6 +489,10 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
     const memberRoles: IRole[] = Object.keys(roles || {}).filter(roleId => Object.keys(member?.roles || {}).includes(roleId)).map(roleId => roles[roleId])
     const profileBadges: ProfileBadge[] = []
     const isOwnProfile = userId === address
+
+    // Check if user is already a friend or has pending request
+    const friends = myProfile ? myProfile.friends : { accepted: {}, sent: {}, received: {} }
+    const isFriendOrPending = userId in friends.accepted || userId in friends.sent || userId in friends.received
 
     if (primaryName) {
         const item: ProfileBadge = {
@@ -536,14 +541,21 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
         })
     }
 
+    async function handleSendFriendRequest() {
+        console.log("Sending friend request to", userId)
+        await subspaceActions.profiles.addFriend(userId)
+        await subspaceActions.profiles.get(userId)
+        await subspaceActions.profiles.get(address)
+    }
+
     return <Popover onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
+        <PopoverTrigger asChild className="cursor-pointer">
             {props.children}
         </PopoverTrigger>
         <PopoverContent sideOffset={7} className="w-74 overflow-clip bg-gradient-to-br from-background/95 via-background/90 to-background/85 backdrop-blur-md border-2 border-primary/20 shadow-2xl" {...rest}>
-            {!isOwnProfile && (
+            {!isOwnProfile && !isFriendOrPending && (
                 <div className="absolute top-2 right-1.5 flex items-center gap-1 z-50">
-                    <Button variant="ghost" size="icon" className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5">
+                    <Button variant="ghost" size="icon" className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5" onClick={handleSendFriendRequest}>
                         <UserPlus2 size={20} className="!w-3.5 !h-3.5" />
                     </Button>
                 </div>

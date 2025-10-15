@@ -12,6 +12,7 @@ import { useParams, useNavigate, useLocation } from "react-router"
 import { toast } from "sonner"
 import SubspaceLoader from "@/components/subspace-loader"
 import { useIsMobile } from "@/hooks/use-mobile"
+import DM from "@/routes/app/components/dm"
 
 declare global {
     interface Window {
@@ -21,10 +22,10 @@ declare global {
 }
 
 export default function App() {
-    const { activeServerId, activeChannelId, lastChannelByServer, actions: globalStateActions } = useGlobalState()
+    const { activeServerId, activeChannelId, activeFriendId, lastChannelByServer, actions: globalStateActions } = useGlobalState()
     const activeServer = useServer(activeServerId)
     const subspaceActions = useSubspaceActions()
-    const { serverId, channelId } = useParams()
+    const { serverId, channelId, friendId } = useParams()
     const navigate = useNavigate()
     const { address } = useWallet()
     const [showLoader, setShowLoader] = useState(true)
@@ -51,6 +52,7 @@ export default function App() {
     useEffect(() => {
         const urlServerId = serverId || ""
         const urlChannelId = channelId || ""
+        const urlFriendId = friendId || ""
 
         if (urlServerId !== activeServerId) {
             globalStateActions.setActiveServerId(urlServerId)
@@ -59,7 +61,11 @@ export default function App() {
         if (urlChannelId !== activeChannelId) {
             globalStateActions.setActiveChannelId(urlChannelId)
         }
-    }, [serverId, channelId, activeServerId, activeChannelId, globalStateActions])
+
+        if (urlFriendId !== activeFriendId) {
+            globalStateActions.setActiveFriendId(urlFriendId)
+        }
+    }, [serverId, channelId, friendId, activeServerId, activeChannelId, activeFriendId, globalStateActions])
 
     // Track the last opened channel for each server
     useEffect(() => {
@@ -69,12 +75,34 @@ export default function App() {
     }, [activeServerId, activeChannelId, globalStateActions])
 
     // Redirect to /app if server is active but not in user's joined servers
+    // Only redirect if we have loaded the user's profile and confirmed the server doesn't exist
     useEffect(() => {
-        if (activeServerId && joinedServers && !joinedServers[activeServerId]) {
-            console.log("Server not found in joined servers, redirecting to /app")
-            navigate("/app")
+        // Only check if we have a profile loaded (meaning joinedServers data is ready)
+        if (activeServerId && userProfile && joinedServers) {
+            // Check if there are any servers at all (to ensure data is loaded)
+            const hasLoadedServers = Object.keys(userProfile.servers || {}).length > 0 || Object.keys(joinedServers).length > 0
+
+            // Only redirect if data is loaded AND server is not in the list
+            if ((hasLoadedServers && !joinedServers[activeServerId]) ||
+                (userProfile.servers && !userProfile.servers[activeServerId])) {
+                console.log("Server not found in joined servers, redirecting to /app")
+                navigate("/app")
+            }
         }
-    }, [activeServerId, joinedServers, navigate])
+    }, [activeServerId, joinedServers, userProfile, navigate])
+
+    // Redirect to /app if friend DM is active but friend is not accepted
+    useEffect(() => {
+        if (activeFriendId && userProfile) {
+            // Check if friend is in the accepted friends list
+            const isAcceptedFriend = userProfile.friends?.accepted?.[activeFriendId]
+
+            if (!isAcceptedFriend) {
+                console.log("Friend not found in accepted friends, redirecting to /app")
+                navigate("/app")
+            }
+        }
+    }, [activeFriendId, userProfile, navigate])
 
     useEffect(() => {
         if (!activeServerId || !Subspace.initialized) {
@@ -157,8 +185,8 @@ export default function App() {
             <Profile />
         </div>
 
-        {/* Welcome section / messages list (if server active or no channel selected) */}
-        {(!activeServer || !activeChannelId) && <Welcome />}
+        {/* Friend section / messages list (if server active or no channel selected) */}
+        {friendId ? <DM friendId={friendId} /> : (!activeServer || !activeChannelId) && <Welcome />}
 
         {/* messages list (if server active) */}
         {activeServer && activeChannelId && <Messages />}

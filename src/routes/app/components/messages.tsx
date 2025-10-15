@@ -709,7 +709,7 @@ function Members({ collapsible }: { collapsible: boolean }) {
             }
         }
         fetchProfiles();
-    }, [members])
+    }, [])
 
     useEffect(() => {
         if (activeServerId) {
