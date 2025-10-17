@@ -9,6 +9,7 @@ import { getPrimaryName, getWanderTier } from "@/lib/utils"
 
 interface SubspaceState {
     profiles: Record<string, IProfile>
+    recentDms: Record<string, number> // userId -> timestamp pairs
     servers: Record<string, IServer> // this will contain all server metadata like channels, roles, server info etc
     members: Record<string, Record<string, IMember>> // serverid -> userid -> member
     messages: Record<string, Record<string, Record<string, IMessage>>> // serverid -> channelid -> messageid -> message
@@ -93,6 +94,7 @@ interface SubspaceActions {
 
 export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     profiles: {},
+    recentDms: {},
     primaryNames: {},
     wanderTiers: {},
     servers: {},
@@ -111,6 +113,15 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     Utils.log({ type: result ? "success" : "error", label: "Got Profile", data: result, duration })
                     result && set((state) => ({ profiles: { ...state.profiles, [profileId]: result } }))
                     const address = result.id
+                    // recent dms
+                    try {
+                        Utils.log({ type: "debug", label: "Getting Recent Dms", data: address })
+                        const { result: recentDms, duration } = await Utils.withDuration(() => SubspaceProfiles.getRecentDms(result.dm_process))
+                        recentDms && set((state) => ({ recentDms: { ...state.recentDms, ...recentDms } }))
+                        Utils.log({ type: "success", label: "Got Recent Dms", data: recentDms, duration })
+                    } catch (e) {
+                        Utils.log({ type: "error", label: "Error Getting Recent Dms", data: e })
+                    }
                     // primary name
                     try {
                         Utils.log({ type: "debug", label: "Getting Primary Name", data: address })
@@ -693,6 +704,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({
         profiles: state.profiles,
+        recentDms: state.recentDms,
         primaryNames: state.primaryNames,
         wanderTiers: state.wanderTiers,
         servers: state.servers,
@@ -812,6 +824,10 @@ export function useFriends(dmProcessId: string): string[] {
 
 export function useBlockedUsers(dmProcessId: string): string[] {
     return useSubspace((state) => state.blockedUsers[dmProcessId] ? state.blockedUsers[dmProcessId] : [])
+}
+
+export function useRecentDms(): Record<string, number> {
+    return useSubspace((state) => state.recentDms)
 }
 
 // Helper function to access actions

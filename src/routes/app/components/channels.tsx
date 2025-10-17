@@ -1,8 +1,10 @@
 import { useGlobalState } from "@/hooks/use-global-state";
-import { useChannels, useCategories, useServer, useSubspaceActions, useMember } from "@/hooks/use-subspace";
+import { useChannels, useCategories, useServer, useSubspaceActions, useMember, useRecentDms, useProfile, usePrimaryName } from "@/hooks/use-subspace";
 import { useWallet } from "@/hooks/use-wallet";
 import { cn } from "@/lib/utils";
 import { Hash, MessageSquare, ChevronDown, ChevronRight, Settings, Copy, Users, LogOut, Plus, FolderPlus, Check } from "lucide-react";
+import { shortenAddress } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/profile";
 import type { IChannel, ICategory } from "@subspace-protocol/sdk/types";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,6 +21,12 @@ import { Permissions, EPermissions } from "@subspace-protocol/sdk/permissions"
 
 interface ChannelItemProps {
     channel: IChannel;
+    isActive: boolean;
+    onClick: () => void;
+}
+
+interface DmItemProps {
+    friendId: string;
     isActive: boolean;
     onClick: () => void;
 }
@@ -48,6 +56,33 @@ function ChannelItem({ channel, isActive, onClick }: ChannelItemProps) {
                     isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}>
                     {channel.name}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function DmItem({ friendId, isActive, onClick }: DmItemProps) {
+    const profile = useProfile(friendId);
+    const primaryName = usePrimaryName(friendId);
+    const displayName = primaryName || shortenAddress(friendId);
+
+    return (
+        <div
+            className={cn(
+                "group relative flex items-center mx-2 px-2 py-1 mb-1 rounded cursor-pointer transition-all duration-75",
+                "hover:bg-muted/60 active:bg-muted/80",
+                isActive && "bg-muted text-foreground"
+            )}
+            onClick={onClick}
+        >
+            <div className="flex items-center min-w-0 flex-1">
+                <ProfileAvatar tx={profile?.pfp} className="w-10 h-10 shrink-0 p-0" />
+                <span className={cn(
+                    "ml-2 text-sm font-medium truncate transition-colors",
+                    isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
+                )}>
+                    {displayName}
                 </span>
             </div>
         </div>
@@ -96,13 +131,14 @@ function CategorySection({ category, channels, activeChannelId, onChannelClick }
 }
 
 export default function Channels() {
-    const { activeServerId, activeChannelId, actions: globalStateActions } = useGlobalState();
+    const { activeServerId, activeChannelId, activeFriendId, actions: globalStateActions } = useGlobalState();
     const { address } = useWallet();
     const channels = useChannels(activeServerId);
     const categories = useCategories(activeServerId);
     const activeServer = useServer(activeServerId);
     const currentMember = useMember(activeServerId, address);
     const subspaceActions = useSubspaceActions();
+    const recentDms = useRecentDms();
     const navigate = useNavigate();
 
     // Dialog states
@@ -117,6 +153,10 @@ export default function Channels() {
 
     const handleChannelClick = (channelId: string) => {
         navigate(`/app/${activeServerId}/${channelId}`);
+    };
+
+    const handleDmClick = (friendId: string) => {
+        navigate(`/app/dm/${friendId}`);
     };
 
     const handleCopyInvite = () => {
@@ -279,7 +319,10 @@ export default function Channels() {
             <div className="flex flex-col h-full">
                 {/* Friends header */}
                 <Link to="/app" className="w-full p-2">
-                    <Button variant="ghost" className="flex items-center justify-start px-4 py-3 w-full bg-secondary">
+                    <Button variant="ghost" className={cn(
+                        "flex items-center justify-start px-4 py-3 w-full transition-colors",
+                        activeFriendId ? "bg-transparent hover:bg-muted/50" : "bg-secondary"
+                    )}>
                         <Users className="w-4 h-4 mr-2 text-muted-foreground" />
                         <span className="text-sm font-semibold text-foreground">Friends</span>
                     </Button>
@@ -293,9 +336,25 @@ export default function Channels() {
 
                 {/* DM List */}
                 <div className="flex-1 overflow-y-auto py-2 border-t">
-                    <div className="text-sm text-muted-foreground px-4 py-2">
-                        No direct messages yet. DM functionality will be available soon.
-                    </div>
+                    {Object.keys(recentDms).length > 0 ? (
+                        <div className="space-y-1">
+                            {Object.entries(recentDms)
+                                .filter(([friendId]) => friendId !== address) // Filter out user's own ID
+                                .sort(([, a], [, b]) => b - a) // Sort by timestamp descending
+                                .map(([friendId, timestamp]) => (
+                                    <DmItem
+                                        key={friendId}
+                                        friendId={friendId}
+                                        isActive={activeFriendId === friendId}
+                                        onClick={() => handleDmClick(friendId)}
+                                    />
+                                ))}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-muted-foreground px-4 py-2">
+                            No direct messages yet. DM functionality will be available soon.
+                        </div>
+                    )}
                 </div>
             </div>
         );

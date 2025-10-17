@@ -489,6 +489,7 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
     const memberRoles: IRole[] = Object.keys(roles || {}).filter(roleId => Object.keys(member?.roles || {}).includes(roleId)).map(roleId => roles[roleId])
     const profileBadges: ProfileBadge[] = []
     const isOwnProfile = userId === address
+    const [isSendingFriendRequest, setIsSendingFriendRequest] = useState(false)
 
     // Check if user is already a friend or has pending request
     const friends = myProfile ? myProfile.friends : { accepted: {}, sent: {}, received: {} }
@@ -543,9 +544,18 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
 
     async function handleSendFriendRequest() {
         console.log("Sending friend request to", userId)
-        await subspaceActions.profiles.addFriend(userId)
-        await subspaceActions.profiles.get(userId)
-        await subspaceActions.profiles.get(address)
+        setIsSendingFriendRequest(true)
+        try {
+            await subspaceActions.profiles.addFriend(userId)
+            await subspaceActions.profiles.get(userId)
+            await subspaceActions.profiles.get(address)
+            window.toast?.success("Friend request sent!")
+        } catch (error) {
+            console.error("Failed to send friend request:", error)
+            window.toast?.error("Failed to send friend request. Please try again.")
+        } finally {
+            setIsSendingFriendRequest(false)
+        }
     }
 
     return <Popover onOpenChange={handleOpenChange}>
@@ -555,8 +565,18 @@ export function ProfilePopover(props: PopoverContentProps & { userId: string }) 
         <PopoverContent sideOffset={7} className="w-74 overflow-clip bg-gradient-to-br from-background/95 via-background/90 to-background/85 backdrop-blur-md border-2 border-primary/20 shadow-2xl" {...rest}>
             {!isOwnProfile && !isFriendOrPending && (
                 <div className="absolute top-2 right-1.5 flex items-center gap-1 z-50">
-                    <Button variant="ghost" size="icon" className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5" onClick={handleSendFriendRequest}>
-                        <UserPlus2 size={20} className="!w-3.5 !h-3.5" />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 bg-background/20 hover:!bg-background/50 backdrop-blur pl-0.5"
+                        onClick={handleSendFriendRequest}
+                        disabled={isSendingFriendRequest}
+                    >
+                        {isSendingFriendRequest ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent" />
+                        ) : (
+                            <UserPlus2 size={20} className="!w-3.5 !h-3.5" />
+                        )}
                     </Button>
                 </div>
             )}

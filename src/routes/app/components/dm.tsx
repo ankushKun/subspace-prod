@@ -232,6 +232,7 @@ export default function DM({ friendId }: DMProps) {
     const myProfile = useProfile(address);
     const friendProfile = useProfile(friendId);
     const friendPrimaryName = usePrimaryName(friendId);
+    const [isAddingFriend, setIsAddingFriend] = useState(false);
 
     // Get DM process ID from my profile
     const dmProcessId = myProfile?.dm_process;
@@ -377,6 +378,22 @@ export default function DM({ friendId }: DMProps) {
     // Display name for friend - IProfile doesn't have a name field, so we use primary name or shortened address
     const friendDisplayName = friendPrimaryName || shortenAddress(friendId);
 
+    const handleAddFriend = async () => {
+        if (!Subspace.initialized) return;
+
+        setIsAddingFriend(true);
+        try {
+            await subspaceActions.profiles.addFriend(friendId);
+            await subspaceActions.profiles.get(address);
+            window.toast?.success("Friend request sent!");
+        } catch (error) {
+            console.error("Failed to send friend request:", error);
+            window.toast?.error("Failed to send friend request. Please try again.");
+        } finally {
+            setIsAddingFriend(false);
+        }
+    };
+
     if (!myProfile || !friendProfile) {
         return (
             <div className="grow flex items-center justify-center">
@@ -400,15 +417,21 @@ export default function DM({ friendId }: DMProps) {
                         Add {friendDisplayName} as a friend to start messaging.
                     </p>
                     <Button
-                        onClick={() => {
-                            if (Subspace.initialized) {
-                                subspaceActions.profiles.addFriend(friendId);
-                            }
-                        }}
+                        onClick={handleAddFriend}
+                        disabled={isAddingFriend}
                         className="bg-primary hover:bg-primary/90"
                     >
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Add Friend
+                        {isAddingFriend ? (
+                            <>
+                                <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent mr-2" />
+                                Sending...
+                            </>
+                        ) : (
+                            <>
+                                <UserPlus className="w-4 h-4 mr-2" />
+                                Add Friend
+                            </>
+                        )}
                     </Button>
                 </div>
             </div>

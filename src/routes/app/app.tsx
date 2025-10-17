@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import SubspaceLoader from "@/components/subspace-loader"
 import { useIsMobile } from "@/hooks/use-mobile"
 import DM from "@/routes/app/components/dm"
+import { useProfilePolling } from "@/hooks/use-profile-polling"
 
 declare global {
     interface Window {
@@ -34,6 +35,9 @@ export default function App() {
     const userProfile = useProfile(address)
     const joinedServers = useProfileServers(address)
     const isMobile = useIsMobile()
+
+    // Start profile polling when user is connected
+    useProfilePolling()
 
     useEffect(() => {
         window.toast = toast

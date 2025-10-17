@@ -22,46 +22,11 @@ function AppWelcome() {
     const sentIds = Object.keys(friends.sent)
     const receivedIds = Object.keys(friends.received)
 
-    // case 1: if there are no friends, show the hero section
-    if (acceptedIds.length === 0 && sentIds.length === 0 && receivedIds.length === 0) {
-        return (
-            <div className="flex-1 flex items-center justify-center p-8 bg-gradient-to-br from-background via-background to-primary/5">
-                <div className="max-w-2xl mx-auto text-center space-y-8 animate-in fade-in-50 duration-700">
-                    {/* Hero Section */}
-                    <div className="space-y-6">
-                        <div className="relative">
-                            <img
-                                src={alienGreen}
-                                alt="Subspace"
-                                className="w-16 h-24 mx-auto opacity-90 animate-breathe"
-                            />
-                            <div className="absolute inset-0 bg-primary/20 w-32 mx-auto rounded-full blur-3xl scale-75 animate-smooth-pulse" />
-                        </div>
-
-                        <div className="space-y-3">
-                            <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-ocr">
-                                Welcome to Subspace <span className="text-sm -ml-6">(beta)</span>
-                            </h1>
-                            <p className="text-lg text-muted-foreground max-w-lg mx-auto leading-relaxed">
-                                Your decentralized communication hub. Connect with communities, share ideas, and explore cyberspace.
-                            </p>
-                        </div>
-                    </div>
-
-
-                </div>
-            </div>
-        )
-    }
-
-    // case 2: if there are friends, show the friends section
-    if (acceptedIds.length > 0 || sentIds.length > 0 || receivedIds.length > 0) {
-        return <FriendsView
-            acceptedIds={acceptedIds}
-            sentIds={sentIds}
-            receivedIds={receivedIds}
-        />
-    }
+    return <FriendsView
+        acceptedIds={acceptedIds}
+        sentIds={sentIds}
+        receivedIds={receivedIds}
+    />
 }
 
 function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent" | "received" }) {
@@ -79,23 +44,44 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
 
     const handleAccept = async () => {
         setLoading(true)
-        await actions.profiles.acceptFriend(userId)
-        await actions.profiles.get(address)
-        setLoading(false)
+        try {
+            await actions.profiles.acceptFriend(userId)
+            await actions.profiles.get(address)
+            window.toast?.success("Friend request accepted!")
+        } catch (error) {
+            console.error("Failed to accept friend request:", error)
+            window.toast?.error("Failed to accept friend request. Please try again.")
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleReject = async () => {
         setLoading(true)
-        await actions.profiles.rejectFriend(userId)
-        await actions.profiles.get(address)
-        setLoading(false)
+        try {
+            await actions.profiles.rejectFriend(userId)
+            await actions.profiles.get(address)
+            window.toast?.success("Friend request rejected")
+        } catch (error) {
+            console.error("Failed to reject friend request:", error)
+            window.toast?.error("Failed to reject friend request. Please try again.")
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleRemove = async () => {
         setLoading(true)
-        await actions.profiles.removeFriend(userId)
-        await actions.profiles.get(address)
-        setLoading(false)
+        try {
+            await actions.profiles.removeFriend(userId)
+            await actions.profiles.get(address)
+            window.toast?.success("Friend removed")
+        } catch (error) {
+            console.error("Failed to remove friend:", error)
+            window.toast?.error("Failed to remove friend. Please try again.")
+        } finally {
+            setLoading(false)
+        }
     }
 
     const displayName = primaryName || shortenAddress(userId)
@@ -144,7 +130,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     className="h-9 w-9 bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300"
                                     title="Accept"
                                 >
-                                    <Check className="h-4 w-4" />
+                                    {loading ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
+                                    ) : (
+                                        <Check className="h-4 w-4" />
+                                    )}
                                 </Button>
                                 <Button
                                     size="icon"
@@ -154,7 +144,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     className="h-9 w-9 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300"
                                     title="Reject"
                                 >
-                                    <X className="h-4 w-4" />
+                                    {loading ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
+                                    ) : (
+                                        <X className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </>
                         )}
@@ -172,7 +166,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     className="h-9 w-9 hover:bg-red-500/20 hover:text-red-400"
                                     title="Cancel Request"
                                 >
-                                    <X className="h-4 w-4" />
+                                    {loading ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
+                                    ) : (
+                                        <X className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
                         )}
@@ -186,7 +184,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     className="h-9 w-9 !bg-transparent hover:!bg-red-300/20 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                                     title="Remove Friend"
                                 >
-                                    <UserX className="h-4 w-4" />
+                                    {loading ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
+                                    ) : (
+                                        <UserX className="h-4 w-4" />
+                                    )}
                                 </Button>
                                 <Link to={`/app/dm/${userId}`}>
                                     <Button
@@ -217,12 +219,12 @@ function FriendsView({ acceptedIds, sentIds, receivedIds }: {
     const { address } = useWallet()
 
     return (
-        <div className="flex-1 flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
-            <div className="mx-auto w-full">
+        <div className="flex-1 flex flex-col bg-gradient-to-br from-background via-background to-primary/5 min-h-0">
+            <div className="mx-auto w-full h-full flex flex-col">
                 {/* Tabs Interface */}
-                <Tabs defaultValue="friends" className="w-full">
+                <Tabs defaultValue="friends" className="w-full h-full flex flex-col">
                     {/* Header with Tabs */}
-                    <div className="border-b p-1.5 pl-4 flex items-center gap-4 font-ocr">
+                    <div className="border-b p-1.5 pl-4 flex items-center gap-4 font-ocr w-full">
                         <div className="flex items-center gap-1">
                             <Users className="w-4 h-4 shrink-0 text-muted-foreground" />
                             <span className="text-muted-foreground">Friends</span>
@@ -247,27 +249,49 @@ function FriendsView({ acceptedIds, sentIds, receivedIds }: {
                     </div>
 
                     {/* Friends Tab */}
-                    <TabsContent value="friends" className="mt-2 px-4">
-                        <div className="space-y-2">
-                            {acceptedIds.length > 0 ? (
-                                acceptedIds.map(id => (
+                    <TabsContent value="friends" className="mt-2 px-0 w-full flex-1 flex flex-col min-h-0">
+                        <div className="space-y-2 w-full flex-1 overflow-y-auto px-0">
+                            {acceptedIds.length > 0 ? (<div className="px-4">
+                                {acceptedIds.map(id => (
                                     <FriendCard key={id} userId={id} type="accepted" />
-                                ))
+                                ))}
+                            </div>
                             ) : (
-                                <div className="text-center py-8">
-                                    <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                                    <h3 className="text-sm font-semibold text-muted-foreground mb-1">No friends yet</h3>
-                                    <p className="text-xs text-muted-foreground">
-                                        Start adding friends to see them here
-                                    </p>
-                                </div>
+                                <>
+                                    <div className="w-full h-full flex items-center justify-center p-8 bg-gradient-to-br from-background via-background to-primary/5">
+                                        <div className="max-w-2xl mx-auto text-center space-y-8 animate-in fade-in-50 duration-700">
+                                            {/* Hero Section */}
+                                            <div className="space-y-6">
+                                                <div className="relative">
+                                                    <img
+                                                        src={alienGreen}
+                                                        alt="Subspace"
+                                                        className="w-16 h-24 mx-auto opacity-90 animate-breathe"
+                                                    />
+                                                    <div className="absolute inset-0 bg-primary/20 w-32 mx-auto rounded-full blur-3xl scale-75 animate-smooth-pulse" />
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent font-ocr">
+                                                        Welcome to Subspace <span className="text-sm -ml-6">(beta)</span>
+                                                    </h1>
+                                                    <p className="text-lg text-muted-foreground max-w-lg mx-auto leading-relaxed">
+                                                        Your decentralized communication hub. Connect with communities, share ideas, and explore cyberspace.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+
+                                        </div>
+                                    </div>
+                                </>
                             )}
                         </div>
                     </TabsContent>
 
                     {/* Pending Tab */}
-                    <TabsContent value="pending" className="mt-2 px-4">
-                        <div className="space-y-4">
+                    <TabsContent value="pending" className="mt-2 px-4 w-full flex-1 flex flex-col min-h-0">
+                        <div className="space-y-4 w-full flex-1 overflow-y-auto">
                             {/* Received Requests Section */}
                             {receivedIds.length > 0 && (
                                 <div className="space-y-2">
