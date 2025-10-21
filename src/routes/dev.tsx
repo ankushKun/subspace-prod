@@ -5,15 +5,38 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useProfile, useProfiles, useSubspace, useSubspaceActions } from "@/hooks/use-subspace"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { useProfile, useProfiles, useSubspace, useSubspaceActions, useDmConversation, useDmConversations, useFriends, useRecentDms, usePrimaryNames, useWanderTiers } from "@/hooks/use-subspace"
+import { useGlobalState } from "@/hooks/use-global-state"
 import { useWallet } from "@/hooks/use-wallet"
 import { Subspace } from "@subspace-protocol/sdk"
 import { useEffect, useState } from "react"
-import { User, Server, Plus, Search, UserPlus, Code2, Wallet, Hash, Users, Shield, MessageSquare, Mail, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { User, Server, Plus, Search, UserPlus, Code2, Wallet, Hash, Users, Shield, MessageSquare, Mail, Trash2, ChevronDown, ChevronUp, Heart, UserCheck, UserX, Send, Clock, Bug } from "lucide-react"
+import JsonView from "@uiw/react-json-view"
+import { darkTheme } from '@uiw/react-json-view/dark';
+
+
+function Json({ value }: { value: any }) {
+    return (
+        <JsonView
+            value={value}
+            style={{ ...darkTheme, borderRadius: '6px', padding: '4px' }}
+            enableClipboard={false}
+            displayDataTypes={false}
+            collapsed={true}
+            shortenTextAfterLength={100}
+            highlightUpdates
+            objectSortKeys
+            displayObjectSize
+
+        />
+    )
+}
 
 export default function Dev() {
-    const { profiles, servers, members, actions: subspaceActions } = useSubspace()
+    const { profiles, servers, members, actions: subspaceActions, dmConversations, friends, blockedUsers, recentDms, primaryNames, wanderTiers, messages } = useSubspace()
     const { connected, address, actions: walletActions } = useWallet()
+    const { activeServerId, activeChannelId, activeFriendId, lastChannelByServer, subspaceFailed, actions: globalActions } = useGlobalState()
     const profile = useProfile(address)
     const [serverId, setServerId] = useState("server-id")
     const [userId, setUserId] = useState("")
@@ -25,6 +48,8 @@ export default function Dev() {
     const [messageContent, setMessageContent] = useState("Hello from dev console!")
     const [dmUserId, setDmUserId] = useState("")
     const [dmMessageId, setDmMessageId] = useState("")
+    const [dmProcessId, setDmProcessId] = useState("")
+    const [dmContent, setDmContent] = useState("Hello from dev console!")
 
     // Optional fields state
     const [serverName, setServerName] = useState("Dev Test Server")
@@ -62,6 +87,13 @@ export default function Dev() {
         }
     }, [address])
 
+    // Set DM process ID from profile
+    useEffect(() => {
+        if (profile?.dm_process) {
+            setDmProcessId(profile.dm_process)
+        }
+    }, [profile])
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-6">
             <div className="mx-auto max-w-6xl space-y-8">
@@ -70,11 +102,11 @@ export default function Dev() {
                     <div className="flex items-center justify-center gap-2">
                         <Code2 className="h-8 w-8 text-primary" />
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                            Developer Console
+                            Developer Utilities
                         </h1>
                     </div>
                     <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                        Test and interact with Subspace SDK features in a beautiful development environment
+                        Test and interact with Subspace SDK features
                     </p>
                 </div>
 
@@ -139,6 +171,118 @@ export default function Dev() {
                     </CardContent>
                 </Card>
 
+                {/* Debug Sheet */}
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <Button variant="ghost" className="gap-2 fixed top-12 right-10 z-30 !bg-secondary">
+                            <Bug className="h-4 w-4" />
+                            View State
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="max-h-[87vh] overflow-y-auto p-4">
+
+                        {/* Subspace State */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-primary">Subspace State</h3>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Profiles</h4>
+                                    <Json value={profiles} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Servers</h4>
+                                    <Json value={servers} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Members</h4>
+                                    <Json value={members} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Messages</h4>
+                                    <Json value={messages} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">DM Conversations</h4>
+                                    <Json value={dmConversations} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Friends</h4>
+                                    <Json value={friends} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Blocked Users</h4>
+                                    <Json value={blockedUsers} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Recent DMs</h4>
+                                    <Json value={recentDms} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Primary Names</h4>
+                                    <Json value={primaryNames} />
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Wander Tiers</h4>
+                                    <Json value={wanderTiers} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Global State */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-primary">Global State</h3>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Active Server ID</h4>
+                                    <code className="text-xs font-mono p-2 bg-muted rounded-lg block">
+                                        {activeServerId || "Not set"}
+                                    </code>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Active Channel ID</h4>
+                                    <code className="text-xs font-mono p-2 bg-muted rounded-lg block">
+                                        {activeChannelId || "Not set"}
+                                    </code>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Active Friend ID</h4>
+                                    <code className="text-xs font-mono p-2 bg-muted rounded-lg block">
+                                        {activeFriendId || "Not set"}
+                                    </code>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium mb-2">Last Channel by Server</h4>
+                                    <Json value={lastChannelByServer} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Current Profile */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-semibold text-primary">Current Profile</h3>
+                            <Json value={profile} />
+                        </div>
+                    </SheetContent>
+                </Sheet>
+
                 {/* Action Sections */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Profile Actions */}
@@ -202,9 +346,7 @@ export default function Dev() {
                                     <Separator />
                                     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                                         <p className="text-sm font-medium">Current Profile:</p>
-                                        <pre className="bg-muted p-2 rounded text-xs overflow-auto">
-                                            {JSON.stringify(profile, null, 2)}
-                                        </pre>
+                                        <Json value={profile} />
                                     </div>
                                 </>
                             )}
@@ -579,9 +721,9 @@ export default function Dev() {
                     </Card>
                 </div>
 
-                {/* Third Row - DM and Profile Management */}
+                {/* Third Row - Enhanced DM and Friends Management */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* DM Management */}
+                    {/* Enhanced DM Management */}
                     <Card className="h-fit">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -589,16 +731,16 @@ export default function Dev() {
                                 Direct Message Management
                             </CardTitle>
                             <CardDescription>
-                                Send, edit, and delete direct messages
+                                Send, edit, and delete direct messages to friends
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="space-y-2">
-                                <Label htmlFor="dm-user-id">DM User ID (Required)</Label>
+                                <Label htmlFor="dm-user-id">Friend ID (Required)</Label>
                                 <div className="flex gap-2">
                                     <Input
                                         id="dm-user-id"
-                                        placeholder="Enter user ID for DM..."
+                                        placeholder="Enter friend user ID..."
                                         value={dmUserId}
                                         onChange={(e) => setDmUserId(e.target.value)}
                                         className="font-mono flex-1"
@@ -615,6 +757,15 @@ export default function Dev() {
                                 </div>
                             </div>
                             <div className="space-y-2">
+                                <Label htmlFor="dm-content">DM Content (Required)</Label>
+                                <Input
+                                    id="dm-content"
+                                    placeholder="Enter DM content..."
+                                    value={dmContent}
+                                    onChange={(e) => setDmContent(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
                                 <Label htmlFor="dm-message-id">DM Message ID (For Edit/Delete)</Label>
                                 <Input
                                     id="dm-message-id"
@@ -627,20 +778,20 @@ export default function Dev() {
                             <Button
                                 onClick={() => subspaceActions.profiles.sendDM({
                                     userId: dmUserId,
-                                    content: messageContent
+                                    content: dmContent
                                 })}
                                 variant="outline"
                                 className="w-full justify-start gap-2"
-                                disabled={!connected || !dmUserId.trim() || !messageContent.trim()}
+                                disabled={!connected || !dmUserId.trim() || !dmContent.trim()}
                             >
-                                <Plus className="h-4 w-4" />
+                                <Send className="h-4 w-4" />
                                 Send DM
                             </Button>
                             <Button
                                 onClick={() => subspaceActions.profiles.editDM({
                                     userId: dmUserId,
                                     messageId: dmMessageId,
-                                    content: messageContent + " (edited)"
+                                    content: dmContent + " (edited)"
                                 })}
                                 variant="outline"
                                 className="w-full justify-start gap-2"
@@ -664,11 +815,11 @@ export default function Dev() {
                         </CardContent>
                     </Card>
 
-                    {/* Friend Management */}
+                    {/* Enhanced Friend Management */}
                     <Card className="h-fit">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <Users className="h-5 w-5" />
+                                <Heart className="h-5 w-5" />
                                 Friend Management
                             </CardTitle>
                             <CardDescription>
@@ -697,42 +848,46 @@ export default function Dev() {
                                     </Button>
                                 </div>
                             </div>
-                            <Button
-                                onClick={() => subspaceActions.profiles.addFriend(friendId)}
-                                variant="outline"
-                                className="w-full justify-start gap-2"
-                                disabled={!connected || !friendId.trim()}
-                            >
-                                <UserPlus className="h-4 w-4" />
-                                Add Friend
-                            </Button>
-                            <Button
-                                onClick={() => subspaceActions.profiles.acceptFriend(friendId)}
-                                variant="outline"
-                                className="w-full justify-start gap-2"
-                                disabled={!connected || !friendId.trim()}
-                            >
-                                <Plus className="h-4 w-4" />
-                                Accept Friend Request
-                            </Button>
-                            <Button
-                                onClick={() => subspaceActions.profiles.rejectFriend(friendId)}
-                                variant="outline"
-                                className="w-full justify-start gap-2"
-                                disabled={!connected || !friendId.trim()}
-                            >
-                                <Search className="h-4 w-4" />
-                                Reject Friend Request
-                            </Button>
-                            <Button
-                                onClick={() => subspaceActions.profiles.removeFriend(friendId)}
-                                variant="destructive"
-                                className="w-full justify-start gap-2"
-                                disabled={!connected || !friendId.trim()}
-                            >
-                                <Plus className="h-4 w-4 rotate-45" />
-                                Remove Friend
-                            </Button>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    onClick={() => subspaceActions.profiles.addFriend(friendId)}
+                                    variant="outline"
+                                    className="w-full justify-start gap-2"
+                                    disabled={!connected || !friendId.trim()}
+                                >
+                                    <UserPlus className="h-4 w-4" />
+                                    Add Friend
+                                </Button>
+                                <Button
+                                    onClick={() => subspaceActions.profiles.acceptFriend(friendId)}
+                                    variant="outline"
+                                    className="w-full justify-start gap-2"
+                                    disabled={!connected || !friendId.trim()}
+                                >
+                                    <UserCheck className="h-4 w-4" />
+                                    Accept
+                                </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    onClick={() => subspaceActions.profiles.rejectFriend(friendId)}
+                                    variant="outline"
+                                    className="w-full justify-start gap-2"
+                                    disabled={!connected || !friendId.trim()}
+                                >
+                                    <UserX className="h-4 w-4" />
+                                    Reject
+                                </Button>
+                                <Button
+                                    onClick={() => subspaceActions.profiles.removeFriend(friendId)}
+                                    variant="destructive"
+                                    className="w-full justify-start gap-2"
+                                    disabled={!connected || !friendId.trim()}
+                                >
+                                    <UserX className="h-4 w-4" />
+                                    Remove
+                                </Button>
+                            </div>
                             <Separator />
                             <Button
                                 onClick={() => subspaceActions.profiles.update({
@@ -751,8 +906,102 @@ export default function Dev() {
                     </Card>
                 </div>
 
+                {/* Fourth Row - DM Conversations and Recent DMs */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* DM Conversation Management */}
+                    <Card className="h-fit">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <MessageSquare className="h-5 w-5" />
+                                DM Conversation Management
+                            </CardTitle>
+                            <CardDescription>
+                                Get and manage DM conversations
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="dm-process-id">DM Process ID (Auto-filled from profile)</Label>
+                                <Input
+                                    id="dm-process-id"
+                                    placeholder="Enter DM process ID..."
+                                    value={dmProcessId}
+                                    onChange={(e) => setDmProcessId(e.target.value)}
+                                    className="font-mono"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="dm-conversation-friend-id">Friend ID for Conversation</Label>
+                                <Input
+                                    id="dm-conversation-friend-id"
+                                    placeholder="Enter friend ID..."
+                                    value={dmUserId}
+                                    onChange={(e) => setDmUserId(e.target.value)}
+                                    className="font-mono"
+                                />
+                            </div>
+                            <Button
+                                onClick={() => subspaceActions.profiles.getDmConversation(dmProcessId, dmUserId)}
+                                variant="outline"
+                                className="w-full justify-start gap-2"
+                                disabled={!connected || !dmProcessId.trim() || !dmUserId.trim()}
+                            >
+                                <Search className="h-4 w-4" />
+                                Get DM Conversation
+                            </Button>
+                            <Button
+                                onClick={() => subspaceActions.profiles.getConversationIds(dmProcessId)}
+                                variant="outline"
+                                className="w-full justify-start gap-2"
+                                disabled={!connected || !dmProcessId.trim()}
+                            >
+                                <Users className="h-4 w-4" />
+                                Get Conversation IDs
+                            </Button>
+                            <Button
+                                onClick={() => subspaceActions.profiles.getBlockedUsers(dmProcessId)}
+                                variant="outline"
+                                className="w-full justify-start gap-2"
+                                disabled={!connected || !dmProcessId.trim()}
+                            >
+                                <UserX className="h-4 w-4" />
+                                Get Blocked Users
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* Recent DMs and Friends Display */}
+                    {/* <Card className="h-fit">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Clock className="h-5 w-5" />
+                                Recent Activity
+                            </CardTitle>
+                            <CardDescription>
+                                View recent DMs and friends
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="space-y-2">
+                                <Label>Recent DMs</Label>
+                                <Json value={useRecentDms()} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Current Friends</Label>
+                                <Json value={profile?.friends || {}} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>DM Process ID</Label>
+                                <code className="text-xs font-mono p-2 bg-muted rounded-lg">
+                                    {profile?.dm_process || "Not available"}
+                                </code>
+                            </div>
+                        </CardContent>
+                    </Card> */}
+                </div>
+
                 {/* Debug Information */}
-                <Card className="border-dashed">
+                {/* <Card className="border-dashed">
                     <CardHeader>
                         <CardTitle className="text-sm font-mono">Debug Information</CardTitle>
                         <CardDescription>
@@ -760,28 +1009,37 @@ export default function Dev() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                             <div>
                                 <p className="font-medium mb-2">Profiles:</p>
-                                <pre className="bg-muted p-2 rounded text-xs overflow-auto">
-                                    {JSON.stringify(profiles, null, 2)}
-                                </pre>
+                                <Json value={profiles} />
                             </div>
                             <div>
                                 <p className="font-medium mb-2">Servers:</p>
-                                <pre className="bg-muted p-2 rounded text-xs overflow-auto">
-                                    {JSON.stringify(servers, null, 2)}
-                                </pre>
+                                <Json value={servers} />
                             </div>
                             <div>
                                 <p className="font-medium mb-2">Members:</p>
-                                <pre className="bg-muted p-2 rounded text-xs overflow-auto">
-                                    {JSON.stringify(members, null, 2)}
-                                </pre>
+                                <Json value={members} />
+                            </div>
+                            <div>
+                                <p className="font-medium mb-2">DM Conversations:</p>
+                                <Json value={useSubspace((state) => state.dmConversations)} />
+                            </div>
+                            <div>
+                                <p className="font-medium mb-2">Recent DMs:</p>
+                                <Json value={useRecentDms()} />
+                            </div>
+                            <div>
+                                <p className="font-medium mb-2">Friends & Blocked:</p>
+                                <Json value={{
+                                    friends: useSubspace((state) => state.friends),
+                                    blockedUsers: useSubspace((state) => state.blockedUsers)
+                                }} />
                             </div>
                         </div>
                     </CardContent>
-                </Card>
+                </Card> */}
             </div>
         </div>
     )

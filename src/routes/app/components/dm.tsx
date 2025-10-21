@@ -4,7 +4,7 @@ import { useWallet } from "@/hooks/use-wallet";
 import { useProfile, usePrimaryName, useSubspace, useSubspaceActions, useDmConversation } from "@/hooks/use-subspace";
 import { useMessageInputFocus } from "@/hooks/use-message-input-focus";
 import { cn, getRelativeTimeString, shortenAddress, getDateKey, getDateLabel } from "@/lib/utils";
-import { Paperclip, SendHorizonal, User, UserCircleIcon, UserPlus } from "lucide-react";
+import { Paperclip, SendHorizonal, User, UserCircleIcon, UserPlus, Check, X, Clock, Mail } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Subspace } from "@subspace-protocol/sdk";
 import type { IMessage } from "subspace-sdk/src/types/subspace";
@@ -233,13 +233,17 @@ export default function DM({ friendId }: DMProps) {
     const friendProfile = useProfile(friendId);
     const friendPrimaryName = usePrimaryName(friendId);
     const [isAddingFriend, setIsAddingFriend] = useState(false);
+    const [isAcceptingFriend, setIsAcceptingFriend] = useState(false);
+    const [isRejectingFriend, setIsRejectingFriend] = useState(false);
 
     // Get DM process ID from my profile
     const dmProcessId = myProfile?.dm_process;
 
-    // Check if users are friends using profile data (like in welcome.tsx)
-    const myFriends = myProfile?.friends?.accepted || {};
-    const areFriends = Object.keys(myFriends).includes(friendId);
+    // Check friend status using profile data
+    const myFriends = myProfile?.friends || { sent: {}, received: {}, accepted: {} };
+    const areFriends = myFriends.accepted?.[friendId];
+    const hasSentRequest = myFriends.sent?.[friendId];
+    const hasReceivedRequest = myFriends.received?.[friendId];
 
     // Only get conversation data for friends - temporary DMs are not supported
     const dmConversation = useDmConversation(dmProcessId || '', friendId);
@@ -394,6 +398,38 @@ export default function DM({ friendId }: DMProps) {
         }
     };
 
+    const handleAcceptFriend = async () => {
+        if (!Subspace.initialized) return;
+
+        setIsAcceptingFriend(true);
+        try {
+            await subspaceActions.profiles.acceptFriend(friendId);
+            await subspaceActions.profiles.get(address);
+            window.toast?.success("Friend request accepted!");
+        } catch (error) {
+            console.error("Failed to accept friend request:", error);
+            window.toast?.error("Failed to accept friend request. Please try again.");
+        } finally {
+            setIsAcceptingFriend(false);
+        }
+    };
+
+    const handleRejectFriend = async () => {
+        if (!Subspace.initialized) return;
+
+        setIsRejectingFriend(true);
+        try {
+            await subspaceActions.profiles.rejectFriend(friendId);
+            await subspaceActions.profiles.get(address);
+            window.toast?.success("Friend request rejected");
+        } catch (error) {
+            console.error("Failed to reject friend request:", error);
+            window.toast?.error("Failed to reject friend request. Please try again.");
+        } finally {
+            setIsRejectingFriend(false);
+        }
+    };
+
     if (!myProfile || !friendProfile) {
         return (
             <div className="grow flex items-center justify-center">
@@ -405,34 +441,104 @@ export default function DM({ friendId }: DMProps) {
         );
     }
 
-    // Show message if users are not friends - temporary DMs are not supported
+    // Show different UI based on friend request status
     if (!areFriends) {
         return (
             <div className="grow flex items-center justify-center">
                 <div className="text-center">
                     <User className="w-16 h-16 mb-4 opacity-50 mx-auto" />
-                    <h3 className="text-lg font-ocr mb-2">Not Friends</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                        You can only send direct messages to friends.<br />
-                        Add {friendDisplayName} as a friend to start messaging.
-                    </p>
-                    <Button
-                        onClick={handleAddFriend}
-                        disabled={isAddingFriend}
-                        className="bg-primary hover:bg-primary/90"
-                    >
-                        {isAddingFriend ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent mr-2" />
-                                Sending...
-                            </>
-                        ) : (
-                            <>
-                                <UserPlus className="w-4 h-4 mr-2" />
-                                Add Friend
-                            </>
-                        )}
-                    </Button>
+
+                    {/* Received friend request - can accept or reject */}
+                    {hasReceivedRequest && (
+                        <>
+                            <h3 className="text-lg font-ocr mb-2">Friend Request Received</h3>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                {friendDisplayName} wants to be your friend.<br />
+                                Accept to start messaging.
+                            </p>
+                            <div className="flex gap-2 justify-center">
+                                <Button
+                                    onClick={handleAcceptFriend}
+                                    disabled={isAcceptingFriend}
+                                    variant="ghost"
+                                    className="bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300"
+                                >
+                                    {isAcceptingFriend ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent mr-2" />
+                                            Accepting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Check className="w-4 h-4 mr-2" />
+                                            Accept
+                                        </>
+                                    )}
+                                </Button>
+                                <Button
+                                    onClick={handleRejectFriend}
+                                    disabled={isRejectingFriend}
+                                    variant="ghost"
+                                    className="bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300"
+                                >
+                                    {isRejectingFriend ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent mr-2" />
+                                            Rejecting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <X className="w-4 h-4 mr-2" />
+                                            Reject
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Sent friend request - waiting for response */}
+                    {hasSentRequest && (
+                        <>
+                            <h3 className="text-lg font-ocr mb-2">Friend Request Sent</h3>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                You've sent a friend request to {friendDisplayName}.<br />
+                                Waiting for them to accept...
+                            </p>
+                            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                <Clock className="w-4 h-4" />
+                                Request Pending
+                            </div>
+                        </>
+                    )}
+
+                    {/* No friend request - can send one */}
+                    {!hasSentRequest && !hasReceivedRequest && (
+                        <>
+                            <h3 className="text-lg font-ocr mb-2">Not Friends</h3>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                You can only send direct messages to friends.<br />
+                                Add {friendDisplayName} as a friend to start messaging.
+                            </p>
+                            <Button
+                                onClick={handleAddFriend}
+                                disabled={isAddingFriend}
+                                className="bg-primary hover:bg-primary/90"
+                            >
+                                {isAddingFriend ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent mr-2" />
+                                        Sending...
+                                    </>
+                                ) : (
+                                    <>
+                                        <UserPlus className="w-4 h-4 mr-2" />
+                                        Add Friend
+                                    </>
+                                )}
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
         );

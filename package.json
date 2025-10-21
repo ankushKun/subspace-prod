@@ -47,6 +47,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/vite": "^4.1.11",
     "@types/react-mentions": "^4.4.1",
+    "@uiw/react-json-view": "^2.0.0-alpha.39",
     "@wanderapp/connect": "^0.1.11",
     "@wauth/sdk": "^0.0.18",
     "@wauth/strategy": "^0.0.18",

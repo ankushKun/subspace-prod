@@ -95,18 +95,8 @@ export default function App() {
         }
     }, [activeServerId, joinedServers, userProfile, navigate])
 
-    // Redirect to /app if friend DM is active but friend is not accepted
-    useEffect(() => {
-        if (activeFriendId && userProfile) {
-            // Check if friend is in the accepted friends list
-            const isAcceptedFriend = userProfile.friends?.accepted?.[activeFriendId]
-
-            if (!isAcceptedFriend) {
-                console.log("Friend not found in accepted friends, redirecting to /app")
-                navigate("/app")
-            }
-        }
-    }, [activeFriendId, userProfile, navigate])
+    // Note: Friend validation is now handled by the DM component itself
+    // which shows a "Not Friends" UI instead of redirecting
 
     useEffect(() => {
         if (!activeServerId || !Subspace.initialized) {
