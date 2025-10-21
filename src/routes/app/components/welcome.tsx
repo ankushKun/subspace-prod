@@ -251,7 +251,7 @@ function FriendsView({ acceptedIds, sentIds, receivedIds }: {
                     {/* Friends Tab */}
                     <TabsContent value="friends" className="mt-2 px-0 w-full flex-1 flex flex-col min-h-0">
                         <div className="space-y-2 w-full flex-1 overflow-y-auto px-0">
-                            {acceptedIds.length > 0 ? (<div className="px-4">
+                            {acceptedIds.length > 0 ? (<div className="px-4 space-y-2">
                                 {acceptedIds.map(id => (
                                     <FriendCard key={id} userId={id} type="accepted" />
                                 ))}
