@@ -9,7 +9,7 @@ import { getPrimaryName, getWanderTier } from "@/lib/utils"
 
 interface SubspaceState {
     profiles: Record<string, IProfile>
-    recentDms: Record<string, number> // userId -> timestamp pairs
+    recentDms: Record<string, Record<string, number>> // dmProcessId -> friendId -> timestamp pairs
     servers: Record<string, IServer> // this will contain all server metadata like channels, roles, server info etc
     members: Record<string, Record<string, IMember>> // serverid -> userid -> member
     messages: Record<string, Record<string, Record<string, IMessage>>> // serverid -> channelid -> messageid -> message
@@ -87,6 +87,7 @@ interface SubspaceActions {
         getConversationIds: (dmProcessId: string) => Promise<string[]>
         getDmConversation: (dmProcessId: string, friendId: string) => Promise<Record<string, IMessage>>
         getBlockedUsers: (dmProcessId: string) => Promise<string[]>
+        refreshRecentDms: (dmProcessId: string) => Promise<Record<string, number> | null>
     },
     // Utility functions
     clearAllStates: () => void
@@ -117,7 +118,12 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                     try {
                         Utils.log({ type: "debug", label: "Getting Recent Dms", data: address })
                         const { result: recentDms, duration } = await Utils.withDuration(() => SubspaceProfiles.getRecentDms(result.dm_process))
-                        recentDms && set((state) => ({ recentDms: { ...state.recentDms, ...recentDms } }))
+                        recentDms && set((state) => ({
+                            recentDms: {
+                                ...state.recentDms,
+                                [result.dm_process]: recentDms
+                            }
+                        }))
                         Utils.log({ type: "success", label: "Got Recent Dms", data: recentDms, duration })
                     } catch (e) {
                         Utils.log({ type: "error", label: "Error Getting Recent Dms", data: e })
@@ -325,6 +331,23 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
                 } catch (e) {
                     Utils.log({ type: "error", label: "Error Getting Blocked Users", data: e })
                     return []
+                }
+            },
+            refreshRecentDms: async (dmProcessId: string) => {
+                Utils.log({ type: "debug", label: "Refreshing Recent Dms", data: dmProcessId })
+                try {
+                    const { result, duration } = await Utils.withDuration(() => SubspaceProfiles.getRecentDms(dmProcessId))
+                    Utils.log({ type: "success", label: "Refreshed Recent Dms", data: result, duration })
+                    result && set((state) => ({
+                        recentDms: {
+                            ...state.recentDms,
+                            [dmProcessId]: result
+                        }
+                    }))
+                    return result
+                } catch (e) {
+                    Utils.log({ type: "error", label: "Error Refreshing Recent Dms", data: e })
+                    return null
                 }
             }
         },
@@ -685,6 +708,7 @@ export const useSubspace = create<SubspaceState>()(persist((set, get) => ({
             Utils.log({ type: "debug", label: "Clearing All States", data: "Resetting profiles, servers, members, and DM data" })
             set(() => ({
                 profiles: {},
+                recentDms: {},
                 primaryNames: {},
                 wanderTiers: {},
                 servers: {},
@@ -826,8 +850,15 @@ export function useBlockedUsers(dmProcessId: string): string[] {
     return useSubspace((state) => state.blockedUsers[dmProcessId] ? state.blockedUsers[dmProcessId] : [])
 }
 
-export function useRecentDms(): Record<string, number> {
+export function useRecentDms(): Record<string, Record<string, number>> {
     return useSubspace((state) => state.recentDms)
+}
+
+export function useRecentDmsForUser(dmProcessId: string): Record<string, number> {
+    return useSubspace((state) => {
+        if (!dmProcessId) return {};
+        return state.recentDms[dmProcessId] || {};
+    })
 }
 
 // Helper function to access actions

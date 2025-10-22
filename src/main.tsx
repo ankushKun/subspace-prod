@@ -33,6 +33,7 @@ import { Subspace } from '@subspace-protocol/sdk';
 import App from '@/routes/app/app';
 import ServerSettings from '@/routes/app/server-settings';
 import AppSettings from '@/routes/app/app-settings';
+import Invite from '@/routes/invite';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -437,9 +438,11 @@ function Main() {
     useEffect(() => {
         async function init() {
             const signer = await walletActions.getSigner()
+            console.log("🔍 [DEBUG] Subspace init - address:", address, "signer:", signer)
             try {
                 // Wait for Subspace initialization to complete
                 await Subspace.init({ address, signer })
+                console.log("🔍 [DEBUG] Subspace initialized with address:", Subspace.address)
 
                 // Only proceed with operations after initialization is confirmed
                 if (Subspace.initialized) {
@@ -462,6 +465,7 @@ function Main() {
             init()
         } else if (!connected && !address) {
             // Clear state when wallet becomes disconnected
+            Subspace.clear()
             globalStateActions.clear()
         }
     }, [connected, address])
@@ -524,7 +528,7 @@ function Main() {
                         <Route path="/app/:serverId" element={<App />} />
                         <Route path="/app/:serverId/:channelId" element={<App />} />
 
-                        {/* <Route path="/invite/:invite" element={<Invite />} /> */}
+                        <Route path="/invite/:invite" element={<Invite />} />
                         <Route path="/app/settings" element={<AppSettings />} />
                         <Route path="/app/:serverId/settings" element={<ServerSettings />} />
 

@@ -138,7 +138,9 @@ export default function Channels() {
     const activeServer = useServer(activeServerId);
     const currentMember = useMember(activeServerId, address);
     const subspaceActions = useSubspaceActions();
-    const recentDms = useRecentDms();
+    const currentUserProfile = useProfile(address);
+    const allRecentDms = useRecentDms();
+    const recentDms = currentUserProfile?.dm_process ? allRecentDms[currentUserProfile.dm_process] || {} : {};
     const navigate = useNavigate();
 
     // Dialog states
