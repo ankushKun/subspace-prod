@@ -1,439 +1,281 @@
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useSubspaceActions, useProfile } from "@/hooks/use-subspace";
-import { useWallet } from "@/hooks/use-wallet";
-import { useGlobalState } from "@/hooks/use-global-state";
-import { useNavigate, useSearchParams } from "react-router";
-import { useState, useReducer, useEffect, useCallback } from "react";
-import {
-    Server,
-    Users,
-    CheckCircle,
-    AlertCircle,
-    Loader2,
-    ExternalLink,
-    ArrowLeft,
-    Compass
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import alienGreen from "@/assets/subspace/alien-green.svg";
-
-// State management for invite page
-interface InviteState {
-    serverId: string;
-    serverPreview: any | null;
-    isLoading: boolean;
-    isFetchingServer: boolean;
-    isJoining: boolean;
-    error: string | null;
-    success: boolean;
-    progressSteps: {
-        fetchingServer?: 'pending' | 'active' | 'completed';
-        joiningServer?: 'pending' | 'active' | 'completed';
-        refreshingProfile?: 'pending' | 'active' | 'completed';
-    };
-}
-
-type InviteAction =
-    | { type: 'SET_SERVER_ID'; payload: string }
-    | { type: 'SET_SERVER_PREVIEW'; payload: any | null }
-    | { type: 'SET_LOADING'; payload: boolean }
-    | { type: 'SET_FETCHING_SERVER'; payload: boolean }
-    | { type: 'SET_JOINING'; payload: boolean }
-    | { type: 'SET_ERROR'; payload: string | null }
-    | { type: 'SET_SUCCESS'; payload: boolean }
-    | { type: 'SET_PROGRESS_STEP'; payload: { step: keyof InviteState['progressSteps']; status: 'pending' | 'active' | 'completed' } }
-    | { type: 'RESET_PROGRESS_STEPS' }
-    | { type: 'RESET_STATE' };
-
-const initialInviteState: InviteState = {
-    serverId: "",
-    serverPreview: null,
-    isLoading: false,
-    isFetchingServer: false,
-    isJoining: false,
-    error: null,
-    success: false,
-    progressSteps: {},
-};
-
-function inviteReducer(state: InviteState, action: InviteAction): InviteState {
-    switch (action.type) {
-        case 'SET_SERVER_ID':
-            return { ...state, serverId: action.payload };
-        case 'SET_SERVER_PREVIEW':
-            return { ...state, serverPreview: action.payload };
-        case 'SET_LOADING':
-            return { ...state, isLoading: action.payload };
-        case 'SET_FETCHING_SERVER':
-            return { ...state, isFetchingServer: action.payload };
-        case 'SET_JOINING':
-            return { ...state, isJoining: action.payload };
-        case 'SET_ERROR':
-            return { ...state, error: action.payload };
-        case 'SET_SUCCESS':
-            return { ...state, success: action.payload };
-        case 'SET_PROGRESS_STEP':
-            return {
-                ...state,
-                progressSteps: {
-                    ...state.progressSteps,
-                    [action.payload.step]: action.payload.status
-                }
-            };
-        case 'RESET_PROGRESS_STEPS':
-            return { ...state, progressSteps: {} };
-        case 'RESET_STATE':
-            return initialInviteState;
-        default:
-            return state;
-    }
-}
-
-function ProgressSteps({
-    steps,
-    progressSteps
-}: {
-    steps: Array<{ key: keyof InviteState['progressSteps']; label: string }>;
-    progressSteps: InviteState['progressSteps'];
-}) {
-    const activeStep = steps.find(step => progressSteps[step.key] === 'active');
-    const completedSteps = steps.filter(step => progressSteps[step.key] === 'completed');
-
-    return (
-        <div className="flex items-center gap-2">
-            {steps.map((step, index) => (
-                <div key={step.key} className="flex items-center gap-2">
-                    <div className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
-                        progressSteps[step.key] === 'completed' && "bg-green-500 text-white",
-                        progressSteps[step.key] === 'active' && "bg-primary text-primary-foreground animate-pulse",
-                        progressSteps[step.key] === 'pending' && "bg-muted text-muted-foreground"
-                    )}>
-                        {progressSteps[step.key] === 'completed' ? (
-                            <CheckCircle className="w-3 h-3" />
-                        ) : (
-                            index + 1
-                        )}
-                    </div>
-                    <span className={cn(
-                        "text-sm",
-                        progressSteps[step.key] === 'active' && "text-primary font-medium",
-                        progressSteps[step.key] === 'completed' && "text-green-600 font-medium"
-                    )}>
-                        {step.label}
-                    </span>
-                    {index < steps.length - 1 && (
-                        <div className={cn(
-                            "w-8 h-px",
-                            progressSteps[step.key] === 'completed' ? "bg-green-500" : "bg-muted"
-                        )} />
-                    )}
-                </div>
-            ))}
-        </div>
-    );
-}
+import SubspaceLoader from "@/components/subspace-loader"
+import { useServer, useSubspaceActions, useProfile, usePrimaryName } from "@/hooks/use-subspace"
+import { useWallet } from "@/hooks/use-wallet"
+import { Subspace, SubspaceValidation } from "@subspace-protocol/sdk"
+import { useParams, useNavigate } from "react-router"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Users, Hash, Crown, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { ProfilePopover, ProfileAvatar } from "@/components/profile"
+import { shortenAddress } from "@/lib/utils"
 
 export default function Invite() {
-    const { address, connected } = useWallet();
-    const { servers, profiles } = useSubspaceActions();
-    const { actions: globalStateActions } = useGlobalState();
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const [state, dispatch] = useReducer(inviteReducer, initialInviteState);
+    const [showLoader, setShowLoader] = useState(true)
+    const [loaderAnimating, setLoaderAnimating] = useState(false)
+    const [isJoining, setIsJoining] = useState(false)
+    const [joinError, setJoinError] = useState<string | null>(null)
+    const [joinSuccess, setJoinSuccess] = useState(false)
+    const { connected, address } = useWallet()
+    const { inviteCode } = useParams()
+    const navigate = useNavigate()
+    const subspaceActions = useSubspaceActions()
+    const server = useServer(inviteCode)
+    const ownerProfile = useProfile(server?.profile?.owner || '')
+    const ownerPrimaryName = usePrimaryName(server?.profile?.owner || '')
+    const userProfile = useProfile(address || '')
+    const invalidCode = SubspaceValidation.isValidTxId(inviteCode)
 
-    // Get server ID from URL params
-    const serverIdFromUrl = searchParams.get('id') || '';
+    // Handle loader transition when Subspace becomes initialized
+    useEffect(() => {
+        if (Subspace.initialized && showLoader && !loaderAnimating) {
+            setLoaderAnimating(true)
+            // Wait for blur-out animation to complete before hiding loader
+            setTimeout(() => {
+                setShowLoader(false)
+                setLoaderAnimating(false)
+            }, 400) // Match the blur-out animation duration
+        }
+    }, [Subspace.initialized, showLoader, loaderAnimating])
+
+    // Reset loader state when Subspace becomes uninitialized
+    useEffect(() => {
+        if (!Subspace.initialized && !showLoader) {
+            setShowLoader(true)
+            setLoaderAnimating(false)
+        }
+    }, [Subspace.initialized, showLoader])
 
     useEffect(() => {
-        if (serverIdFromUrl) {
-            dispatch({ type: 'SET_SERVER_ID', payload: serverIdFromUrl });
-            fetchServerDetails(serverIdFromUrl);
+        if (!Subspace.initialized) return
+        if (!inviteCode) return console.error("No invite code", inviteCode)
+        if (!invalidCode) return console.error("Invalid invite code", inviteCode)
+        subspaceActions.servers.get(inviteCode)
+    }, [inviteCode, invalidCode, Subspace.initialized])
+
+    // Fetch owner profile when server is loaded
+    useEffect(() => {
+        if (server?.profile?.owner) {
+            subspaceActions.profiles.get(server.profile.owner)
         }
-    }, [serverIdFromUrl]);
-
-    const fetchServerDetails = useCallback(async (serverId: string) => {
-        if (!serverId.trim()) {
-            dispatch({ type: 'SET_SERVER_PREVIEW', payload: null });
-            return;
-        }
-
-        dispatch({ type: 'SET_FETCHING_SERVER', payload: true });
-        dispatch({ type: 'SET_ERROR', payload: null });
-
-        try {
-            // Extract server ID from invite link or use as-is if it's already an ID
-            let cleanServerId = serverId.trim();
-
-            // Handle different invite formats
-            if (cleanServerId.includes('subspace.ar.io/#/invite/')) {
-                cleanServerId = cleanServerId.split('subspace.ar.io/#/invite/')[1];
-            } else if (cleanServerId.includes('subspace.com/invite/')) {
-                cleanServerId = cleanServerId.split('subspace.com/invite/')[1];
-            } else if (cleanServerId.includes('/invite/')) {
-                cleanServerId = cleanServerId.split('/invite/')[1];
-            }
-
-            const serverDetails = await servers.get(cleanServerId);
-
-            if (serverDetails) {
-                dispatch({ type: 'SET_SERVER_PREVIEW', payload: serverDetails });
-                dispatch({ type: 'SET_SERVER_ID', payload: cleanServerId });
-            } else {
-                dispatch({ type: 'SET_SERVER_PREVIEW', payload: null });
-                dispatch({ type: 'SET_ERROR', payload: 'Server not found. Please check the invite link.' });
-            }
-        } catch (error) {
-            dispatch({ type: 'SET_SERVER_PREVIEW', payload: null });
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to fetch server details. Please try again.' });
-        } finally {
-            dispatch({ type: 'SET_FETCHING_SERVER', payload: false });
-        }
-    }, [servers]);
+    }, [server?.profile?.owner])
 
     const handleJoinServer = async () => {
-        if (!state.serverPreview || !connected) return;
+        if (!inviteCode || !server) return
 
-        dispatch({ type: 'SET_JOINING', payload: true });
-        dispatch({ type: 'SET_ERROR', payload: null });
+        setIsJoining(true)
+        setJoinError(null)
 
         try {
-            const serverId = state.serverPreview.profile.id;
-
-            // Join server
-            dispatch({ type: 'SET_PROGRESS_STEP', payload: { step: 'joiningServer', status: 'active' } });
-            const success = await servers.join(serverId);
-
+            const success = await subspaceActions.servers.join(inviteCode)
             if (success) {
-                dispatch({ type: 'SET_PROGRESS_STEP', payload: { step: 'joiningServer', status: 'completed' } });
-
-                // Refetch user profile to update server list
-                if (address) {
-                    dispatch({ type: 'SET_PROGRESS_STEP', payload: { step: 'refreshingProfile', status: 'active' } });
-                    await profiles.get(address);
-                    dispatch({ type: 'SET_PROGRESS_STEP', payload: { step: 'refreshingProfile', status: 'completed' } });
-                }
-
-                dispatch({ type: 'SET_SUCCESS', payload: true });
-
+                setJoinSuccess(true)
                 // Navigate to the server after a short delay
                 setTimeout(() => {
-                    navigate(`/app/${serverId}`);
-                }, 2000);
+                    navigate(`/app/${inviteCode}`)
+                }, 1500)
             } else {
-                dispatch({ type: 'SET_ERROR', payload: 'Failed to join server. Please try again.' });
+                setJoinError("Failed to join server. Please try again.")
             }
         } catch (error) {
-            dispatch({ type: 'SET_ERROR', payload: 'An error occurred while joining the server. Please try again.' });
+            setJoinError("An error occurred while joining the server.")
+            console.error("Join server error:", error)
         } finally {
-            dispatch({ type: 'SET_JOINING', payload: false });
+            setIsJoining(false)
         }
-    };
+    }
 
-    const handleBackToApp = () => {
-        navigate('/app');
-    };
+    // if subspace is not initialized or loader is still showing, show the loader
+    if (!Subspace.initialized && connected) {
+        return <SubspaceLoader isAnimatingOut={loaderAnimating} />
+    }
 
-    const handleTryAgain = () => {
-        if (state.serverId) {
-            fetchServerDetails(state.serverId);
-        }
-    };
-
-    if (!connected) {
+    // Show error for invalid invite code
+    if (inviteCode && !invalidCode) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center p-4">
                 <Card className="w-full max-w-md">
-                    <CardHeader className="text-center">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                            <img src={alienGreen} alt="Subspace" className="w-10 h-10" />
+                    <CardContent className="pt-6">
+                        <div className="flex flex-col items-center text-center space-y-4">
+                            <div className="p-3 rounded-full bg-destructive/10">
+                                <AlertCircle className="h-8 w-8 text-destructive" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-semibold">Invalid Invite</h2>
+                                <p className="text-muted-foreground mt-2">
+                                    This invite link is not valid or has expired.
+                                </p>
+                            </div>
+                            <Button
+                                variant="outline"
+                                onClick={() => navigate('/app')}
+                                className="w-full"
+                            >
+                                Go Home
+                            </Button>
                         </div>
-                        <CardTitle className="text-2xl">Connect to Join</CardTitle>
-                        <CardDescription>
-                            You need to connect your wallet to join this server
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Button
-                            onClick={handleBackToApp}
-                            className="w-full"
-                        >
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Go to App
-                        </Button>
                     </CardContent>
                 </Card>
             </div>
-        );
+        )
     }
+
+    // Show skeleton loading state while server data is being fetched
+    if (!server) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center p-4">
+                <Card className="w-full max-w-md bg-background/95 backdrop-blur-md border-2 border-primary/20 shadow-2xl">
+                    <CardContent className="p-8">
+                        {/* Server Avatar Skeleton */}
+                        <div className="flex justify-center mb-6">
+                            <Skeleton className="h-20 w-20 rounded-full" />
+                        </div>
+
+                        {/* Invitation Text Skeleton */}
+                        <div className="text-center mb-6 space-y-3">
+                            <Skeleton className="h-4 w-48 mx-auto" />
+                            <Skeleton className="h-8 w-64 mx-auto" />
+                            <Skeleton className="h-4 w-40 mx-auto" />
+                        </div>
+
+                        {/* Server Stats Skeleton */}
+                        <div className="space-y-3 mb-6">
+                            <div className="flex items-center justify-center gap-2">
+                                <Skeleton className="h-2 w-2 rounded-full" />
+                                <Skeleton className="h-4 w-24" />
+                            </div>
+                            <div className="flex items-center justify-center gap-2">
+                                <Skeleton className="h-4 w-16" />
+                                <Skeleton className="h-6 w-20 rounded-md" />
+                            </div>
+                        </div>
+
+                        {/* Join Button Skeleton */}
+                        <div className="space-y-4">
+                            <Skeleton className="h-12 w-full rounded-md" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
+    // Calculate server statistics
+    const channelCount = Object.keys(server.channels || {}).length
+    const categoryCount = Object.keys(server.categories || {}).length
+    const roleCount = Object.keys(server.roles || {}).length
+
+    // Check if user has already joined the server
+    const hasJoinedServer = userProfile?.servers && inviteCode && userProfile.servers[inviteCode]?.approved
 
     return (
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <Card className="w-full max-w-lg">
-                <CardHeader className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                        <img src={alienGreen} alt="Subspace" className="w-10 h-10" />
+
+            <Card className="w-full max-w-md bg-background/95 backdrop-blur-md border-2 border-primary/20 shadow-2xl">
+                <CardContent className="p-0">
+                    {/* Server Avatar - Centered */}
+                    <div className="flex justify-center mb-6">
+                        <div className="relative">
+                            <Avatar className="h-20 w-20 border-4 border-background shadow-lg">
+                                <AvatarImage src={server.profile.pfp} alt={server.profile.name} />
+                                <AvatarFallback className="text-2xl font-semibold bg-primary/10">
+                                    {server.profile.name?.charAt(0)?.toUpperCase() || 'S'}
+                                </AvatarFallback>
+                            </Avatar>
+                        </div>
                     </div>
-                    <CardTitle className="text-2xl">Server Invite</CardTitle>
-                    <CardDescription>
-                        {state.success
-                            ? "Successfully joined the server!"
-                            : "You've been invited to join a server"
-                        }
-                    </CardDescription>
-                </CardHeader>
 
-                <CardContent className="space-y-6">
-                    {/* Error Display */}
-                    {state.error && (
-                        <Alert variant="destructive">
-                            <AlertCircle className="w-4 h-4" />
-                            <AlertDescription>{state.error}</AlertDescription>
-                        </Alert>
-                    )}
+                    {/* Invitation Text */}
+                    <div className="text-center mb-6">
+                        <p className="text-sm text-muted-foreground mb-2">You've been invited to join</p>
+                        <h1 className="text-2xl font-bold text-foreground mb-2">{server.profile.name}</h1>
+                        {server.profile.description && (
+                            <p className="text-sm text-muted-foreground">{server.profile.description}</p>
+                        )}
+                    </div>
 
-                    {/* Success State */}
-                    {state.success && (
-                        <Alert className="border-green-200 bg-green-50">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <AlertDescription className="text-green-800">
-                                You've successfully joined the server! Redirecting you now...
-                            </AlertDescription>
-                        </Alert>
-                    )}
+                    {/* Server Stats */}
+                    <div className="space-y-3 mb-6">
+                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>{server.member_count || 0} Members</span>
+                        </div>
 
-                    {/* Server Preview */}
-                    {state.isFetchingServer && (
-                        <div className="bg-muted/30 rounded-lg p-6 border border-dashed border-muted-foreground/30">
-                            <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 bg-muted rounded-full animate-pulse" />
-                                <div className="flex-1 space-y-3">
-                                    <div className="h-5 bg-muted rounded animate-pulse" />
-                                    <div className="h-4 bg-muted rounded w-2/3 animate-pulse" />
-                                    <div className="h-3 bg-muted rounded w-1/2 animate-pulse" />
+                        {/* Server Owner */}
+                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                            <span>Owned by</span>
+                            <ProfilePopover userId={server.profile.owner}>
+                                <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer">
+                                    <ProfileAvatar tx={ownerProfile?.pfp} className="h-4 w-4 !p-0" />
+                                    <span className="text-sm font-medium text-foreground">
+                                        {ownerPrimaryName || shortenAddress(server.profile.owner)}
+                                    </span>
+                                </div>
+                            </ProfilePopover>
+                        </div>
+                    </div>
+
+                    {/* Join Button */}
+                    <div className="space-y-2">
+                        {hasJoinedServer ? (
+                            <div className="space-y-3 flex flex-col items-center">
+                                <Button
+                                    onClick={() => navigate(`/app/${inviteCode}`)}
+                                    className="w-2/3 h-10 mx-auto bg-green-500/20 backdrop-blur-md border border-green-400/30 hover:bg-green-500/30 hover:border-green-400/50 text-white shadow-lg transition-all duration-300"
+                                >
+                                    Open Server
+                                </Button>
+                                <div className="flex items-center justify-center gap-2 p-1 px-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                    <span className="text-green-500 text-sm p-0">
+                                        You're already a member of {server.profile.name}
+                                    </span>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {state.serverPreview && !state.isFetchingServer && (
-                        <div className="bg-primary/5 rounded-lg p-6 border border-primary/20">
-                            <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 rounded-full overflow-hidden bg-muted flex-shrink-0">
-                                    {state.serverPreview.profile?.pfp ? (
-                                        <img
-                                            src={`https://arweave.net/${state.serverPreview.profile.pfp}`}
-                                            alt={state.serverPreview.profile?.name || "Server"}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-semibold text-xl">
-                                            {(state.serverPreview.profile?.name || "S").charAt(0).toUpperCase()}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <h3 className="font-semibold text-lg text-foreground truncate">
-                                            {state.serverPreview.profile?.name || "Unnamed Server"}
-                                        </h3>
-                                        <Badge variant="secondary" className="text-xs">
-                                            <Server className="w-3 h-3 mr-1" />
-                                            Server
-                                        </Badge>
-                                    </div>
-                                    {state.serverPreview.profile?.description && (
-                                        <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                                            {state.serverPreview.profile.description}
-                                        </p>
-                                    )}
-                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                        {state.serverPreview.member_count > 0 && (
-                                            <div className="flex items-center gap-1">
-                                                <Users className="w-3 h-3" />
-                                                {state.serverPreview.member_count} members
-                                            </div>
-                                        )}
-                                        <div className="flex items-center gap-1 text-green-600">
-                                            <CheckCircle className="w-3 h-3" />
-                                            Server found
-                                        </div>
-                                    </div>
-                                </div>
+                        ) : joinSuccess ? (
+                            <div className="flex items-center justify-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                                <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                <span className="text-green-500 font-medium">
+                                    Successfully joined {server.profile.name}!
+                                </span>
                             </div>
-                        </div>
-                    )}
-
-                    {/* No Server Found */}
-                    {!state.serverPreview && !state.isFetchingServer && !state.error && (
-                        <div className="bg-muted/30 rounded-lg p-6 border border-dashed border-muted-foreground/30 text-center">
-                            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-                                <Compass className="w-6 h-6 text-muted-foreground" />
-                            </div>
-                            <h3 className="font-medium text-foreground mb-2">Server Not Found</h3>
-                            <p className="text-sm text-muted-foreground mb-4">
-                                The invite link appears to be invalid or the server no longer exists.
-                            </p>
-                            <Button variant="outline" onClick={handleTryAgain} size="sm">
-                                Try Again
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Progress Steps */}
-                    {(state.isJoining || state.serverPreview) && (
-                        <div className="space-y-4">
-                            <div className="text-sm font-medium text-foreground">Progress</div>
-                            <ProgressSteps
-                                steps={[
-                                    { key: 'fetchingServer', label: 'Fetching server' },
-                                    { key: 'joiningServer', label: 'Joining server' },
-                                    { key: 'refreshingProfile', label: 'Updating profile' }
-                                ]}
-                                progressSteps={state.progressSteps}
-                            />
-                        </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3">
-                        <Button
-                            variant="outline"
-                            onClick={handleBackToApp}
-                            className="flex-1"
-                        >
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Back to App
-                        </Button>
-
-                        {state.serverPreview && !state.success && (
-                            <Button
-                                onClick={handleJoinServer}
-                                disabled={state.isJoining || state.isFetchingServer}
-                                className="flex-1"
-                            >
-                                {state.isJoining ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                        Joining...
-                                    </>
+                        ) : (
+                            <div className="space-y-2 flex items-center">
+                                {isJoining ? (
+                                    <Skeleton className="h-10 w-2/3 mx-auto bg-green-500/20 backdrop-blur-md border border-green-400/30 text-white shadow-lg">
+                                        <span className="text-sm font-medium">Joining server...</span>
+                                    </Skeleton>
                                 ) : (
-                                    <>
-                                        <ExternalLink className="w-4 h-4 mr-2" />
-                                        Join Server
-                                    </>
+                                    <Button
+                                        onClick={handleJoinServer}
+                                        disabled={!connected}
+                                        className="w-2/3 mx-auto h-10 bg-green-500/20 backdrop-blur-md border border-green-400/30 hover:bg-green-500/30 hover:border-green-400/50 text-white shadow-lg transition-all duration-300 disabled:bg-gray-500/20 disabled:border-gray-400/30 disabled:hover:bg-gray-500/20 disabled:hover:border-gray-400/30"
+                                    >
+                                        Accept Invite
+                                    </Button>
                                 )}
-                            </Button>
+
+                                {!connected && (
+                                    <p className="text-center text-sm text-muted-foreground">
+                                        Please connect your wallet to join this server
+                                    </p>
+                                )}
+
+                                {joinError && (
+                                    <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                                        <AlertCircle className="h-4 w-4 text-destructive" />
+                                        <span className="text-destructive text-sm">{joinError}</span>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </CardContent>
             </Card>
         </div>
-    );
+    )
 }

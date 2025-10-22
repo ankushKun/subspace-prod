@@ -708,20 +708,3 @@ body {
         transform-origin: center;
     }
 }
-
-/* Performance optimizations for all animated elements */
-.animate-pulse,
-.animate-spin,
-.animate-smooth-pulse,
-.animate-smooth-spin,
-.animate-breathe,
-.animate-float,
-.animate-shimmer,
-.animate-blur-in,
-.animate-blur-out,
-[style*="animation"] {
-    backface-visibility: hidden;
-    perspective: 1000px;
-    transform: translateZ(0);
-    will-change: transform;
-}

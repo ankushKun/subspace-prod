@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useWallet } from "./use-wallet"
 import { useSubspaceActions } from "./use-subspace"
-import { Subspace } from "@subspace-protocol/sdk"
+import { Subspace, Utils } from "@subspace-protocol/sdk"
 
 /**
  * Custom hook that polls the logged-in user's profile every 20 seconds
@@ -13,14 +13,14 @@ export function useProfilePolling() {
     const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
     useEffect(() => {
-        console.log("[useProfilePolling] Effect triggered - connected:", connected, "address:", address, "Subspace.initialized:", Subspace.initialized)
+        Utils.log({ type: "debug", label: "Profile Polling Effect triggered", data: { connected, address, SubspaceInitialized: Subspace.initialized } })
         // Only start polling if user is connected, has an address, and Subspace is initialized
         if (connected && address && Subspace.initialized) {
-            console.log("[useProfilePolling] Starting profile polling for user:", address)
+            Utils.log({ type: "debug", label: "Profile Polling Starting", data: address })
 
             const pollProfile = async () => {
                 try {
-                    console.log("[useProfilePolling] Polling profile for user:", address)
+                    Utils.log({ type: "debug", label: "Polling Profile", data: address })
                     // Fetch the current user's profile to update servers and friends lists
                     await subspaceActions.profiles.get(address)
                 } catch (error) {
@@ -36,7 +36,7 @@ export function useProfilePolling() {
 
             return () => {
                 if (pollingIntervalRef.current) {
-                    console.log("[useProfilePolling] Stopping profile polling for user:", address)
+                    Utils.log({ type: "debug", label: "Profile Polling Stopping", data: { address, interval: pollingIntervalRef.current } })
                     clearInterval(pollingIntervalRef.current)
                     pollingIntervalRef.current = null
                 }
@@ -44,12 +44,12 @@ export function useProfilePolling() {
         } else {
             // Clear any existing polling when user is not connected
             if (pollingIntervalRef.current) {
-                console.log("[useProfilePolling] Clearing polling interval - user not connected")
+                Utils.log({ type: "debug", label: "Profile Polling Clearing interval - user not connected", data: { interval: pollingIntervalRef.current } })
                 clearInterval(pollingIntervalRef.current)
                 pollingIntervalRef.current = null
             }
         }
-    }, [connected, address, subspaceActions])
+    }, [connected, address, subspaceActions, Subspace.initialized])
 
     // Cleanup on unmount
     useEffect(() => {

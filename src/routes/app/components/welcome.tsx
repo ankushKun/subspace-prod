@@ -34,7 +34,7 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
     const primaryName = usePrimaryName(userId)
     const actions = useSubspaceActions()
     const { address } = useWallet()
-    const [loading, setLoading] = React.useState(false)
+    const [loading, setLoading] = React.useState<"accept" | "reject" | "remove" | null>(null)
 
     React.useEffect(() => {
         if (!profile) {
@@ -43,7 +43,7 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
     }, [userId, profile])
 
     const handleAccept = async () => {
-        setLoading(true)
+        setLoading("accept")
         try {
             await actions.profiles.acceptFriend(userId)
             await actions.profiles.get(address)
@@ -52,12 +52,12 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
             console.error("Failed to accept friend request:", error)
             window.toast?.error("Failed to accept friend request. Please try again.")
         } finally {
-            setLoading(false)
+            setLoading(null)
         }
     }
 
     const handleReject = async () => {
-        setLoading(true)
+        setLoading("reject")
         try {
             await actions.profiles.rejectFriend(userId)
             await actions.profiles.get(address)
@@ -66,12 +66,12 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
             console.error("Failed to reject friend request:", error)
             window.toast?.error("Failed to reject friend request. Please try again.")
         } finally {
-            setLoading(false)
+            setLoading(null)
         }
     }
 
     const handleRemove = async () => {
-        setLoading(true)
+        setLoading("remove")
         try {
             await actions.profiles.removeFriend(userId)
             await actions.profiles.get(address)
@@ -80,7 +80,7 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
             console.error("Failed to remove friend:", error)
             window.toast?.error("Failed to remove friend. Please try again.")
         } finally {
-            setLoading(false)
+            setLoading(null)
         }
     }
 
@@ -126,11 +126,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     size="icon"
                                     variant="ghost"
                                     onClick={handleAccept}
-                                    disabled={loading}
+                                    disabled={loading !== null}
                                     className="h-9 w-9 bg-green-500/20 hover:bg-green-500/30 text-green-400 hover:text-green-300"
                                     title="Accept"
                                 >
-                                    {loading ? (
+                                    {loading === "accept" ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
                                     ) : (
                                         <Check className="h-4 w-4" />
@@ -140,11 +140,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     size="icon"
                                     variant="ghost"
                                     onClick={handleReject}
-                                    disabled={loading}
+                                    disabled={loading !== null}
                                     className="h-9 w-9 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300"
                                     title="Reject"
                                 >
-                                    {loading ? (
+                                    {loading === "reject" ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
                                     ) : (
                                         <X className="h-4 w-4" />
@@ -162,11 +162,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     size="icon"
                                     variant="ghost"
                                     onClick={handleReject}
-                                    disabled={loading}
+                                    disabled={loading !== null}
                                     className="h-9 w-9 hover:bg-red-500/20 hover:text-red-400"
                                     title="Cancel Request"
                                 >
-                                    {loading ? (
+                                    {loading === "reject" ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
                                     ) : (
                                         <X className="h-4 w-4" />
@@ -180,11 +180,11 @@ function FriendCard({ userId, type }: { userId: string, type: "accepted" | "sent
                                     size="icon"
                                     variant="destructive"
                                     onClick={handleRemove}
-                                    disabled={loading}
+                                    disabled={loading !== null}
                                     className="h-9 w-9 !bg-transparent hover:!bg-red-300/20 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                                     title="Remove Friend"
                                 >
-                                    {loading ? (
+                                    {loading === "remove" ? (
                                         <div className="animate-spin rounded-full h-4 w-4 border border-current border-t-transparent" />
                                     ) : (
                                         <UserX className="h-4 w-4" />

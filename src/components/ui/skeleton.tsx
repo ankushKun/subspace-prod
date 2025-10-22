@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils"
 
-function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
+function Skeleton({ className, children, ...props }: React.ComponentProps<"div"> & { children?: React.ReactNode }) {
   return (
     <div
       data-slot="skeleton"
@@ -8,6 +8,11 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
       {...props}
     >
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+      {children && (
+        <div className="relative z-10 flex items-center justify-center h-full">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

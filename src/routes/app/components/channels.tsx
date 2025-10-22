@@ -163,7 +163,7 @@ export default function Channels() {
 
     const handleCopyInvite = () => {
         // TODO: Implement invite generation and copying
-        navigator.clipboard.writeText(`https://subspace.ar.io/#/invite/${activeServerId}`);
+        navigator.clipboard.writeText(`${window.location.origin}/#/invite/${activeServerId}`);
         // Could add a toast notification here
         toast.success("Invite copied", {});
         const copyIcon = document.getElementById("copy-invite-icon");

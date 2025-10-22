@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import alien from '@/assets/subspace/alien-green.svg';
 import { Toaster } from 'sonner';
-
+import { Utils } from "@subspace-protocol/sdk"
 import Dev from '@/routes/dev';
 import { Subspace } from '@subspace-protocol/sdk';
 import App from '@/routes/app/app';
@@ -438,11 +438,9 @@ function Main() {
     useEffect(() => {
         async function init() {
             const signer = await walletActions.getSigner()
-            console.log("🔍 [DEBUG] Subspace init - address:", address, "signer:", signer)
             try {
                 // Wait for Subspace initialization to complete
                 await Subspace.init({ address, signer })
-                console.log("🔍 [DEBUG] Subspace initialized with address:", Subspace.address)
 
                 // Only proceed with operations after initialization is confirmed
                 if (Subspace.initialized) {
@@ -528,7 +526,7 @@ function Main() {
                         <Route path="/app/:serverId" element={<App />} />
                         <Route path="/app/:serverId/:channelId" element={<App />} />
 
-                        <Route path="/invite/:invite" element={<Invite />} />
+                        <Route path="/invite/:inviteCode" element={<Invite />} />
                         <Route path="/app/settings" element={<AppSettings />} />
                         <Route path="/app/:serverId/settings" element={<ServerSettings />} />
 

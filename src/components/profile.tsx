@@ -25,8 +25,8 @@ export function ProfileAvatar(props: HTMLAttributes<HTMLDivElement> & { tx: stri
     // validate tx is a valid arweave transaction
     const valid = SubspaceValidation.isValidTxId(props.tx)
 
-    return <Avatar {...props} className={cn("border border-primary/20 items-center justify-center !rounded w-10 h-10", props.className)} >
-        {valid ? <img src={`https://arweave.net/${props.tx}`} alt={`${props.tx}`} /> : <img src={alienGreen} alt="alien" className="p-2 bg-primary/10 opacity-40" />}
+    return <Avatar {...props} className={cn("border border-primary/20 items-center justify-center !rounded w-10 h-10 p-0", props.className)} >
+        {valid ? <img src={`https://arweave.net/${props.tx}`} alt={`${props.tx}`} /> : <img src={alienGreen} alt="alien" className="p-1 bg-primary/10 opacity-40" />}
     </Avatar>
 }
 
