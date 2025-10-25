@@ -213,3 +213,16 @@ export async function getWanderTier(address: string): Promise<IWanderTier> {
 }
 
 
+export async function fetchSubspaceProcessId(): Promise<string> {
+    const response = await fetch("https://arweave.tech/api/subspace/process")
+    const data = await response.text()
+    return data.trim()
+}
+
+export async function respawnSubspaceProcess() {
+    const response = await fetch("https://arweave.tech/api/subspace/respawn", {
+        method: "POST"
+    })
+    const data = await response.text()
+    return data.trim()
+}

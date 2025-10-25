@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { useIsMobileDevice } from "@/hooks/use-mobile"
 import { WAuthProviders } from "@wauth/sdk"
+import { Link } from "react-router"
 
 const totalScanSteps = 7;
 
@@ -220,7 +221,7 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
 
                             {/* Wallet Options */}
                             <div className="space-y-3">
-                                {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" && (
+                                {window && window.arweaveWallet && window.arweaveWallet.walletName == "ArConnect" ? (
                                     <Button
                                         variant="outline"
                                         className="w-full h-12 justify-between font-ocr border-primary/30 text-primary/80 hover:bg-primary/10 hover:border-primary/40"
@@ -229,7 +230,16 @@ export default function LoginDialog({ children }: { children: React.ReactNode })
                                         <span>Arweave Wallet</span>
                                         <img src={arweave} className="w-6 h-6 opacity-60 invert dark:invert-0" />
                                     </Button>
-                                )}
+                                ) : <Link to="https://www.wander.app/download?tab=download-browser" target="_blank">
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-12 justify-between font-ocr border-primary/30 text-primary/80 hover:bg-primary/10 hover:border-primary/40"
+
+                                    >
+                                        <span>Get Wander Wallet</span>
+                                        <img src={arweave} className="w-6 h-6 opacity-60 invert dark:invert-0" />
+                                    </Button>
+                                </Link>}
 
                                 {/* <Button
                                     variant="outline"

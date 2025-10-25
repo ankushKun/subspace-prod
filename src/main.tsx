@@ -34,6 +34,7 @@ import App from '@/routes/app/app';
 import ServerSettings from '@/routes/app/server-settings';
 import AppSettings from '@/routes/app/app-settings';
 import Invite from '@/routes/invite';
+import { fetchSubspaceProcessId, respawnSubspaceProcess } from './lib/utils';
 
 interface ErrorBoundaryState {
     hasError: boolean;
@@ -438,9 +439,11 @@ function Main() {
     useEffect(() => {
         async function init() {
             const signer = await walletActions.getSigner()
+            const latestSubspaceProcess = await fetchSubspaceProcessId()
+            console.log("🔍 Latest Subspace Process:", latestSubspaceProcess)
             try {
                 // Wait for Subspace initialization to complete
-                await Subspace.init({ address, signer })
+                await Subspace.init({ address, signer, PROCESS: latestSubspaceProcess?.trim() || undefined })
 
                 // Only proceed with operations after initialization is confirmed
                 if (Subspace.initialized) {
@@ -456,6 +459,13 @@ function Main() {
                 }
             } catch (error) {
                 globalStateActions.setSubspaceFailed(true)
+                try {
+                    await Subspace.getSources()
+                } catch {
+                    const newProcess = await respawnSubspaceProcess()
+                    console.log("🔍 New Subspace Process:", newProcess)
+                    await Subspace.init({ PROCESS: newProcess?.trim() || undefined })
+                }
                 handleAsyncError(error as Error)
             }
         }

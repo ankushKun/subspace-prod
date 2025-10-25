@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, GitBranch, Package, Code2, Zap, Github, Box, ExternalLink } from "lucide-react"
+import { ArrowLeft, GitBranch, Package, Code2, Zap, Github, Box, ExternalLink, Cpu } from "lucide-react"
 import { Link } from "react-router"
 import xLogo from "@/assets/logos/x.svg"
+import { Subspace } from "@subspace-protocol/sdk"
 
 declare const __VERSION__: string
 declare const __COMMIT_HASH__: string
@@ -49,6 +50,11 @@ export default function AppSettings() {
             icon: <Zap className="w-5 h-5" />,
             label: "Vite Version",
             value: "6.3.5",
+        },
+        {
+            icon: <Cpu className="w-5 h-5" />,
+            label: "Subspace Process",
+            value: Subspace.subspaceProcess,
         },
     ]
 
