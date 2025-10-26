@@ -329,6 +329,7 @@ function Main() {
     const { actions: globalStateActions, subspaceFailed } = useGlobalState()
     const [errorBoundary, setErrorBoundary] = useState<ErrorBoundary | null>(null);
     const [appReady, setAppReady] = useState(false);
+    const [previousAddress, setPreviousAddress] = useState<string | undefined>(undefined);
 
     // Set the global error boundary reference
     useEffect(() => {
@@ -435,6 +436,20 @@ function Main() {
             window.removeEventListener("subspace-wallet-disconnected", handleWalletDisconnected)
         }
     }, [])
+
+    // Refresh page when wallet address changes from one address to another
+    useEffect(() => {
+        // If both previous and current address exist and are different, refresh
+        if (previousAddress && address && previousAddress !== address) {
+            console.log("🔄 Wallet address changed, refreshing page...")
+            window.location.reload()
+        }
+
+        // Update the previous address whenever address changes
+        if (address) {
+            setPreviousAddress(address)
+        }
+    }, [address])
 
     useEffect(() => {
         async function init() {
