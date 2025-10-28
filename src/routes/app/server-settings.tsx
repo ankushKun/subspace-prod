@@ -1164,41 +1164,43 @@ export default function ServerSettings() {
                                     {/* Left Panel - Roles List */}
                                     <div className="space-y-3">
                                         {roles && Object.values(roles).length > 0 ? (
-                                            Object.values(roles).map((role) => (
-                                                <div
-                                                    key={role.id}
-                                                    className={cn(
-                                                        "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors group hover:bg-muted/80",
-                                                        selectedRoleId === role.id
-                                                            ? "bg-primary/10 border-primary/30"
-                                                            : "bg-muted border-border hover:bg-muted/80"
-                                                    )}
-                                                    onClick={() => handleRoleClick(role.id)}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className="w-4 h-4 rounded-full"
-                                                            style={{ backgroundColor: role.color || '#6b7280' }}
-                                                        />
-                                                        <div>
-                                                            <div className="font-medium text-foreground max-w-96 truncate">{role.name}</div>
-                                                            <div className="text-sm text-muted-foreground">
-                                                                Permissions: {role.permissions || 0}
+                                            Object.values(roles)
+                                                .sort((a, b) => (b.order || 0) - (a.order || 0)) // Sort by order descending (highest first)
+                                                .map((role) => (
+                                                    <div
+                                                        key={role.id}
+                                                        className={cn(
+                                                            "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors group hover:bg-muted/80",
+                                                            selectedRoleId === role.id
+                                                                ? "bg-primary/10 border-primary/30"
+                                                                : "bg-muted border-border hover:bg-muted/80"
+                                                        )}
+                                                        onClick={() => handleRoleClick(role.id)}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className="w-4 h-4 rounded-full"
+                                                                style={{ backgroundColor: role.color || '#6b7280' }}
+                                                            />
+                                                            <div>
+                                                                <div className="font-medium text-foreground max-w-96 truncate">{role.name}</div>
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    Permissions: {role.permissions || 0}
+                                                                </div>
                                                             </div>
                                                         </div>
+                                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                onClick={() => handleDeleteRole(role.id)}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </Button>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            onClick={() => handleDeleteRole(role.id)}
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ))
+                                                ))
                                         ) : (
                                             <div className="text-center py-12">
                                                 <Shield size={48} className="mx-auto mb-4 text-muted-foreground/50" />

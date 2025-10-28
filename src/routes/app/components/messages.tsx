@@ -1,6 +1,7 @@
 import { ProfileAvatar, ProfilePopover } from "@/components/profile";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useGlobalState } from "@/hooks/use-global-state";
 import { useChannel, useMember, useMembers, useMessages, usePrimaryName, usePrimaryNames, useProfile, useRoles, useServer, useSubspace, useSubspaceActions } from "@/hooks/use-subspace";
 import { useMessageInputFocus } from "@/hooks/use-message-input-focus";
@@ -77,6 +78,39 @@ function MentionDisplay({ userId, serverId }: MentionDisplayProps) {
             </span>
         </ProfilePopover>
     );
+}
+
+// Function to get absolute date/time string in user's local timezone and format
+function getAbsoluteDateTimeString(timestamp: number): string {
+    // Convert timestamp to milliseconds if it's in seconds
+    const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
+    const date = new Date(timestampMs)
+
+    // Use undefined locale to automatically use the user's system locale and timezone
+    return date.toLocaleString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit'
+    })
+}
+
+// Function to get absolute date string (without time) in user's local timezone and format
+function getAbsoluteDateString(timestamp: number): string {
+    // Convert timestamp to milliseconds if it's in seconds
+    const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
+    const date = new Date(timestampMs)
+
+    // Use undefined locale to automatically use the user's system locale and timezone
+    return date.toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    })
 }
 
 // Function to parse mentions from message content
@@ -344,13 +378,21 @@ function MessageInput() {
 
 function DateDivider({ timestamp }: { timestamp: number }) {
     const dateLabel = getDateLabel(timestamp)
+    const absoluteDateString = getAbsoluteDateString(timestamp)
 
     return (
         <div className="flex items-center gap-3 py-4 px-3">
             <div className="flex-1 h-px bg-border"></div>
-            <div className="text-xs font-ocr text-muted-foreground/60 px-2 bg-background">
-                {dateLabel}
-            </div>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div className="text-xs font-ocr text-muted-foreground/60 px-2 bg-background cursor-help">
+                        {dateLabel}
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent className="bg-secondary/40 text-foreground backdrop-blur text-xs" sideOffset={7} side="bottom">
+                    <p className="text-xs">{absoluteDateString}</p>
+                </TooltipContent>
+            </Tooltip>
             <div className="flex-1 h-px bg-border"></div>
         </div>
     )
@@ -361,6 +403,7 @@ function Message({ message, serverId }: { message: IMessage, serverId: string })
     const member = useMember(serverId, message.author_id)
     const primaryName = usePrimaryName(message.author_id)
     const relativeTimeString = getRelativeTimeString(message.timestamp)
+    const absoluteDateTimeString = getAbsoluteDateTimeString(message.timestamp)
     const roles = useRoles(serverId)
 
     // Helper function to get topmost role for a member
@@ -387,7 +430,7 @@ function Message({ message, serverId }: { message: IMessage, serverId: string })
     const shouldUseRoleColor = roleColor && roleColor.toUpperCase() !== Constants.DEFAULT_ROLE_COLOR.toUpperCase();
     const displayColor = shouldUseRoleColor ? roleColor : (member ? 'var(--primary)' : undefined);
 
-    return <div className="flex items-start gap-3 cursor-pointer hover:bg-secondary/30 p-2 px-3">
+    return <div className="flex items-start gap-3 cursor-pointer hover:bg-secondary/30 p-2 px-3 group">
         <ProfilePopover userId={message.author_id} side="right" align="start" alignOffset={-30}><ProfileAvatar tx={author?.pfp} className="mt-1" /></ProfilePopover>
         <div className="grow">
             <div className="flex items-center gap-1">
@@ -399,7 +442,14 @@ function Message({ message, serverId }: { message: IMessage, serverId: string })
                         {member?.nickname || primaryName || <span className="text-xs opacity-60">{shortenAddress(message.author_id)}</span>}
                     </div>
                 </ProfilePopover>
-                <div className="text-xs text-muted-foreground/40">{relativeTimeString}</div>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="text-xs text-muted-foreground/40 cursor-help group-hover:visible invisible">{relativeTimeString}</div>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-secondary/40 text-foreground backdrop-blur text-xs" sideOffset={7} side="bottom">
+                        <p className="text-xs">{absoluteDateTimeString}</p>
+                    </TooltipContent>
+                </Tooltip>
             </div>
             <MessageContent content={message.content} serverId={serverId} />
         </div>
@@ -496,49 +546,51 @@ export default function Messages() {
         return groups
     }, [messages])
 
-    return <div className="grow flex">
-        {/* messages */}
-        <div className="grow flex flex-col gap-1 h-screen max-h-[calc(100vh-0.5rem)] relative">
-            {/* header */}
-            <div className="border-b p-3.5 flex items-center gap-1 font-ocr"><Hash className="w-4 h-4 shrink-0 text-muted-foreground" />{channel?.name}</div>
+    return <TooltipProvider delayDuration={300}>
+        <div className="grow flex">
+            {/* messages */}
+            <div className="grow flex flex-col gap-1 h-screen max-h-[calc(100vh-0.5rem)] relative">
+                {/* header */}
+                <div className="border-b p-3.5 flex items-center gap-1 font-ocr"><Hash className="w-4 h-4 shrink-0 text-muted-foreground" />{channel?.name}</div>
 
-            {/* Scroll to bottom button */}
-            {showJumpButton && (
-                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
-                    <Button
-                        onClick={scrollToBottom}
-                        className="bg-primary/30 hover:bg-primary/70 backdrop-blur text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg transition-colors duration-200"
-                    >
-                        Jump to latest message
-                    </Button>
-                </div>
-            )}
-            {/* message list */}
-            <div ref={messagesContainerRef} className="grow overflow-y-scroll flex flex-col">
-                {messagesGroupedByDate.map((group, groupIndex) => (
-                    <div key={group.dateKey}>
-                        {/* Date divider shown at the start of each date group */}
-                        <DateDivider timestamp={group.timestamp} />
-                        {/* Messages in this date group (already in chronological order) */}
-                        {group.messages.map((message) => (
-                            <Message key={message.id} message={message} serverId={activeServerId} />
-                        ))}
+                {/* Scroll to bottom button */}
+                {showJumpButton && (
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
+                        <Button
+                            onClick={scrollToBottom}
+                            className="bg-primary/30 hover:bg-primary/70 backdrop-blur text-white text-sm font-medium px-4 py-2 rounded-lg shadow-lg transition-colors duration-200"
+                        >
+                            Jump to latest message
+                        </Button>
                     </div>
-                ))}
-                {
-                    messagesGroupedByDate.length === 0 && <div className="text-center text-sm text-gray-500">No messages yet</div>
-                }
-                {/* Scroll anchor - always stays at the bottom */}
-                <div ref={messagesEndRef} />
+                )}
+                {/* message list */}
+                <div ref={messagesContainerRef} className="grow overflow-y-scroll flex flex-col">
+                    {messagesGroupedByDate.map((group, groupIndex) => (
+                        <div key={group.dateKey}>
+                            {/* Date divider shown at the start of each date group */}
+                            <DateDivider timestamp={group.timestamp} />
+                            {/* Messages in this date group (already in chronological order) */}
+                            {group.messages.map((message) => (
+                                <Message key={message.id} message={message} serverId={activeServerId} />
+                            ))}
+                        </div>
+                    ))}
+                    {
+                        messagesGroupedByDate.length === 0 && <div className="text-center text-sm text-gray-500">No messages yet</div>
+                    }
+                    {/* Scroll anchor - always stays at the bottom */}
+                    <div ref={messagesEndRef} />
+                </div>
+                {/* input */}
+                <div className="">
+                    <MessageInput />
+                </div>
             </div>
-            {/* input */}
-            <div className="">
-                <MessageInput />
-            </div>
+            {/* members */}
+            <Members collapsible={true} />
         </div>
-        {/* members */}
-        <Members collapsible={true} />
-    </div>
+    </TooltipProvider>
 }
 
 // appears in the sidebar member list
@@ -598,29 +650,29 @@ function SortedMemberList({ members, serverId }: { members: IMember[], serverId:
     const primaryNames = useSubspace((state) => state.primaryNames);
     const roles = useRoles(serverId);
 
-    // Helper function to get topmost hoisted role for a member
-    const getTopmostHoistedRole = (member: IMember) => {
-        if (!member.roles || !roles) return null;
-
-        const memberRoleIds = Object.keys(member.roles);
-        const memberRoles = memberRoleIds
-            .map(roleId => roles[roleId])
-            .filter(role => role && role.hoist); // Only consider hoisted roles
-
-        if (memberRoles.length === 0) return null;
-
-        // Return role with highest order (topmost in hierarchy)
-        return memberRoles.reduce((highest, current) =>
-            current.order > highest.order ? current : highest
-        );
-    };
-
-    // Group members by their topmost hoisted role
+    // Group members by their topmost role
     const groupedMembers = useMemo(() => {
+        // Helper function to get topmost role for a member
+        const getTopmostRole = (member: IMember) => {
+            if (!member.roles || !roles) return null;
+
+            const memberRoleIds = Object.keys(member.roles);
+            const memberRoles = memberRoleIds
+                .map(roleId => roles[roleId])
+                .filter(role => role); // Consider all roles
+
+            if (memberRoles.length === 0) return null;
+
+            // Return role with highest order (topmost in hierarchy)
+            return memberRoles.reduce((highest, current) =>
+                current.order > highest.order ? current : highest
+            );
+        };
+
         const groups: Record<string, { role: any | null, members: IMember[] }> = {};
 
         members.forEach(member => {
-            const topmostRole = getTopmostHoistedRole(member);
+            const topmostRole = getTopmostRole(member);
             const groupKey = topmostRole?.id || 'no-role';
 
             if (!groups[groupKey]) {

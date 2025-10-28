@@ -22,6 +22,7 @@ export function getRelativeTimeString(timestamp: number) {
 
     // Handle future timestamps or very recent messages (within 5 seconds)
     if (diffInSeconds < -5) {
+        // Use user's local timezone and locale for future dates
         return new Date(timestampMs).toLocaleString()
     }
 
@@ -30,12 +31,12 @@ export function getRelativeTimeString(timestamp: number) {
         return "now"
     }
 
-    // Check if message is from today
+    // Check if message is from today (in user's local timezone)
     const today = new Date()
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    // Reset time to start of day for comparison
+    // Reset time to start of day for comparison (in user's local timezone)
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
     const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate())
     const messageDateStart = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate())
@@ -53,8 +54,8 @@ export function getRelativeTimeString(timestamp: number) {
         // Yesterday
         return "Yesterday"
     } else {
-        // Different date - show absolute date
-        return messageDate.toLocaleDateString('en-US', {
+        // Different date - show absolute date using user's local timezone and locale
+        return messageDate.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
@@ -67,30 +68,42 @@ export function getDateKey(timestamp: number): string {
     const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
     const date = new Date(timestampMs)
 
-    // Return date in YYYY-MM-DD format for grouping
-    return date.toISOString().split('T')[0]
+    // Return date in YYYY-MM-DD format for grouping using user's local timezone
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+
+    return `${year}-${month}-${day}`
 }
 
 export function getDateLabel(timestamp: number): string {
     // Convert timestamp to milliseconds if it's in seconds
     const timestampMs = timestamp > 1e12 ? timestamp : timestamp * 1000
     const messageDate = new Date(timestampMs)
-    const today = new Date()
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
+    const now = new Date()
 
-    // Reset time to start of day for comparison
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate())
+    // Reset time to start of day for comparison (in user's local timezone)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const messageDateStart = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate())
 
-    if (messageDateStart.getTime() === todayStart.getTime()) {
+    // Calculate the difference in days
+    const diffInMs = todayStart.getTime() - messageDateStart.getTime()
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
+
+    if (diffInDays === 0) {
         return "Today"
-    } else if (messageDateStart.getTime() === yesterdayStart.getTime()) {
+    } else if (diffInDays === 1) {
         return "Yesterday"
+    } else if (diffInDays > 1) {
+        // Format using user's local timezone and locale
+        return messageDate.toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        })
     } else {
-        // Format as "Month Day, Year" (e.g., "January 15, 2024")
-        return messageDate.toLocaleDateString('en-US', {
+        // Future date - format using user's local timezone and locale
+        return messageDate.toLocaleDateString(undefined, {
             year: 'numeric',
             month: 'long',
             day: 'numeric'

@@ -534,7 +534,6 @@ export default function Channels() {
                 {/* Categorized channels */}
                 {sortedCategories.map((category) => {
                     const categoryChannels = channelsByCategory[category.id] || [];
-                    if (categoryChannels.length === 0) return null;
 
                     return (
                         <CategorySection
